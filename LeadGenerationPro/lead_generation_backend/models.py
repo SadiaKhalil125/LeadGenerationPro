@@ -22,3 +22,11 @@ class ScrapeResponse(BaseModel):
     data: List[Dict[str, Any]]
     success: bool
     message: str
+    
+class Attribute(BaseModel):
+    name: str
+    datatype: str   # e.g. "text", "int", "bool"
+
+class EntityRequest(BaseModel):
+    name: str   # table name
+    attributes: List[Attribute]
