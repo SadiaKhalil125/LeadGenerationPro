@@ -2,7 +2,7 @@ import json
 import asyncio
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 from crawl4ai import JsonCssExtractionStrategy
-from models import ScrapeRequest, ScrapeResponse, FieldMapping
+from .models import ScrapeRequest, ScrapeResponse, FieldMapping
 from datetime import datetime
 
 async def extract_website(request: ScrapeRequest) -> ScrapeResponse:

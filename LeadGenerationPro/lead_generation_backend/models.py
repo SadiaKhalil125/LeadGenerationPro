@@ -2,9 +2,19 @@ from pydantic import BaseModel
 from typing import Dict, List, Optional, Any
 from pydantic import HttpUrl
 from datetime import datetime
+
 class FieldMapping(BaseModel):
     selector: str
     extract: str = "text"  # text, href, src, or attribute name
+
+class EntityMappingRequest(BaseModel):
+   
+    entity_name: str              # e.g., "company", "job", "person"
+    url: HttpUrl    
+    container_selector: Optional[str] = None
+    field_mappings: Dict[str, FieldMapping]
+    # key = field name (e.g., "company_name"), value = FieldMapping selector/extract info
+
 
 class ScrapeRequest(BaseModel):
     entity_name: str

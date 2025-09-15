@@ -2,12 +2,12 @@ from fastapi import FastAPI, HTTPException
 from bs4 import BeautifulSoup
 from datetime import datetime
 import asyncio
-from models import FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest
-from utils import extract_value, fetch_page
+from .models import FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest
+from .utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import sys
-from crawl4Util import extract_website
+from .crawl4Util import extract_website
 import asyncio
 from asyncio import WindowsProactorEventLoopPolicy  # For proper subprocess support on Windows
 import psycopg2
@@ -15,6 +15,8 @@ import os
 import json
 from psycopg2.extras import Json
 from psycopg2 import sql
+from urllib.parse import urlparse
+
 
 # 1. Set the event loop policy before any async operations
 if sys.platform == "win32":
@@ -22,9 +24,9 @@ if sys.platform == "win32":
 
 
 # 2. Database connection setup
-DB_NAME = os.getenv("DB_NAME", "LeadGenerationPro")
+DB_NAME = os.getenv("DB_NAME", "LeadGen")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS", "9042c98a")
+DB_PASS = os.getenv("DB_PASS", "hannia")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
@@ -248,7 +250,106 @@ async def save_entity(request: EntityRequest):
         print(f"Error creating entity: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create entity: {str(e)}")
 
-    
+
+
+def generate_mapping_name(entity_name: str, url: str) -> str:
+    # Always parse a plain string
+    host = (urlparse(str(url)).hostname or "unknown").split('.')[0]
+    return f"{entity_name}_{host}_mapping".lower()
+
+@app.post("/save-entity-mapping", response_model=dict)
+async def save_entity_mapping(mapping: EntityMappingRequest):
+
+    """
+    Save a scraping configuration (EntityMapping) for a website.
+    Ensures:
+    - The referenced entity table already exists.
+    - Field mapping keys match the table's columns.
+    """
+
+    try:
+        if not mapping.entity_name.strip():
+            raise HTTPException(status_code=400, detail="Entity name cannot be empty.")
+        if not mapping.field_mappings:
+            raise HTTPException(status_code=400, detail="At least one field mapping is required.")
+
+        cur = conn.cursor()
+
+        # Check if the entity table exists
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = %s
+            )
+        """, (mapping.entity_name,))
+        if not cur.fetchone()[0]:
+            raise HTTPException(status_code=400, detail=f"Entity table '{mapping.entity_name}' does not exist.")
+
+        # ✅ Get column names of the entity table
+        cur.execute(sql.SQL("SELECT column_name FROM information_schema.columns WHERE table_name = %s"), 
+                    (mapping.entity_name,))
+        existing_columns = {row[0] for row in cur.fetchall()}  # set of column names
+
+        # ✅ Validate all mapping field names exist as columns (ignore id)
+        invalid = [field for field in mapping.field_mappings.keys() if field not in existing_columns]
+        if invalid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid field mappings: {invalid}. Valid columns: {sorted(existing_columns)}"
+            )
+        
+        mapping_name = generate_mapping_name(mapping.entity_name, mapping.url)
+
+        serialized_mappings= {
+            key: {"selector": fm.selector, "extract": fm.extract}
+            for key, fm in mapping.field_mappings.items()
+        }
+
+        # Create table for mappings if it doesn't exist
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS entity_mappings (
+                id SERIAL PRIMARY KEY,
+                entity_name TEXT NOT NULL,
+                url TEXT NOT NULL,
+                mapping_name TEXT NOT NULL, 
+                container_selector TEXT,
+                field_mappings JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                CONSTRAINT unique_entity_url UNIQUE (entity_name, url),
+                CONSTRAINT unique_mapping_name UNIQUE (mapping_name)
+            )
+        """)
+
+        # Insert the new mapping
+        cur.execute(
+            """
+            INSERT INTO entity_mappings (entity_name, url, mapping_name, container_selector, field_mappings)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (entity_name, url) 
+            DO UPDATE SET
+                container_selector = EXCLUDED.container_selector,
+                field_mappings = EXCLUDED.field_mappings,
+                created_at = NOW()
+            RETURNING id
+            """,
+            (mapping.entity_name, str(mapping.url), mapping_name, mapping.container_selector, Json(serialized_mappings))
+        )
+
+        mapping_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+
+        return {
+            "message": f"Entity mapping for '{mapping.entity_name}' on '{mapping.url}' saved successfully.",
+            "mapping_name": mapping_name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error saving entity mapping: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save mapping: {str(e)}")
+
 @app.get("/")
 async def root():
     return {
