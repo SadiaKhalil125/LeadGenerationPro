@@ -2,12 +2,12 @@ from fastapi import FastAPI, HTTPException
 from bs4 import BeautifulSoup
 from datetime import datetime
 import asyncio
-from .models import FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest
-from .utils import extract_value, fetch_page
+from models import FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo
+from utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import sys
-from .crawl4Util import extract_website
+from crawl4Util import extract_website
 import asyncio
 from asyncio import WindowsProactorEventLoopPolicy  # For proper subprocess support on Windows
 import psycopg2
@@ -24,9 +24,9 @@ if sys.platform == "win32":
 
 
 # 2. Database connection setup
-DB_NAME = os.getenv("DB_NAME", "LeadGen")
+DB_NAME = os.getenv("DB_NAME", "LeadGenerationPro")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS", "hannia")
+DB_PASS = os.getenv("DB_PASS", "9042c98a")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
@@ -349,6 +349,97 @@ async def save_entity_mapping(mapping: EntityMappingRequest):
     except Exception as e:
         print(f"Error saving entity mapping: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save mapping: {str(e)}")
+
+
+@app.get("/entities", response_model=EntitiesListResponse)
+async def get_all_entities():
+    """
+    Get all saved entities (tables) with their column information.
+    """
+    try:
+        cur = conn.cursor()
+        
+        # Get all user-created tables (excluding system tables)
+        cur.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_type = 'BASE TABLE'
+            AND table_name NOT IN ('entity_mappings')
+            ORDER BY table_name
+        """)
+        
+        table_names = [row[0] for row in cur.fetchall()]
+        entities = []
+        
+        for table_name in table_names:
+            # Get columns for each table
+            cur.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = %s 
+                AND table_schema = 'public'
+                ORDER BY ordinal_position
+            """, (table_name,))
+            
+            columns = [row[0] for row in cur.fetchall()]
+            
+            entities.append(EntityInfo(
+                name=table_name,
+                columns=columns
+            ))
+        
+        cur.close()
+        
+        return EntitiesListResponse(
+            total_entities=len(entities),
+            entities=entities
+        )
+        
+    except Exception as e:
+        print(f"Error fetching entities: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch entities: {str(e)}")
+
+@app.get("/mappings", response_model=MappingsListResponse)
+async def get_all_mappings():
+    """
+    Get all saved entity mappings.
+    """
+    try:
+        cur = conn.cursor()
+        
+        # Get all mappings
+        cur.execute("""
+            SELECT id, entity_name, url, mapping_name, container_selector, field_mappings, created_at
+            FROM entity_mappings 
+            ORDER BY created_at DESC
+        """)
+        
+        rows = cur.fetchall()
+        mappings = []
+        
+        for row in rows:
+            mappings.append(MappingInfo(
+                id=row[0],
+                entity_name=row[1],
+                url=row[2],
+                mapping_name=row[3],
+                container_selector=row[4],
+                field_mappings=row[5],  # This is already a dict from JSONB
+                created_at=row[6]
+            ))
+        
+        cur.close()
+        
+        return MappingsListResponse(
+            total_mappings=len(mappings),
+            mappings=mappings
+        )
+        
+    except Exception as e:
+        print(f"Error fetching mappings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch mappings: {str(e)}")
+    
 
 @app.get("/")
 async def root():

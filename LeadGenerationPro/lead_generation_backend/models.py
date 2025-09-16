@@ -40,3 +40,26 @@ class Attribute(BaseModel):
 class EntityRequest(BaseModel):
     name: str   # table name
     attributes: List[Attribute]
+
+
+class EntityInfo(BaseModel):
+    name: str
+    columns: List[str]
+    created_at: Optional[datetime] = None
+
+class EntitiesListResponse(BaseModel):
+    total_entities: int
+    entities: List[EntityInfo]
+
+class MappingInfo(BaseModel):
+    id: int
+    entity_name: str
+    url: str
+    mapping_name: str
+    container_selector: Optional[str] = None
+    field_mappings: Dict[str, Any]
+    created_at: datetime
+
+class MappingsListResponse(BaseModel):
+    total_mappings: int
+    mappings: List[MappingInfo]
