@@ -169,86 +169,242 @@ TYPE_MAP = {
     "datetime": "TIMESTAMP",
     "timestamp": "TIMESTAMP"
 }
-
 @app.post("/save-entity", response_model=dict)
 async def save_entity(request: EntityRequest):
-    """
-    Save a new entity configuration.
-    Example request:
-    {
-        "name": "business_listings",
-        "attributes": [
-            {"name": "company_name", "datatype": "str"},
-            {"name": "company_link", "datatype": "str"},
-            {"name": "address", "datatype": "str"},
-            {"name": "description", "datatype": "str"}
-        ]
-    }
-    """
+    """Save a new entity configuration."""
     try:
         table_name = request.name.strip()
-        if not table_name:
-            raise HTTPException(status_code=400, detail="Table name cannot be empty.")
+        if not table_name or not request.attributes:
+            raise HTTPException(status_code=400, detail="Table name and attributes required.")
 
-        # Validate attribute list
-        if not request.attributes:
-            raise HTTPException(status_code=400, detail="At least one attribute must be provided.")
-
-        # Build column definitions
-        cols = []
+        # Build columns
+        cols = [sql.SQL("id SERIAL PRIMARY KEY")]
         for attr in request.attributes:
-            fname = attr.name.strip()  # Fixed: using 'name' instead of 'field_name'
+            fname = attr.name.strip()
             dt = attr.datatype.strip().lower()
             
-            if not fname:
-                raise HTTPException(status_code=400, detail="Field name cannot be empty.")
+            if not fname or dt not in TYPE_MAP:
+                raise HTTPException(status_code=400, detail=f"Invalid field or datatype: {dt}")
             
-            if dt not in TYPE_MAP:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Unsupported datatype: {attr.datatype}. Supported types: {list(TYPE_MAP.keys())}"
-                )
-            
-            pg_type = TYPE_MAP[dt]
-            # Build an SQL snippet for the column: "field_name datatype"
             cols.append(sql.SQL("{} {}").format(
                 sql.Identifier(fname),
-                sql.SQL(pg_type)
+                sql.SQL(TYPE_MAP[dt])
             ))
 
-        # Always include id primary key
-        id_col = sql.SQL("id SERIAL PRIMARY KEY")
-
-        # Combine all columns
-        all_columns = [id_col] + cols
-
-        # Create database cursor
+        # Create table
         cur = conn.cursor()
-        
-        # Construct CREATE TABLE IF NOT EXISTS with safe identifiers
         create_stmt = sql.SQL("CREATE TABLE IF NOT EXISTS {table} ( {fields} );").format(
             table=sql.Identifier(table_name),
-            fields=sql.SQL(", ").join(all_columns)
+            fields=sql.SQL(", ").join(cols)
         )
-        
-        # Execute the statement
         cur.execute(create_stmt)
-        conn.commit()  # Don't forget to commit the transaction
+        conn.commit()
         cur.close()
 
         return {
-            "message": f"Entity (table) '{table_name}' created successfully.",
+            "success": True,
+            "message": f"Entity '{table_name}' created successfully.",
             "table_name": table_name,
-            "columns_created": len(cols) + 1  # +1 for id column
+            "columns_created": len(cols)
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create entity: {str(e)}")
 
+
+@app.put("/edit-entity/{table_name}", response_model=dict)
+async def edit_entity(table_name: str, request: EntityRequest):
+    """Edit entity by adding new columns (SQL ALTER TABLE)."""
+    try:
+        table_name = table_name.strip()
+        if not table_name or not request.attributes:
+            raise HTTPException(status_code=400, detail="Table name and attributes required.")
+
+        cur = conn.cursor()
+        
+        # Check if table exists
+        cur.execute("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = %s)", (table_name,))
+        if not cur.fetchone()[0]:
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found.")
+
+        # Add new columns
+        added_cols = 0
+        for attr in request.attributes:
+            fname = attr.name.strip()
+            dt = attr.datatype.strip().lower()
+            
+            if not fname or dt not in TYPE_MAP:
+                continue
+                
+            try:
+                alter_stmt = sql.SQL("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {type};").format(
+                    table=sql.Identifier(table_name),
+                    col=sql.Identifier(fname),
+                    type=sql.SQL(TYPE_MAP[dt])
+                )
+                cur.execute(alter_stmt)
+                added_cols += 1
+            except Exception:
+                continue  # Skip if column already exists or other error
+
+        conn.commit()
+        cur.close()
+
+        return {
+            "success": True,
+            "message": f"Entity '{table_name}' updated successfully.",
+            "table_name": table_name,
+            "columns_added": added_cols
+        }
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        # Log the error and raise HTTP exception
-        print(f"Error creating entity: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to create entity: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to edit entity: {str(e)}")
+
+
+@app.delete("/delete-entity/{table_name}", response_model=dict)
+async def delete_entity(table_name: str):
+    """Delete entire entity (DROP TABLE)."""
+    try:
+        table_name = table_name.strip()
+        if not table_name:
+            raise HTTPException(status_code=400, detail="Table name required.")
+
+        cur = conn.cursor()
+        
+        # Check if table exists
+        cur.execute("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = %s)", (table_name,))
+        if not cur.fetchone()[0]:
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found.")
+
+        # Drop table
+        drop_stmt = sql.SQL("DROP TABLE {table};").format(table=sql.Identifier(table_name))
+        cur.execute(drop_stmt)
+        conn.commit()
+        cur.close()
+
+        return {
+            "success": True,
+            "message": f"Entity '{table_name}' deleted successfully.",
+            "table_name": table_name
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete entity: {str(e)}")
+
+
+@app.delete("/delete-column/{table_name}/{column_name}", response_model=dict)
+async def delete_column(table_name: str, column_name: str):
+    """Delete a specific column from entity (ALTER TABLE DROP COLUMN)."""
+    try:
+        table_name = table_name.strip()
+        column_name = column_name.strip()
+        
+        if not table_name or not column_name:
+            raise HTTPException(status_code=400, detail="Table name and column name required.")
+        
+        if column_name == "id":
+            raise HTTPException(status_code=400, detail="Cannot delete primary key column 'id'.")
+
+        cur = conn.cursor()
+        
+        # Check if table exists
+        cur.execute("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = %s)", (table_name,))
+        if not cur.fetchone()[0]:
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found.")
+
+        # Check if column exists
+        cur.execute("""
+            SELECT EXISTS(SELECT 1 FROM information_schema.columns 
+            WHERE table_name = %s AND column_name = %s)
+        """, (table_name, column_name))
+        if not cur.fetchone()[0]:
+            raise HTTPException(status_code=404, detail=f"Column '{column_name}' not found in table '{table_name}'.")
+
+        # Drop column
+        drop_stmt = sql.SQL("ALTER TABLE {table} DROP COLUMN {col};").format(
+            table=sql.Identifier(table_name),
+            col=sql.Identifier(column_name)
+        )
+        cur.execute(drop_stmt)
+        conn.commit()
+        cur.close()
+
+        return {
+            "success": True,
+            "message": f"Column '{column_name}' deleted from '{table_name}' successfully.",
+            "table_name": table_name,
+            "column_deleted": column_name
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete column: {str(e)}")
+
+@app.put("/rename-column/{table_name}/{old_name}/{new_name}", response_model=dict)
+async def rename_column(table_name: str, old_name: str, new_name: str):
+    """Rename a column in the specified table."""
+    try:
+        cur = conn.cursor()
+        rename_stmt = sql.SQL("ALTER TABLE {table} RENAME COLUMN {old_col} TO {new_col};").format(
+            table=sql.Identifier(table_name),
+            old_col=sql.Identifier(old_name),
+            new_col=sql.Identifier(new_name)
+        )
+        cur.execute(rename_stmt)
+        conn.commit()
+        cur.close()
+        
+        return {
+            "success": True,
+            "message": f"Column '{old_name}' renamed to '{new_name}' successfully.",
+            "table_name": table_name
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to rename column: {str(e)}")
+
+@app.get("/entity-info/{table_name}", response_model=dict)
+async def get_entity_info(table_name: str):
+    """Get information about an entity (table structure)."""
+    try:
+        table_name = table_name.strip()
+        if not table_name:
+            raise HTTPException(status_code=400, detail="Table name required.")
+
+        cur = conn.cursor()
+        
+        # Check if table exists and get column info
+        cur.execute("""
+            SELECT column_name, data_type, is_nullable 
+            FROM information_schema.columns 
+            WHERE table_name = %s 
+            ORDER BY ordinal_position
+        """, (table_name,))
+        
+        columns = cur.fetchall()
+        if not columns:
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found.")
+
+        # Get row count
+        cur.execute(sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(table_name)))
+        row_count = cur.fetchone()[0]
+        cur.close()
+
+        return {
+            "success": True,
+            "table_name": table_name,
+            "columns": [{"name": col[0], "type": col[1], "nullable": col[2]} for col in columns],
+            "column_count": len(columns),
+            "row_count": row_count
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get entity info: {str(e)}")
+
+
+
+
 
 
 

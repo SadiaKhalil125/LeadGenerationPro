@@ -6,16 +6,15 @@ import WebScraperForm from './WebScraperForm'
 import AddSchema from './AddSchema'
 import EntityForm from "./EntityForm"
 import TaskForm from './TaskForm'
+import EntityList from './EntityList'
 function App() {
 
   return (
-    <>
-    {/* <WebScraperForm/> */}
-      <AddSchema/> 
-      {/* <EntityForm /> */}
-      <TaskForm />
+    <>  
+    <EntityForm/> 
+    {/* <EntityList/> */}
     </>
   )
 }
 
-export default App
+export default App;
