@@ -2,12 +2,12 @@ from fastapi import FastAPI, HTTPException
 from bs4 import BeautifulSoup
 from datetime import datetime
 import asyncio
-from models import FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo
-from utils import extract_value, fetch_page
+from .models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest
+from .utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import sys
-from crawl4Util import extract_website
+from .crawl4Util import extract_website
 import asyncio
 from asyncio import WindowsProactorEventLoopPolicy  # For proper subprocess support on Windows
 import psycopg2
@@ -24,9 +24,9 @@ if sys.platform == "win32":
 
 
 # 2. Database connection setup
-DB_NAME = os.getenv("DB_NAME", "LeadGenerationPro")
+DB_NAME = os.getenv("DB_NAME", "LeadGen")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS", "9042c98a")
+DB_PASS = os.getenv("DB_PASS", "hannia")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
@@ -413,99 +413,163 @@ def generate_mapping_name(entity_name: str, url: str) -> str:
     host = (urlparse(str(url)).hostname or "unknown").split('.')[0]
     return f"{entity_name}_{host}_mapping".lower()
 
-@app.post("/save-entity-mapping", response_model=dict)
-async def save_entity_mapping(mapping: EntityMappingRequest):
-
-    """
-    Save a scraping configuration (EntityMapping) for a website.
-    Ensures:
-    - The referenced entity table already exists.
-    - Field mapping keys match the table's columns.
-    """
-
+@app.post("/save-source", response_model=dict)
+async def save_source(name: str, url: str):
+    """Save a website source in 'sources' table or reuse if it already exists."""
+    cur = conn.cursor()
     try:
-        if not mapping.entity_name.strip():
-            raise HTTPException(status_code=400, detail="Entity name cannot be empty.")
-        if not mapping.field_mappings:
-            raise HTTPException(status_code=400, detail="At least one field mapping is required.")
+        name = name.strip()
+        url = url.strip()
+        if not name or not url:
+            raise HTTPException(status_code=400, detail="Source name and URL required.")
 
-        cur = conn.cursor()
-
-        # Check if the entity table exists
+        # 1️⃣ Ensure table exists
         cur.execute("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_name = %s
-            )
-        """, (mapping.entity_name,))
-        if not cur.fetchone()[0]:
-            raise HTTPException(status_code=400, detail=f"Entity table '{mapping.entity_name}' does not exist.")
+            CREATE TABLE IF NOT EXISTS sources (
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                url TEXT NOT NULL
+            );
+        """)
 
-        # ✅ Get column names of the entity table
-        cur.execute(sql.SQL("SELECT column_name FROM information_schema.columns WHERE table_name = %s"), 
-                    (mapping.entity_name,))
-        existing_columns = {row[0] for row in cur.fetchall()}  # set of column names
+        # 2️⃣ Check if source already exists (reuse if found)
+        cur.execute("SELECT id FROM sources WHERE name = %s;", (name,))
+        existing = cur.fetchone()
+        if existing:
+            existing_id = existing[0]
+            return {
+                "success": True,
+                "id": existing_id,
+                "message": f"Source '{name}' already exists—reusing it."
+            }
 
-        # ✅ Validate all mapping field names exist as columns (ignore id)
-        invalid = [field for field in mapping.field_mappings.keys() if field not in existing_columns]
-        if invalid:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid field mappings: {invalid}. Valid columns: {sorted(existing_columns)}"
-            )
-        
-        mapping_name = generate_mapping_name(mapping.entity_name, mapping.url)
+        # 3️⃣ Insert a new source
+        cur.execute(
+            "INSERT INTO sources (name, url) VALUES (%s, %s) RETURNING id;",
+            (name, url)
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
 
-        serialized_mappings= {
-            key: {"selector": fm.selector, "extract": fm.extract}
-            for key, fm in mapping.field_mappings.items()
-        }
+        return {"success": True, "id": new_id, "message": f"Source '{name}' saved successfully."}
 
-        # Create table for mappings if it doesn't exist
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save source: {str(e)}")
+    finally:
+        cur.close()
+
+
+@app.post("/save-entity-mapping", response_model=dict)
+async def save_entity_mapping(mapping: MappingFormRequest):
+    """
+    Save scraping configurations for one or more entities against one source.
+    Steps:
+    1. Ensure the source is saved.
+    2. For each entity mapping:
+       - Validate entity table exists.
+       - Validate mapping field keys match table columns.
+       - Save mapping linked to source_id.
+    """
+
+    cur = conn.cursor()
+    try:
+        # Normalize URL before inserting
+        normalized_url = str(mapping.url)
+        if normalized_url and not normalized_url.startswith(('http://', 'https://')):
+            normalized_url = f'https://{normalized_url}'
+
+        # Save/verify the source → returns source_id
+        source_result = await save_source(mapping.source, normalized_url)
+        source_id = source_result.get("id")
+        if not source_id:
+            raise HTTPException(status_code=500, detail="Failed to retrieve source_id.")
+
+        # Ensure entity_mappings table exists
         cur.execute("""
             CREATE TABLE IF NOT EXISTS entity_mappings (
                 id SERIAL PRIMARY KEY,
                 entity_name TEXT NOT NULL,
-                url TEXT NOT NULL,
-                mapping_name TEXT NOT NULL, 
+                source_id INT REFERENCES sources(id) ON DELETE CASCADE,
+                mapping_name TEXT NOT NULL UNIQUE,
                 container_selector TEXT,
                 field_mappings JSONB NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW(),
-                CONSTRAINT unique_entity_url UNIQUE (entity_name, url),
-                CONSTRAINT unique_mapping_name UNIQUE (mapping_name)
-            )
+                CONSTRAINT unique_entity_source UNIQUE (entity_name, source_id)
+            );
         """)
 
-        # Insert the new mapping
-        cur.execute(
-            """
-            INSERT INTO entity_mappings (entity_name, url, mapping_name, container_selector, field_mappings)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (entity_name, url) 
-            DO UPDATE SET
-                container_selector = EXCLUDED.container_selector,
-                field_mappings = EXCLUDED.field_mappings,
-                created_at = NOW()
-            RETURNING id
-            """,
-            (mapping.entity_name, str(mapping.url), mapping_name, mapping.container_selector, Json(serialized_mappings))
-        )
+        saved_mappings = []
 
-        mapping_id = cur.fetchone()[0]
+        # Process each entity mapping in the request
+        for em in mapping.entity_mappings:
+            entity_name = em.entity_name.strip()
+            if not entity_name:
+                raise HTTPException(status_code=400, detail="Entity name cannot be empty.")
+
+            if not em.field_mappings:
+                raise HTTPException(status_code=400, detail=f"No field mappings for {entity_name}.")
+
+            #  Check entity table exists
+            cur.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables WHERE table_name = %s
+                )
+            """, (entity_name,))
+            if not cur.fetchone()[0]:
+                raise HTTPException(status_code=400, detail=f"Entity table '{entity_name}' does not exist.")
+
+            #  Validate field mapping keys
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s", (entity_name,))
+            existing_columns = {row[0] for row in cur.fetchall()}
+            invalid = [field for field in em.field_mappings.keys() if field not in existing_columns]
+            if invalid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid fields {invalid} for '{entity_name}'. Valid columns: {sorted(existing_columns)}"
+                )
+
+            #  Serialize mappings and generate mapping_name
+            serialized = {
+                key: {"selector": fm.selector, "extract": fm.extract}
+                for key, fm in em.field_mappings.items()
+            }
+            mapping_name = f"{entity_name}-{mapping.source}-mapping"  # Simple unique name pattern
+
+
+            # 💾 Insert or update mapping
+            cur.execute("""
+                INSERT INTO entity_mappings (entity_name, source_id, mapping_name, container_selector, field_mappings)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (entity_name, source_id)
+                DO UPDATE SET
+                    container_selector = EXCLUDED.container_selector,
+                    field_mappings = EXCLUDED.field_mappings,
+                    created_at = NOW()
+                RETURNING id;
+            """, (entity_name, source_id, mapping_name, em.container_selector, Json(serialized)))
+
+            mapping_id = cur.fetchone()[0]
+            saved_mappings.append({
+                "mapping_name": mapping_name
+            })
+
         conn.commit()
-        cur.close()
-
         return {
-            "message": f"Entity mapping for '{mapping.entity_name}' on '{mapping.url}' saved successfully.",
-            "mapping_name": mapping_name
+            "success": True,
+            "message": f"{len(saved_mappings)} entity mappings saved for source '{mapping.source}'.",
+            "saved_mappings": saved_mappings
         }
 
     except HTTPException:
+        conn.rollback()
         raise
     except Exception as e:
-        print(f"Error saving entity mapping: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to save mapping: {str(e)}")
-
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save entity mappings: {str(e)}")
+    finally:
+        cur.close()
+        
 
 @app.get("/entities", response_model=EntitiesListResponse)
 async def get_all_entities():
@@ -521,7 +585,7 @@ async def get_all_entities():
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
             AND table_type = 'BASE TABLE'
-            AND table_name NOT IN ('entity_mappings')
+            AND table_name NOT IN ('entity_mappings','sources')
             ORDER BY table_name
         """)
         
@@ -565,11 +629,23 @@ async def get_all_mappings():
         cur = conn.cursor()
         
         # Get all mappings
+        
         cur.execute("""
-            SELECT id, entity_name, url, mapping_name, container_selector, field_mappings, created_at
-            FROM entity_mappings 
-            ORDER BY created_at DESC
-        """)
+            SELECT em.id,
+           em.entity_name,
+           em.mapping_name,
+           em.container_selector,
+           em.field_mappings,
+           em.created_at,
+           em.source_id,
+           s.name AS source_name,
+           s.url  AS source_url
+    FROM entity_mappings em
+    JOIN sources s
+      ON em.source_id = s.id
+    ORDER BY em.created_at DESC;
+""")
+
         
         rows = cur.fetchall()
         mappings = []
@@ -578,11 +654,14 @@ async def get_all_mappings():
             mappings.append(MappingInfo(
                 id=row[0],
                 entity_name=row[1],
-                url=row[2],
-                mapping_name=row[3],
-                container_selector=row[4],
-                field_mappings=row[5],  # This is already a dict from JSONB
-                created_at=row[6]
+                mapping_name=row[2],
+                container_selector=row[3],
+                field_mappings=row[4],  # This is already a dict from JSONB
+                created_at=row[5],
+                source_id=row[6],
+                source_name=row[7],
+                url=row[8]  # source_url
+
             ))
         
         cur.close()
@@ -596,6 +675,77 @@ async def get_all_mappings():
         print(f"Error fetching mappings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch mappings: {str(e)}")
     
+@app.delete("/delete-mapping/{mapping_name}", response_model=dict)
+async def delete_mapping(mapping_name: str):
+    """
+    Delete an entity mapping by its mapping_name.
+    """
+    try:
+        mapping_name = mapping_name.strip()
+        if not mapping_name:
+            raise HTTPException(status_code=400, detail="Mapping name is required.")
+
+        cur = conn.cursor()
+
+        # Check if mapping exists
+        cur.execute("SELECT id FROM entity_mappings WHERE mapping_name = %s;", (mapping_name,))
+        mapping = cur.fetchone()
+        if not mapping:
+            cur.close()
+            raise HTTPException(status_code=404, detail=f"Mapping '{mapping_name}' not found.")
+
+        # Delete mapping
+        cur.execute("DELETE FROM entity_mappings WHERE mapping_name = %s;", (mapping_name,))
+        conn.commit()
+        cur.close()
+
+        return {
+            "success": True,
+            "message": f"Mapping '{mapping_name}' deleted successfully.",
+            "mapping_name": mapping_name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete mapping: {str(e)}")
+
+    
+@app.get("/sources", response_model=SourcesListResponse)
+async def get_all_sources():
+    """
+    Get all saved website sources.
+    """
+    try:
+        cur = conn.cursor()
+        # 🗃 Fetch all sources sorted by creation order (id descending for newest first)
+        cur.execute("""
+            SELECT id, name, url
+            FROM sources
+            ORDER BY id DESC;
+        """)
+        rows = cur.fetchall()
+        cur.close()
+
+        # 📋 Convert rows into response objects
+        sources = []
+        for row in rows:
+            sources.append(SourceInfo(
+                id=row[0],
+                name=row[1],
+                url=row[2]
+            ))
+
+        return SourcesListResponse(
+            total_sources=len(sources),
+            sources=sources
+        )
+
+    except Exception as e:
+        print(f"Error fetching sources: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch sources: {str(e)}")
+
 
 @app.get("/")
 async def root():
