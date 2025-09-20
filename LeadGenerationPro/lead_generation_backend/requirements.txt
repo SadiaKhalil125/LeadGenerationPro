@@ -9,5 +9,11 @@ pydantic
 httpx
 pytest
 pytest-asyncio
-
+aiohttp
+crawl4ai
+json
+datetime
+typing
+re
+psycopg2
 
