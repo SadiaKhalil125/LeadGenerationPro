@@ -2,19 +2,30 @@ import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import WebScraperForm from './WebScraperForm'
-import AddSchema from './AddSchema'
 import EntityForm from "./EntityForm"
 import TaskForm from './TaskForm'
 import EntityList from './EntityList'
+import TaskScheduler from './TaskSchedular'
+import NavigationPage from './NavigationPage'
+import TasksManagement from './TasksManagement';
 function App() {
 
   return (
-    <>  
-    <EntityForm/> 
-    {/* <EntityList/> */}
-    </>
-  )
+   <BrowserRouter> 
+      {/* <NavigationPage /> */}
+      <Routes>
+        <Route path="/" element={<NavigationPage />} />
+        <Route path="/entityform" element={<EntityForm />} />
+        <Route path="/entitylist" element={<EntityList />} />
+        <Route path="/taskform" element={<TaskForm />} />
+        <Route path="/taskscheduler" element={<TaskScheduler />} />
+        <Route path="/tasksmanagement" element={<TasksManagement />} />
+        <Route path="/webscraperform" element={<WebScraperForm />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;

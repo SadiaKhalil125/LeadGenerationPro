@@ -78,3 +78,28 @@ class SourceInfo(BaseModel):
 class SourcesListResponse(BaseModel):
     total_sources: int
     sources: List[SourceInfo]
+
+class TaskRequest(BaseModel):
+    source_id: int
+    mapping_id: int  
+    scheduled_time: datetime
+    task_name: Optional[str] = None  # Optional custom task name
+
+class TaskInfo(BaseModel):
+    id: int
+    task_name: str
+    source_id: int
+    source_name: str
+    mapping_id: int
+    mapping_name: str
+    entity_name: str
+    scheduled_time: datetime
+    created_at: datetime
+
+class TasksListResponse(BaseModel):
+    total_tasks: int
+    tasks: List[TaskInfo]
+
+class TaskUpdateRequest(BaseModel):
+    scheduled_time: datetime
+    task_name: Optional[str] = None
