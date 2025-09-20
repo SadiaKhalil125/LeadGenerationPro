@@ -5,7 +5,7 @@ import './App.css'
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import WebScraperForm from './WebScraperForm'
 import EntityForm from "./EntityForm"
-import TaskForm from './TaskForm'
+import EntityMappingFrom from './EntityMappingForm'
 import EntityList from './EntityList'
 import TaskScheduler from './TaskSchedular'
 import NavigationPage from './NavigationPage'
@@ -19,7 +19,7 @@ function App() {
         <Route path="/" element={<NavigationPage />} />
         <Route path="/entityform" element={<EntityForm />} />
         <Route path="/entitylist" element={<EntityList />} />
-        <Route path="/taskform" element={<TaskForm />} />
+        <Route path="/entitymappingform" element={<EntityMappingFrom />} />
         <Route path="/taskscheduler" element={<TaskScheduler />} />
         <Route path="/tasksmanagement" element={<TasksManagement />} />
         <Route path="/webscraperform" element={<WebScraperForm />} />

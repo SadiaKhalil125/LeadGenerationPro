@@ -25,7 +25,7 @@ const NavigationPage = () => {
         </button>
 
         <button
-          onClick={() => navigate('/taskform')}
+          onClick={() => navigate('/entitymappingform')}
           className="px-6 py-3 rounded-xl text-white bg-gradient-to-b from-green-600 to-green-400 hover:bg-green-700 shadow-md"
         >
           Create Entity Mapping
