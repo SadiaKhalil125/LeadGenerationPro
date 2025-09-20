@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+psycopg2-binary
+beautifulsoup4
+python-dotenv
+pydantic
+
+
+httpx
+pytest
+pytest-asyncio
+
+
