@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi import Body
 from bs4 import BeautifulSoup
 from datetime import datetime
 import asyncio
@@ -685,7 +686,58 @@ async def get_all_mappings():
     except Exception as e:
         print(f"Error fetching mappings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch mappings: {str(e)}")
-    
+
+@app.put("/edit-mapping/{mapping_name}", response_model=dict)
+async def edit_mapping(mapping_name: str, payload: dict = Body(...)):
+    """
+    Edit an existing entity mapping by mapping_name.
+    Payload can include: mapping_name, container_selector, field_mappings, source_id
+    """
+    try:
+        mapping_name = mapping_name.strip()
+        if not mapping_name:
+            raise HTTPException(status_code=400, detail="Mapping name is required.")
+
+        cur = conn.cursor()
+
+        # Check if mapping exists
+        cur.execute("SELECT id FROM entity_mappings WHERE mapping_name = %s;", (mapping_name,))
+        mapping = cur.fetchone()
+        if not mapping:
+            cur.close()
+            raise HTTPException(status_code=404, detail=f"Mapping '{mapping_name}' not found.")
+
+        # Update values
+        cur.execute("""
+            UPDATE entity_mappings
+            SET mapping_name = %s,
+                container_selector = %s,
+                field_mappings = %s,
+                source_id = %s
+            WHERE mapping_name = %s;
+        """, (
+            payload.get("mapping_name", mapping_name),
+            payload.get("container_selector"),
+            payload.get("field_mappings"),
+            payload.get("source_id"),
+            mapping_name
+        ))
+
+        conn.commit()
+        cur.close()
+
+        return {
+            "success": True,
+            "message": f"Mapping '{mapping_name}' updated successfully.",
+            "updated_mapping": payload
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update mapping: {str(e)}")
+
 @app.delete("/delete-mapping/{mapping_name}", response_model=dict)
 async def delete_mapping(mapping_name: str):
     """
