@@ -30,14 +30,24 @@ DB_PASS = os.getenv("DB_PASS", "9042c98a")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
-conn = psycopg2.connect(
-    dbname=DB_NAME,
-    user=DB_USER,
-    password=DB_PASS,
-    host=DB_HOST,
-    port=DB_PORT
-)
-cur = conn.cursor()
+def get_db_cursor():
+    """Get a fresh database cursor"""
+    connection = psycopg2.connect(
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST,
+        port=DB_PORT
+    )
+    return connection, connection.cursor()
+# conn = psycopg2.connect(
+#     dbname=DB_NAME,
+#     user=DB_USER,
+#     password=DB_PASS,
+#     host=DB_HOST,
+#     port=DB_PORT
+# )
+# cur = conn.cursor()
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -173,6 +183,7 @@ TYPE_MAP = {
 async def save_entity(request: EntityRequest):
     """Save a new entity configuration."""
     try:
+        conn, cur = get_db_cursor()
         table_name = request.name.strip()
         if not table_name or not request.attributes:
             raise HTTPException(status_code=400, detail="Table name and attributes required.")
@@ -192,7 +203,7 @@ async def save_entity(request: EntityRequest):
             ))
 
         # Create table
-        cur = conn.cursor()
+        
         create_stmt = sql.SQL("CREATE TABLE IF NOT EXISTS {table} ( {fields} );").format(
             table=sql.Identifier(table_name),
             fields=sql.SQL(", ").join(cols)
@@ -215,11 +226,12 @@ async def save_entity(request: EntityRequest):
 async def edit_entity(table_name: str, request: EntityRequest):
     """Edit entity by adding new columns (SQL ALTER TABLE)."""
     try:
+        conn, cur = get_db_cursor()
         table_name = table_name.strip()
         if not table_name or not request.attributes:
             raise HTTPException(status_code=400, detail="Table name and attributes required.")
 
-        cur = conn.cursor()
+        
         
         # Check if table exists
         cur.execute("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = %s)", (table_name,))
@@ -265,6 +277,7 @@ async def edit_entity(table_name: str, request: EntityRequest):
 async def delete_entity(table_name: str):
     """Delete entire entity (DROP TABLE)."""
     try:
+        conn, cur = get_db_cursor()
         table_name = table_name.strip()
         if not table_name:
             raise HTTPException(status_code=400, detail="Table name required.")
@@ -297,6 +310,7 @@ async def delete_entity(table_name: str):
 async def delete_column(table_name: str, column_name: str):
     """Delete a specific column from entity (ALTER TABLE DROP COLUMN)."""
     try:
+        conn, cur = get_db_cursor()
         table_name = table_name.strip()
         column_name = column_name.strip()
         
@@ -306,7 +320,7 @@ async def delete_column(table_name: str, column_name: str):
         if column_name == "id":
             raise HTTPException(status_code=400, detail="Cannot delete primary key column 'id'.")
 
-        cur = conn.cursor()
+        
         
         # Check if table exists
         cur.execute("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = %s)", (table_name,))
@@ -345,7 +359,7 @@ async def delete_column(table_name: str, column_name: str):
 async def rename_column(table_name: str, old_name: str, new_name: str):
     """Rename a column in the specified table."""
     try:
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
         rename_stmt = sql.SQL("ALTER TABLE {table} RENAME COLUMN {old_col} TO {new_col};").format(
             table=sql.Identifier(table_name),
             old_col=sql.Identifier(old_name),
@@ -367,11 +381,12 @@ async def rename_column(table_name: str, old_name: str, new_name: str):
 async def get_entity_info(table_name: str):
     """Get information about an entity (table structure)."""
     try:
+        conn, cur = get_db_cursor()
         table_name = table_name.strip()
         if not table_name:
             raise HTTPException(status_code=400, detail="Table name required.")
 
-        cur = conn.cursor()
+        
         
         # Check if table exists and get column info
         cur.execute("""
@@ -416,8 +431,9 @@ def generate_mapping_name(entity_name: str, url: str) -> str:
 @app.post("/save-source", response_model=dict)
 async def save_source(name: str, url: str):
     """Save a website source in 'sources' table or reuse if it already exists."""
-    cur = conn.cursor()
+    conn, cur = get_db_cursor()
     try:
+
         name = name.strip()
         url = url.strip()
         if not name or not url:
@@ -472,7 +488,7 @@ async def save_entity_mapping(mapping: MappingFormRequest):
        - Save mapping linked to source_id.
     """
 
-    cur = conn.cursor()
+    conn, cur = get_db_cursor()
     try:
         # Normalize URL before inserting
         normalized_url = str(mapping.url)
@@ -577,7 +593,8 @@ async def get_all_entities():
     Get all saved entities (tables) with their column information.
     """
     try:
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
+        
         
         # Get all user-created tables (excluding system tables)
         cur.execute("""
@@ -585,7 +602,7 @@ async def get_all_entities():
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
             AND table_type = 'BASE TABLE'
-            AND table_name NOT IN ('entity_mappings','sources')
+            AND table_name NOT IN ('entity_mappings','sources','tasks')
             ORDER BY table_name
         """)
         
@@ -626,7 +643,8 @@ async def get_all_mappings():
     Get all saved entity mappings.
     """
     try:
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
+        
         
         # Get all mappings
         
@@ -681,11 +699,12 @@ async def delete_mapping(mapping_name: str):
     Delete an entity mapping by its mapping_name.
     """
     try:
+        conn, cur = get_db_cursor()
         mapping_name = mapping_name.strip()
         if not mapping_name:
             raise HTTPException(status_code=400, detail="Mapping name is required.")
 
-        cur = conn.cursor()
+        
 
         # Check if mapping exists
         cur.execute("SELECT id FROM entity_mappings WHERE mapping_name = %s;", (mapping_name,))
@@ -718,7 +737,7 @@ async def get_all_sources():
     Get all saved website sources.
     """
     try:
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
         # 🗃 Fetch all sources sorted by creation order (id descending for newest first)
         cur.execute("""
             SELECT id, name, url
@@ -751,7 +770,8 @@ async def get_all_sources():
 async def create_task(request: TaskRequest):
     """Create a scheduled scraping task."""
     try:
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
+        # cur = conn.cursor()
         
         # Create tasks table if it doesn't exist
         cur.execute("""
@@ -829,7 +849,8 @@ async def create_task(request: TaskRequest):
 async def get_all_tasks():
     """Get all scheduled tasks with their details."""
     try:
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
+        # cur = conn.cursor()
         
         cur.execute("""
             SELECT 
@@ -878,7 +899,8 @@ async def get_all_tasks():
 async def get_mappings_by_source(source_id: int):
     """Get all mappings for a specific source by ID."""
     try:
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
+        # cur = conn.cursor()
         
         cur.execute("""
             SELECT em.id, em.mapping_name, em.entity_name, em.container_selector
@@ -918,7 +940,8 @@ async def get_mappings_by_source(source_id: int):
 async def delete_task(task_id: int):
     """Delete a scheduled task."""
     try:
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
+        # cur = conn.cursor()
         
         # Check if task exists
         cur.execute("SELECT task_name FROM tasks WHERE id = %s", (task_id,))
@@ -949,7 +972,8 @@ async def delete_task(task_id: int):
 async def update_task(task_id: int, request: TaskUpdateRequest):
     """Update a task's scheduled time and optionally its name."""
     try:
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
+        # cur = conn.cursor()
         
         # Check if task exists
         cur.execute("SELECT task_name FROM tasks WHERE id = %s", (task_id,))

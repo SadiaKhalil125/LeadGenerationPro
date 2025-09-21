@@ -45,7 +45,7 @@ const EntityForm = () => {
         body: JSON.stringify(payload),
       });
       const data = await response.json();
-
+      
       if (data.success === true) {
         alert("Entity saved successfully!");
         setEntityName("");
