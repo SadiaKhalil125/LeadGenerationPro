@@ -34,7 +34,7 @@ const NavigationPage = () => {
           onClick={() => navigate('/mappingmanager')}
           className="px-6 py-3 rounded-xl text-white bg-gradient-to-b from-green-600 to-green-400 hover:bg-green-700 shadow-md"
         >
-          Review/Manage Entity Mapping
+          Entity Mapping List
         </button>
 
         <button

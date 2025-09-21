@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
-import axios from "axios";
 
-const API_BASE = "http://localhost:8000"; // change if needed
+const API_BASE = "http://127.0.0.1:8000";
 
 function shortDate(ts) {
   if (!ts) return "-";
@@ -14,21 +13,20 @@ function shortDate(ts) {
 }
 
 function statusForMapping(m) {
-  // Basic heuristic: if field_mappings exist -> Active, else Broken
   if (!m.field_mappings || Object.keys(m.field_mappings).length === 0) {
     return { label: "Broken", color: "bg-yellow-100 text-yellow-800" };
   }
   return { label: "Active", color: "bg-green-100 text-green-800" };
 }
 
-export default function MappingManager() {
+const MappingManager = () => {
   const [mappings, setMappings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState("");
   const [filterSource, setFilterSource] = useState("all");
-  const [editModal, setEditModal] = useState(null); // {originalName, mapping}
+  const [editModal, setEditModal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(null);
@@ -41,9 +39,9 @@ export default function MappingManager() {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.get(`${API_BASE}/mappings`);
-      // response_model returns MappingsListResponse with mappings array
-      const list = res.data?.mappings ?? [];
+      const res = await fetch(`${API_BASE}/mappings`);
+      const data = await res.json();
+      const list = data?.mappings ?? [];
       setMappings(list);
       setLastRefreshed(new Date());
     } catch (err) {
@@ -85,7 +83,14 @@ export default function MappingManager() {
     if (!window.confirm(`Delete mapping '${mappingName}'? This cannot be undone.`)) return;
     setDeleting(true);
     try {
-      await axios.delete(`${API_BASE}/delete-mapping/${encodeURIComponent(mappingName)}`);
+      const res = await fetch(`${API_BASE}/delete-mapping/${encodeURIComponent(mappingName)}`, {
+        method: 'DELETE'
+      });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
       setMappings((prev) => prev.filter((m) => m.mapping_name !== mappingName));
     } catch (err) {
       console.error("Delete failed:", err);
@@ -96,7 +101,14 @@ export default function MappingManager() {
   };
 
   const onOpenEdit = (mapping) => {
-    // keep original mapping name for PUT path (server expects mapping_name path param)
+    // Convert field_mappings object to array of key-value pairs for easier editing
+    const fieldMappingsArray = Object.entries(mapping.field_mappings || {}).map(([key, value]) => ({
+      id: Math.random().toString(36).substr(2, 9), // temporary ID for React keys
+      field_name: key,
+      selector: value.selector || "",
+      extract: value.extract || "text"
+    }));
+
     setEditModal({
       originalName: mapping.mapping_name,
       mapping: {
@@ -104,36 +116,94 @@ export default function MappingManager() {
         mapping_name: mapping.mapping_name,
         entity_name: mapping.entity_name,
         container_selector: mapping.container_selector ?? "",
-        field_mappings: mapping.field_mappings ?? {},
         source_id: mapping.source_id,
         source_name: mapping.source_name,
       },
-      jsonEditorText: JSON.stringify(mapping.field_mappings ?? {}, null, 2),
-      jsonError: null,
+      fieldMappingsArray: fieldMappingsArray
+    });
+  };
+
+  const addFieldMapping = () => {
+    if (!editModal) return;
+    const newField = {
+      id: Math.random().toString(36).substr(2, 9),
+      field_name: "",
+      selector: "",
+      extract: "text"
+    };
+    setEditModal({
+      ...editModal,
+      fieldMappingsArray: [...editModal.fieldMappingsArray, newField]
+    });
+  };
+
+  const removeFieldMapping = (id) => {
+    if (!editModal) return;
+    setEditModal({
+      ...editModal,
+      fieldMappingsArray: editModal.fieldMappingsArray.filter(field => field.id !== id)
+    });
+  };
+
+  const updateFieldMapping = (id, field, value) => {
+    if (!editModal) return;
+    setEditModal({
+      ...editModal,
+      fieldMappingsArray: editModal.fieldMappingsArray.map(mapping => 
+        mapping.id === id ? { ...mapping, [field]: value } : mapping
+      )
     });
   };
 
   const onSaveEdit = async () => {
     if (!editModal) return;
+
+    // Validate that all fields have names and selectors
+    const invalidFields = editModal.fieldMappingsArray.filter(
+      field => !field.field_name.trim() || !field.selector.trim()
+    );
+
+    if (invalidFields.length > 0) {
+      alert("Please fill in all field names and selectors before saving.");
+      return;
+    }
+
     setSaving(true);
     try {
-      // Build payload — only include editable fields
+      // Convert array back to object format expected by backend
+      const fieldMappingsObject = {};
+      editModal.fieldMappingsArray.forEach(field => {
+        fieldMappingsObject[field.field_name] = {
+          selector: field.selector,
+          extract: field.extract
+        };
+      });
+
       const payload = {
         mapping_name: editModal.mapping.mapping_name,
         container_selector: editModal.mapping.container_selector,
-        field_mappings: editModal.mapping.field_mappings,
+        field_mappings: fieldMappingsObject,
         source_id: editModal.mapping.source_id,
       };
 
-      await axios.put(
-        `${API_BASE}/edit-mapping/${encodeURIComponent(editModal.originalName)}`,
-        payload
-      );
+      const res = await fetch(`${API_BASE}/edit-mapping/${encodeURIComponent(editModal.originalName)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
 
-      // Update local list: replace matching mapping by mapping_name (use id if available)
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      // Update local list
       setMappings((prev) =>
         prev.map((m) =>
-          m.mapping_name === editModal.originalName ? { ...m, ...editModal.mapping } : m
+          m.mapping_name === editModal.originalName 
+            ? { ...m, ...editModal.mapping, field_mappings: fieldMappingsObject } 
+            : m
         )
       );
 
@@ -161,7 +231,7 @@ export default function MappingManager() {
           <div className="flex items-center space-x-3">
             <button
               onClick={fetchMappings}
-              className="bg-black text-white px-3 py-2 rounded shadow hover:opacity-90 flex items-center space-x-2"
+              className="bg-white text-teal-600 px-3 py-2 rounded shadow hover:opacity-90 flex items-center space-x-2"
               title="Refresh"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -170,12 +240,12 @@ export default function MappingManager() {
               </svg>
               <span>Refresh</span>
             </button>
-            <a
-              href="/entitymappingform"
-              className="bg-green-500 text-white px-3 py-2 rounded shadow hover:opacity-90"
+            <button 
+              onClick={() => window.location.href = '/entitymappingform'}
+              className="bg-gradient-to-b from-yellow-500 to-yellow-400 text-black px-3 py-2 rounded shadow hover:opacity-90"
             >
               + Create Mapping
-            </a>
+            </button>
           </div>
         </div>
 
@@ -274,14 +344,14 @@ export default function MappingManager() {
 
                         <button
                           onClick={() => onOpenEdit(m)}
-                          className="px-3 py-1 bg-yellow-500 text-white rounded text-sm"
+                          className="px-3 py-1 bg-gradient-to-b from-yellow-500 to-yellow-400 text-white rounded text-sm"
                         >
                           Edit
                         </button>
 
                         <button
                           onClick={() => onDelete(m.mapping_name)}
-                          className="px-3 py-1 bg-red-500 text-white rounded text-sm"
+                          className="px-3 py-1 bg-gradient-to-b from-red-500 to-red-400 text-white rounded text-sm"
                           disabled={deleting}
                         >
                           Delete
@@ -292,9 +362,15 @@ export default function MappingManager() {
                     {expandedId === m.id && (
                       <div className="mt-4 bg-gray-50 p-3 rounded">
                         <div className="text-sm text-gray-700 mb-2 font-medium">Field mappings</div>
-                        <pre className="whitespace-pre-wrap text-sm bg-white p-3 rounded border text-gray-800">
-                          {JSON.stringify(m.field_mappings ?? {}, null, 2)}
-                        </pre>
+                        <div className="space-y-2">
+                          {Object.entries(m.field_mappings || {}).map(([key, value]) => (
+                            <div key={key} className="bg-white p-2 rounded border text-sm">
+                              <div className="font-medium text-gray-800">{key}</div>
+                              <div className="text-gray-600">Selector: {value.selector}</div>
+                              <div className="text-gray-600">Extract: {value.extract}</div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -308,79 +384,124 @@ export default function MappingManager() {
       {/* Edit Modal */}
       {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="bg-white w-full max-w-2xl rounded shadow p-6">
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded shadow p-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Edit Mapping</h2>
-              <button onClick={() => setEditModal(null)} className="text-gray-600">✕</button>
+              <button onClick={() => setEditModal(null)} className="text-gray-600 text-2xl">✕</button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="block">
-                <div className="text-sm text-gray-600 mb-1">Mapping Name</div>
-                <input
-                  value={editModal.mapping.mapping_name}
-                  onChange={(e) => setEditModal({
-                    ...editModal,
-                    mapping: { ...editModal.mapping, mapping_name: e.target.value }
-                  })}
-                  className="w-full border p-2 rounded"
-                />
-              </label>
-
-              <label className="block">
-                <div className="text-sm text-gray-600 mb-1">Source</div>
-                <input
-                  value={editModal.mapping.source_name || ""}
-                  readOnly
-                  className="w-full border p-2 rounded bg-gray-50"
-                />
-              </label>
-
-              <label className="block md:col-span-2">
-                <div className="text-sm text-gray-600 mb-1">Container Selector</div>
-                <input
-                  value={editModal.mapping.container_selector}
-                  onChange={(e) => setEditModal({
-                    ...editModal,
-                    mapping: { ...editModal.mapping, container_selector: e.target.value }
-                  })}
-                  className="w-full border p-2 rounded"
-                />
-              </label>
-
-              <label className="block md:col-span-2">
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-600 mb-1">Field mappings (JSON)</div>
-                  <div className="text-xs text-gray-500">Edit JSON then click Save</div>
-                </div>
-                <textarea
-                  value={editModal.jsonEditorText}
-                  onChange={(e) => {
-                    const text = e.target.value;
-                    let parsed = null;
-                    let jsonError = null;
-                    try {
-                      parsed = JSON.parse(text);
-                    } catch (err) {
-                      jsonError = err.message;
-                    }
-                    setEditModal({
+            <div className="space-y-4">
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block">
+                  <div className="text-sm text-gray-600 mb-1">Mapping Name</div>
+                  <input
+                    value={editModal.mapping.mapping_name}
+                    onChange={(e) => setEditModal({
                       ...editModal,
-                      jsonEditorText: text,
-                      jsonError,
-                      mapping: { ...editModal.mapping, field_mappings: parsed ?? editModal.mapping.field_mappings }
-                    });
-                  }}
-                  rows={10}
-                  className="w-full border p-2 rounded font-mono text-sm"
-                />
-                {editModal.jsonError && (
-                  <div className="text-red-600 text-sm mt-1">JSON error: {editModal.jsonError}</div>
+                      mapping: { ...editModal.mapping, mapping_name: e.target.value }
+                    })}
+                    className="w-full border p-2 rounded"
+                  />
+                </label>
+
+                <label className="block">
+                  <div className="text-sm text-gray-600 mb-1">Source</div>
+                  <input
+                    value={editModal.mapping.source_name || ""}
+                    readOnly
+                    className="w-full border p-2 rounded bg-gray-50"
+                  />
+                </label>
+
+                <label className="block md:col-span-2">
+                  <div className="text-sm text-gray-600 mb-1">Container Selector</div>
+                  <input
+                    value={editModal.mapping.container_selector}
+                    onChange={(e) => setEditModal({
+                      ...editModal,
+                      mapping: { ...editModal.mapping, container_selector: e.target.value }
+                    })}
+                    className="w-full border p-2 rounded"
+                    placeholder="e.g., .item, .product, .listing"
+                  />
+                </label>
+              </div>
+
+              {/* Field Mappings */}
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-lg font-semibold">Field Mappings</h3>
+                  <button
+                    onClick={addFieldMapping}
+                    className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                  >
+                    + Add Field
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {editModal.fieldMappingsArray.map((field, index) => (
+                    <div key={field.id} className="border rounded p-3 bg-gray-50">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                        <div>
+                          <label className="text-sm text-gray-600 mb-1 block">Field Name</label>
+                          <input
+                            value={field.field_name}
+                            onChange={(e) => updateFieldMapping(field.id, 'field_name', e.target.value)}
+                            className="w-full border p-2 rounded"
+                            placeholder="e.g., company_name"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="text-sm text-gray-600 mb-1 block">CSS Selector</label>
+                          <input
+                            value={field.selector}
+                            onChange={(e) => updateFieldMapping(field.id, 'selector', e.target.value)}
+                            className="w-full border p-2 rounded"
+                            placeholder="e.g., h3.title a"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="text-sm text-gray-600 mb-1 block">Extract</label>
+                          <select
+                            value={field.extract}
+                            onChange={(e) => updateFieldMapping(field.id, 'extract', e.target.value)}
+                            className="w-full border p-2 rounded"
+                          >
+                            <option value="text">Text</option>
+                            <option value="href">Href</option>
+                            <option value="src">Src</option>
+                            <option value="value">Value</option>
+                            <option value="title">Title</option>
+                            <option value="alt">Alt</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <button
+                            onClick={() => removeFieldMapping(field.id)}
+                            className="w-full px-3 py-2 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {editModal.fieldMappingsArray.length === 0 && (
+                  <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded">
+                    No field mappings defined. Click "Add Field" to get started.
+                  </div>
                 )}
-              </label>
+              </div>
             </div>
 
-            <div className="mt-4 flex justify-end gap-3">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setEditModal(null)}
                 className="px-4 py-2 border rounded"
@@ -390,10 +511,10 @@ export default function MappingManager() {
               </button>
               <button
                 onClick={onSaveEdit}
-                className="px-4 py-2 bg-green-600 text-white rounded"
-                disabled={saving || !!editModal.jsonError}
+                className="px-4 py-2 bg-gradient-to-b from-green-500 to-green-400 text-white rounded"
+                disabled={saving}
               >
-                {saving ? "Saving..." : "Save"}
+                {saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>
@@ -401,4 +522,6 @@ export default function MappingManager() {
       )}
     </div>
   );
-}
+};
+
+export default MappingManager;

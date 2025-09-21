@@ -17,7 +17,7 @@ import json
 from psycopg2.extras import Json
 from psycopg2 import sql
 from urllib.parse import urlparse
-
+from psycopg2.extras import Json
 
 # 1. Set the event loop policy before any async operations
 if sys.platform == "win32":
@@ -687,27 +687,42 @@ async def get_all_mappings():
         print(f"Error fetching mappings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch mappings: {str(e)}")
 
+
 @app.put("/edit-mapping/{mapping_name}", response_model=dict)
 async def edit_mapping(mapping_name: str, payload: dict = Body(...)):
     """
     Edit an existing entity mapping by mapping_name.
     Payload can include: mapping_name, container_selector, field_mappings, source_id
     """
+    connection = None
     try:
         mapping_name = mapping_name.strip()
         if not mapping_name:
             raise HTTPException(status_code=400, detail="Mapping name is required.")
 
-        cur = conn.cursor()
+        # Create fresh connection
+        connection = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            host=DB_HOST,
+            port=DB_PORT
+        )
+        cur = connection.cursor()
 
         # Check if mapping exists
         cur.execute("SELECT id FROM entity_mappings WHERE mapping_name = %s;", (mapping_name,))
         mapping = cur.fetchone()
         if not mapping:
-            cur.close()
             raise HTTPException(status_code=404, detail=f"Mapping '{mapping_name}' not found.")
 
-        # Update values
+        # Get the values from payload, with fallbacks
+        new_mapping_name = payload.get("mapping_name", mapping_name)
+        container_selector = payload.get("container_selector")
+        field_mappings = payload.get("field_mappings", {})
+        source_id = payload.get("source_id")
+
+        # Update the mapping
         cur.execute("""
             UPDATE entity_mappings
             SET mapping_name = %s,
@@ -716,26 +731,34 @@ async def edit_mapping(mapping_name: str, payload: dict = Body(...)):
                 source_id = %s
             WHERE mapping_name = %s;
         """, (
-            payload.get("mapping_name", mapping_name),
-            payload.get("container_selector"),
-            payload.get("field_mappings"),
-            payload.get("source_id"),
+            new_mapping_name,
+            container_selector,
+            Json(field_mappings),  # Use Json() for JSONB fields
+            source_id,
             mapping_name
         ))
 
-        conn.commit()
+        connection.commit()
         cur.close()
+        connection.close()
 
         return {
             "success": True,
             "message": f"Mapping '{mapping_name}' updated successfully.",
-            "updated_mapping": payload
+            "updated_mapping": {
+                "mapping_name": new_mapping_name,
+                "container_selector": container_selector,
+                "field_mappings": field_mappings,
+                "source_id": source_id
+            }
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        conn.rollback()
+        if connection:
+            connection.rollback()
+            connection.close()
         raise HTTPException(status_code=500, detail=f"Failed to update mapping: {str(e)}")
 
 @app.delete("/delete-mapping/{mapping_name}", response_model=dict)
