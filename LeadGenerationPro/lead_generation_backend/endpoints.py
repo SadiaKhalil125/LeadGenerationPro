@@ -40,14 +40,7 @@ def get_db_cursor():
         port=DB_PORT
     )
     return connection, connection.cursor()
-# conn = psycopg2.connect(
-#     dbname=DB_NAME,
-#     user=DB_USER,
-#     password=DB_PASS,
-#     host=DB_HOST,
-#     port=DB_PORT
-# )
-# cur = conn.cursor()
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
