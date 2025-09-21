@@ -3,12 +3,12 @@ from fastapi import Body
 from bs4 import BeautifulSoup
 from datetime import datetime
 import asyncio
-from models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest
-from utils import extract_value, fetch_page
+from .models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest
+from .utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import sys
-from crawl4Util import extract_website
+from .crawl4Util import extract_website
 import asyncio
 from asyncio import WindowsProactorEventLoopPolicy  # For proper subprocess support on Windows
 import psycopg2
@@ -25,9 +25,9 @@ if sys.platform == "win32":
 
 
 # 2. Database connection setup
-DB_NAME = os.getenv("DB_NAME", "LeadGenerationPro")
+DB_NAME = os.getenv("DB_NAME", "LeadGen")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS", "9042c98a")
+DB_PASS = os.getenv("DB_PASS", "hannia")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
