@@ -32,7 +32,7 @@ const TasksManagement = () => {
     const fetchTasks = async () => {
         try {
             setLoading(true);
-            const res = await fetch('http://127.0.0.1:8000/tasks');
+            const res = await fetch('http://127.0.0.1:8000/task/tasks');
             const data = await res.json();
             setTasks(data.tasks || []);
         } catch (error) {
@@ -75,7 +75,7 @@ const TasksManagement = () => {
                 scheduled_time: new Date(editScheduledTime).toISOString(),
                 task_name: editTaskName || undefined
             };
-            const res = await fetch(`http://127.0.0.1:8000/update-task/${taskId}`, {
+            const res = await fetch(`http://127.0.0.1:8000/task/update-task/${taskId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestData),
@@ -99,7 +99,7 @@ const TasksManagement = () => {
         if (!confirm(`Are you sure you want to delete task "${taskName}"?`)) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://127.0.0.1:8000/delete-task/${taskId}`, { method: 'DELETE' });
+            const res = await fetch(`http://127.0.0.1:8000/task/delete-task/${taskId}`, { method: 'DELETE' });
             const data = await res.json();
             if (res.ok && data.success) {
                 setResponse({ type: 'success', message: data.message });

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "http://127.0.0.1:8000/mapping";
 
 function shortDate(ts) {
   if (!ts) return "-";

@@ -34,7 +34,7 @@ const TaskScheduler = () => {
 
     const fetchSources = async () => {
         try {
-            const res = await fetch('http://127.0.0.1:8000/sources');
+            const res = await fetch('http://127.0.0.1:8000/source/sources');
             const data = await res.json();
             setSources(data.sources || []);
         } catch (error) {
@@ -45,7 +45,7 @@ const TaskScheduler = () => {
 
     const fetchTasks = async () => {
         try {
-            const res = await fetch('http://127.0.0.1:8000/tasks');
+            const res = await fetch('http://127.0.0.1:8000/task/tasks');
             const data = await res.json();
             setTasks(data.tasks || []);
         } catch (error) {
@@ -61,7 +61,7 @@ const TaskScheduler = () => {
             return;
         }
         try {
-            const res = await fetch(`http://127.0.0.1:8000/mappings-by-source/${sourceId}`);
+            const res = await fetch(`http://127.0.0.1:8000/mapping/mappings-by-source/${sourceId}`);
             const data = await res.json();
             if (data.success) {
                 setMappings(data.mappings || []);
@@ -95,7 +95,7 @@ const TaskScheduler = () => {
                 scheduled_time: new Date(scheduledTime).toISOString(),
                 task_name: taskName || undefined
             };
-            const res = await fetch('http://127.0.0.1:8000/create-task', {
+            const res = await fetch('http://127.0.0.1:8000/task/create-task', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestData),
@@ -124,7 +124,7 @@ const TaskScheduler = () => {
         if (!confirm(`Are you sure you want to delete task "${taskName}"?`)) return;
 
         try {
-            const res = await fetch(`http://127.0.0.1:8000/delete-task/${taskId}`, { method: 'DELETE' });
+            const res = await fetch(`http://127.0.0.1:8000/task/delete-task/${taskId}`, { method: 'DELETE' });
             const data = await res.json();
             if (res.ok && data.success) {
                 setResponse({ type: 'success', message: data.message });

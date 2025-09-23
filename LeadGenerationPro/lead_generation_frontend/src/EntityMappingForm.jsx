@@ -17,7 +17,7 @@ export default function EntityMappingScreen() {
   useEffect(() => {
     const fetchEntities = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/entities");
+        const res = await fetch("http://127.0.0.1:8000/entity/entities");
         if (!res.ok) throw new Error(`Failed: ${res.status}`);
         const data = await res.json();
 
@@ -118,7 +118,7 @@ export default function EntityMappingScreen() {
     const payload = { source, url, entity_mappings };
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/save-entity-mapping", {
+      const res = await fetch("http://127.0.0.1:8000/mapping/save-entity-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
