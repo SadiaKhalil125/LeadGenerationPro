@@ -49,6 +49,19 @@ const NavigationPage = () => {
         >
             Task List
         </button>
+        <button
+          onClick={() => navigate('/taskexecutor')}
+          className="px-6 py-3 rounded-xl text-white bg-gradient-to-b from-purple-600 to-purple-400 hover:bg-purple-700 shadow-md"
+        >
+            Task Executor
+        </button>
+        <button
+          onClick={() => navigate('/sourcemanagement')}
+          className="px-6 py-3 rounded-xl text-white bg-gradient-to-b from-yellow-600 to-yellow-400 hover:bg-purple-700 shadow-md"
+        >
+            Source Manager
+        </button>
+
       </div>
     </div>
   );

@@ -3,6 +3,17 @@ from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest
 from fastapi import APIRouter
 from .get_db_connection import get_db_cursor
 from datetime import datetime
+from crawl4Util import extract_website
+from models import ScrapeRequest
+import asyncio
+import sys
+from psycopg2 import sql
+from asyncio import WindowsProactorEventLoopPolicy 
+import sys
+import asyncio
+
+# if sys.platform == "win32":
+#     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 router = APIRouter()
 
@@ -219,3 +230,186 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update task: {str(e)}")
+    
+@router.post("/execute-task/{task_id}")
+async def execute_task(task_id: int):
+    """Execute a task by scraping data and storing it in the corresponding entity table."""
+    conn = None
+    try:
+        conn, cur = get_db_cursor()
+        
+        # Get task details with all necessary information
+        cur.execute("""
+            SELECT 
+                t.id,
+                t.task_name,
+                t.source_id,
+                s.name as source_name,
+                s.url as source_url,
+                t.mapping_id,
+                em.mapping_name,
+                em.entity_name,
+                em.container_selector,
+                em.field_mappings
+            FROM tasks t
+            JOIN sources s ON t.source_id = s.id
+            JOIN entity_mappings em ON t.mapping_id = em.id
+            WHERE t.id = %s
+        """, (task_id,))
+        
+        task_data = cur.fetchone()
+        if not task_data:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Extract task information
+        (task_id_db, task_name, source_id, source_name, source_url, 
+         mapping_id, mapping_name, entity_name, container_selector, field_mappings) = task_data
+        
+        # Build ScrapeRequest from task data
+        scrape_request = ScrapeRequest(
+            entity_name=entity_name,
+            url=source_url,
+            container_selector=container_selector,
+            field_mappings=field_mappings,
+            max_items=None,  # You can make this configurable later
+            timeout=30  # Increased timeout for better reliability
+        )
+        
+        # Execute scraping using the dynamic scraper (now properly async)
+        scrape_response = await extract_website(scrape_request)
+        
+        if not scrape_response.success or not scrape_response.data:
+            return {
+                "success": False,
+                "task_id": task_id,
+                "task_name": task_name,
+                "message": f"Scraping failed: {scrape_response.message}",
+                "items_scraped": 0,
+                "items_stored": 0
+            }
+        
+        # Get entity table structure to match fields
+        cur.execute("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = %s 
+            AND column_name != 'id'
+            ORDER BY ordinal_position
+        """, (entity_name,))
+        
+        table_columns = {row[0]: row[1] for row in cur.fetchall()}
+        
+        if not table_columns:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Entity table '{entity_name}' not found or has no columns"
+            )
+        
+        # Insert scraped data into entity table
+        items_stored = 0
+        for item in scrape_response.data:
+            # Prepare data for insertion, matching table columns
+            insert_data = {}
+            for column_name in table_columns.keys():
+                # Get value from scraped data, or None if not present
+                insert_data[column_name] = item.get(column_name)
+            
+            # Build dynamic INSERT statement
+            columns = list(insert_data.keys())
+            values = list(insert_data.values())
+            
+            if columns:  # Only insert if we have columns to insert
+                insert_stmt = sql.SQL(
+                    "INSERT INTO {} ({}) VALUES ({})"
+                ).format(
+                    sql.Identifier(entity_name),
+                    sql.SQL(', ').join(map(sql.Identifier, columns)),
+                    sql.SQL(', ').join(sql.Placeholder() * len(columns))
+                )
+                
+                try:
+                    cur.execute(insert_stmt, values)
+                    items_stored += 1
+                except Exception as e:
+                    print(f"Error inserting row: {e}")
+                    # Continue with next item instead of failing completely
+                    continue
+        
+        # Commit all inserts
+        conn.commit()
+        
+        return {
+            "success": True,
+            "task_id": task_id,
+            "task_name": task_name,
+            "entity_name": entity_name,
+            "message": f"Task '{task_name}' executed successfully",
+            "items_scraped": len(scrape_response.data),
+            "items_stored": items_stored,
+            "scraping_details": {
+                "url": source_url,
+                "scraped_at": scrape_response.scraped_at.isoformat(),
+                "total_items_found": scrape_response.total_items
+            }
+        }
+        
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Task execution failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.get("/task-execution-history/{task_id}")
+async def get_task_execution_history(task_id: int):
+    """Get execution history for a specific task (you can extend this later)."""
+    try:
+        conn, cur = get_db_cursor()
+        
+        # For now, just return task info
+        # You can extend this later to track execution history in a separate table
+        cur.execute("""
+            SELECT 
+                t.id,
+                t.task_name,
+                s.name as source_name,
+                em.entity_name,
+                t.created_at,
+                t.scheduled_time
+            FROM tasks t
+            JOIN sources s ON t.source_id = s.id
+            JOIN entity_mappings em ON t.mapping_id = em.id
+            WHERE t.id = %s
+        """, (task_id,))
+        
+        task_info = cur.fetchone()
+        if not task_info:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Get count of records in entity table (as a simple execution indicator)
+        entity_name = task_info[3]
+        cur.execute(sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(entity_name)))
+        record_count = cur.fetchone()[0]
+        
+        cur.close()
+        
+        return {
+            "task_id": task_info[0],
+            "task_name": task_info[1],
+            "source_name": task_info[2],
+            "entity_name": task_info[3],
+            "created_at": task_info[4],
+            "scheduled_time": task_info[5],
+            "current_record_count": record_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get execution history: {str(e)}")

@@ -6,8 +6,13 @@ from utils import extract_value, fetch_page
 import asyncio
 from fastapi import APIRouter
 from .get_db_connection import get_db_cursor
+from pydantic import BaseModel
 
 router = APIRouter()
+
+class SourceUpdateRequest(BaseModel):
+    name: str
+    url: str
 
 @router.get("/sources", response_model=SourcesListResponse)
 async def get_all_sources():
@@ -42,6 +47,37 @@ async def get_all_sources():
     except Exception as e:
         print(f"Error fetching sources: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch sources: {str(e)}")
+
+@router.get("/source/{source_id}", response_model=SourceInfo)
+async def get_source_by_id(source_id: int):
+    """
+    Get a specific source by ID.
+    """
+    try:
+        conn, cur = get_db_cursor()
+        cur.execute("""
+            SELECT id, name, url
+            FROM sources
+            WHERE id = %s;
+        """, (source_id,))
+        
+        row = cur.fetchone()
+        cur.close()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Source with ID {source_id} not found")
+        
+        return SourceInfo(
+            id=row[0],
+            name=row[1],
+            url=row[2]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching source: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch source: {str(e)}")
 
 @router.post("/save-source", response_model=dict)
 async def save_source(name: str, url: str):
@@ -90,3 +126,175 @@ async def save_source(name: str, url: str):
     finally:
         cur.close()
 
+@router.put("/source/{source_id}", response_model=dict)
+async def update_source(source_id: int, update_request: SourceUpdateRequest):
+    """
+    Update an existing source by ID.
+    """
+    conn, cur = get_db_cursor()
+    try:
+        name = update_request.name.strip()
+        url = update_request.url.strip()
+        
+        if not name or not url:
+            raise HTTPException(status_code=400, detail="Source name and URL are required.")
+        
+        # Check if source exists
+        cur.execute("SELECT id FROM sources WHERE id = %s;", (source_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail=f"Source with ID {source_id} not found")
+        
+        # Check if name conflicts with another source (exclude current source)
+        cur.execute("SELECT id FROM sources WHERE name = %s AND id != %s;", (name, source_id))
+        if cur.fetchone():
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Another source with name '{name}' already exists"
+            )
+        
+        # Update the source
+        cur.execute(
+            "UPDATE sources SET name = %s, url = %s WHERE id = %s;",
+            (name, url, source_id)
+        )
+        
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Source with ID {source_id} not found")
+        
+        conn.commit()
+        
+        return {
+            "success": True,
+            "id": source_id,
+            "message": f"Source '{name}' updated successfully."
+        }
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update source: {str(e)}")
+    finally:
+        cur.close()
+
+@router.delete("/source/{source_id}", response_model=dict)
+async def delete_source(source_id: int):
+    """
+    Delete a source by ID.
+    This will also check for dependencies and warn if the source is being used.
+    """
+    conn, cur = get_db_cursor()
+    try:
+        # Check if source exists
+        cur.execute("SELECT name FROM sources WHERE id = %s;", (source_id,))
+        source_row = cur.fetchone()
+        if not source_row:
+            raise HTTPException(status_code=404, detail=f"Source with ID {source_id} not found")
+        
+        source_name = source_row[0]
+        
+        # Check for dependencies in entity_mappings table
+        cur.execute("SELECT COUNT(*) FROM entity_mappings WHERE source_id = %s;", (source_id,))
+        mapping_count = cur.fetchone()[0]
+        
+        # Check for dependencies in tasks table
+        cur.execute("SELECT COUNT(*) FROM tasks WHERE source_id = %s;", (source_id,))
+        task_count = cur.fetchone()[0]
+        
+        if mapping_count > 0 or task_count > 0:
+            dependency_details = []
+            if mapping_count > 0:
+                dependency_details.append(f"{mapping_count} entity mapping(s)")
+            if task_count > 0:
+                dependency_details.append(f"{task_count} task(s)")
+            
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete source '{source_name}'. It is being used by: {', '.join(dependency_details)}. Please delete dependent items first."
+            )
+        
+        # Delete the source
+        cur.execute("DELETE FROM sources WHERE id = %s;", (source_id,))
+        
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Source with ID {source_id} not found")
+        
+        conn.commit()
+        
+        return {
+            "success": True,
+            "message": f"Source '{source_name}' deleted successfully."
+        }
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete source: {str(e)}")
+    finally:
+        cur.close()
+
+@router.delete("/source/{source_id}/force", response_model=dict)
+async def force_delete_source(source_id: int):
+    """
+    Force delete a source by ID, including all its dependencies.
+    WARNING: This will cascade delete all related entity mappings and tasks.
+    """
+    conn, cur = get_db_cursor()
+    try:
+        # Check if source exists
+        cur.execute("SELECT name FROM sources WHERE id = %s;", (source_id,))
+        source_row = cur.fetchone()
+        if not source_row:
+            raise HTTPException(status_code=404, detail=f"Source with ID {source_id} not found")
+        
+        source_name = source_row[0]
+        
+        # Count dependencies before deletion
+        cur.execute("SELECT COUNT(*) FROM entity_mappings WHERE source_id = %s;", (source_id,))
+        mapping_count = cur.fetchone()[0]
+        
+        cur.execute("SELECT COUNT(*) FROM tasks WHERE source_id = %s;", (source_id,))
+        task_count = cur.fetchone()[0]
+        
+        # Delete in order: tasks -> entity_mappings -> source
+        # Delete tasks first
+        cur.execute("DELETE FROM tasks WHERE source_id = %s;", (source_id,))
+        
+        # Delete entity mappings
+        cur.execute("DELETE FROM entity_mappings WHERE source_id = %s;", (source_id,))
+        
+        # Finally delete the source
+        cur.execute("DELETE FROM sources WHERE id = %s;", (source_id,))
+        
+        conn.commit()
+        
+        deleted_items = []
+        if task_count > 0:
+            deleted_items.append(f"{task_count} task(s)")
+        if mapping_count > 0:
+            deleted_items.append(f"{mapping_count} entity mapping(s)")
+        
+        message = f"Source '{source_name}' and all its dependencies deleted successfully."
+        if deleted_items:
+            message += f" Deleted: {', '.join(deleted_items)}"
+        
+        return {
+            "success": True,
+            "message": message,
+            "deleted_dependencies": {
+                "tasks": task_count,
+                "entity_mappings": mapping_count
+            }
+        }
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to force delete source: {str(e)}")
+    finally:
+        cur.close()

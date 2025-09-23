@@ -11,7 +11,8 @@ import EntityList from './EntityList'
 import TaskScheduler from './TaskScheduler'
 import NavigationPage from './NavigationPage'
 import TasksManagement from './TasksManagement'
-
+import TaskExecutor from './TaskExecutor'
+import SourceManagement from './SourceManager';
 function App() {
 
   return (
@@ -25,7 +26,9 @@ function App() {
         <Route path="/mappingmanager" element={<MappingManager />} />
         <Route path="/taskscheduler" element={<TaskScheduler />} />
         <Route path="/tasksmanagement" element={<TasksManagement />} />
+        <Route path="/taskexecutor" element={<TaskExecutor />} />
         <Route path="/webscraperform" element={<WebScraperForm />} />
+        <Route path="/sourcemanagement" element={<SourceManagement />} />
       </Routes>
     </BrowserRouter>
   );

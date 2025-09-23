@@ -1,27 +1,93 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, ToggleLeft, ToggleRight, ChevronDown } from "lucide-react";
+import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
+// --- 1. Define reusable metadata options ---
+const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
+
+// --- 2. Create a new component for the Metadata Input with Dropdown ---
+const MetadataInput = ({ value, onChange, options }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Effect to close the dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(option); // Update the parent state
+    setIsOpen(false); // Close the dropdown
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <input
+        type="text"
+        placeholder="Metadata (e.g., text, href)"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setIsOpen(true)} // Open dropdown on focus
+        className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
+      />
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800"
+        aria-label="Toggle metadata options"
+      >
+        {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+      </button>
+
+      {isOpen && (
+        <div className="absolute mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-48 overflow-y-auto">
+          {options.map((option) => (
+            <div
+              key={option}
+              onClick={() => handleSelect(option)}
+              className="px-4 py-2 hover:bg-teal-50 cursor-pointer text-gray-700"
+            >
+              {option}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 export default function EntityMappingScreen() {
   const navigate = useNavigate();
   const [source, setSource] = useState("");
   const [url, setUrl] = useState("");
 
+  const [existingSources, setExistingSources] = useState([]);
+  const [sourcesDropdownOpen, setSourcesDropdownOpen] = useState(false);
+  const sourcesDropdownRef = useRef(null);
+
   const [entities, setEntities] = useState([]);
   const [selectedEntities, setSelectedEntities] = useState([]);
   const [entityData, setEntityData] = useState({});
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const [entitiesDropdownOpen, setEntitiesDropdownOpen] = useState(false);
+  const entitiesDropdownRef = useRef(null);
 
-  // Fetch available entities and columns (runs once)
+  // Fetch available entities and columns
   useEffect(() => {
     const fetchEntities = async () => {
       try {
         const res = await fetch("http://127.0.0.1:8000/entity/entities");
-        if (!res.ok) throw new Error(`Failed: ${res.status}`);
+        if (!res.ok) throw new Error(`Failed to fetch entities: ${res.status}`);
         const data = await res.json();
 
-        // Build entities list and initial entityData (with containerSelector + fields)
         setEntities(data.entities.map((e) => e.name));
         const initialData = {};
         data.entities.forEach((e) => {
@@ -31,24 +97,42 @@ export default function EntityMappingScreen() {
             fields: e.columns.map((col) => ({
               attribute: col,
               selector: "",
-              metadata: "",
+              metadata: "", // Default to empty
             })),
           };
         });
         setEntityData(initialData);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching entities:", err);
         alert("Failed to load entities.");
       }
     };
     fetchEntities();
   }, []);
 
-  // Close dropdown on outside click
+  // Fetch existing sources
+  useEffect(() => {
+    const fetchSources = async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/source/sources");
+        if (!res.ok) throw new Error(`Failed to fetch sources: ${res.status}`);
+        const data = await res.json();
+        setExistingSources(data.sources || []);
+      } catch (err) {
+        console.error("Error fetching sources:", err);
+      }
+    };
+    fetchSources();
+  }, []);
+
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setDropdownOpen(false);
+      if (sourcesDropdownRef.current && !sourcesDropdownRef.current.contains(e.target)) {
+        setSourcesDropdownOpen(false);
+      }
+      if (entitiesDropdownRef.current && !entitiesDropdownRef.current.contains(e.target)) {
+        setEntitiesDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -61,7 +145,6 @@ export default function EntityMappingScreen() {
     );
   };
 
-  // Toggle enabled — preserve fields immutably
   const toggleEntityStatus = (entity) => {
     setEntityData((prev) => {
       const cur = prev[entity] || { fields: [] };
@@ -72,12 +155,10 @@ export default function EntityMappingScreen() {
     });
   };
 
-  // --- FIXED: update by attribute (stable id) instead of index ---
   const handleFieldChange = (entity, attribute, key, value) => {
-    // important: use functional setState to avoid stale closures
     setEntityData((prev) => {
       const cur = prev[entity];
-      if (!cur) return prev; // defensive
+      if (!cur) return prev;
       const updatedFields = cur.fields.map((f) =>
         f.attribute === attribute ? { ...f, [key]: value } : f
       );
@@ -86,6 +167,12 @@ export default function EntityMappingScreen() {
         [entity]: { ...cur, fields: updatedFields },
       };
     });
+  };
+
+  const handleSourceSelect = (selectedSource) => {
+    setSource(selectedSource.name);
+    setUrl(selectedSource.url);
+    setSourcesDropdownOpen(false);
   };
 
   const handleReview = (entity) => {
@@ -98,7 +185,6 @@ export default function EntityMappingScreen() {
       return;
     }
 
-    // Build entity_mappings array for backend — exclude 'id'
     const entity_mappings = selectedEntities.map((entity) => {
       const container_selector = entityData[entity]?.containerSelector || null;
       const field_mappings = {};
@@ -108,6 +194,7 @@ export default function EntityMappingScreen() {
         .forEach((f) => {
           field_mappings[f.attribute] = {
             selector: f.selector,
+            // Fallback to 'text' if metadata is empty
             extract: f.metadata || "text",
           };
         });
@@ -139,17 +226,41 @@ export default function EntityMappingScreen() {
           Entity Mapping Configuration
         </h1>
 
-        {/* Source + URL */}
+        {/* Source + URL with Dropdown */}
         <div className="space-y-6 mb-8">
           <div>
             <label className="block mb-2 text-gray-700 font-semibold text-sm uppercase">Source</label>
-            <input
-              type="text"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              placeholder="Enter source"
-              className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
-            />
+            <div className="relative" ref={sourcesDropdownRef}>
+              <input
+                type="text"
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                onFocus={() => setSourcesDropdownOpen(true)}
+                placeholder="Enter or select a source"
+                className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
+              />
+              <button
+                onClick={() => setSourcesDropdownOpen(!sourcesDropdownOpen)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800"
+              >
+                {sourcesDropdownOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+              </button>
+
+              {sourcesDropdownOpen && existingSources.length > 0 && (
+                <div className="absolute mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-lg z-30 max-h-60 overflow-y-auto">
+                  {existingSources.map((s) => (
+                    <div
+                      key={s.id}
+                      onClick={() => handleSourceSelect(s)}
+                      className="px-4 py-3 hover:bg-teal-50 cursor-pointer"
+                    >
+                      <p className="font-semibold">{s.name}</p>
+                      <p className="text-sm text-gray-500">{s.url}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div>
             <label className="block mb-2 text-gray-700 font-semibold text-sm uppercase">URL</label>
@@ -163,26 +274,29 @@ export default function EntityMappingScreen() {
           </div>
         </div>
 
-        {/* Dropdown */}
-        <div className="mb-8 relative" ref={dropdownRef}>
+        {/* Entity Selector Dropdown */}
+        <div className="mb-8 relative" ref={entitiesDropdownRef}>
           <label className="block mb-4 text-gray-700 font-semibold text-sm uppercase">
             Select Entities
           </label>
           <div
-            onClick={() => setDropdownOpen(!dropdownOpen)}
+            onClick={() => setEntitiesDropdownOpen(!entitiesDropdownOpen)}
             className="flex justify-between items-center w-full p-4 rounded-xl bg-gray-50 border border-gray-300 cursor-pointer"
           >
             <span>{selectedEntities.length > 0 ? selectedEntities.join(", ") : "Choose entities..."}</span>
             <ChevronDown className="w-5 h-5 opacity-70" />
           </div>
 
-          {dropdownOpen && (
+          {entitiesDropdownOpen && (
             <div className="absolute mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-lg z-20">
               {entities.map((entity) => (
                 <label
                   key={entity}
                   className="flex justify-between items-center px-4 py-3 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => handleEntityToggle(entity)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEntityToggle(entity);
+                  }}
                 >
                   <span>{entity}</span>
                   <input
@@ -241,7 +355,7 @@ export default function EntityMappingScreen() {
                         [entity]: {
                           ...cur,
                           containerSelector: e.target.value,
-                          fields: [...cur.fields], // preserve fields array immutably
+                          fields: [...cur.fields],
                         },
                       };
                     })
@@ -250,7 +364,7 @@ export default function EntityMappingScreen() {
                 />
               </div>
 
-              {/* Field rows (exclude 'id'), stable keys, update by attribute */}
+              {/* Field rows */}
               {(entityData[entity]?.fields || [])
                 .filter((field) => field.attribute.toLowerCase() !== "id")
                 .map((field) => (
@@ -266,11 +380,11 @@ export default function EntityMappingScreen() {
                       onChange={(e) => handleFieldChange(entity, field.attribute, "selector", e.target.value)}
                       className="p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
                     />
-                    <input
-                      placeholder="Metadata (extract type)"
+                    {/* --- 3. Replace the old input with the new MetadataInput component --- */}
+                    <MetadataInput
                       value={field.metadata}
-                      onChange={(e) => handleFieldChange(entity, field.attribute, "metadata", e.target.value)}
-                      className="p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
+                      onChange={(newValue) => handleFieldChange(entity, field.attribute, "metadata", newValue)}
+                      options={METADATA_OPTIONS}
                     />
                   </div>
                 ))}
@@ -280,7 +394,6 @@ export default function EntityMappingScreen() {
 
         {selectedEntities.length > 0 && (
           <div className="mt-10 flex justify-center gap-6">
-            {/* Save Button */}
             <button
               onClick={handleSave}
               className="px-16 py-5 rounded-2xl shadow-xl font-bold text-xl tracking-wide transition-all hover:scale-105"
@@ -288,8 +401,6 @@ export default function EntityMappingScreen() {
             >
               Save Configuration
             </button>
-
-            {/* Go to Mappings */}
             <button
               onClick={() => navigate("/mappingmanager")}
               className="px-8 py-5 rounded-2xl shadow-xl font-bold text-xl tracking-wide text-white bg-gradient-to-b from-blue-600 to-blue-400 hover:bg-blue-700 transition-all hover:scale-105"

@@ -1,3 +1,10 @@
+import sys
+import asyncio
+
+# Set event loop policy FIRST, before any other imports
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import asyncio
@@ -5,15 +12,8 @@ from models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest,
 from utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-import sys
 from crawl4Util import extract_website
-import asyncio
-from asyncio import WindowsProactorEventLoopPolicy  # For proper subprocess support on Windows
 from routers import entity_crud, source_crud, entity_mappings_crud, task_crud
-
-# 1. Set the event loop policy before any async operations
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(WindowsProactorEventLoopPolicy())
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -24,12 +24,13 @@ app = FastAPI(
     description="A flexible web scraper that accepts entity configurations at runtime",
     version="1.0.0"
 )
+
 app.include_router(entity_crud.router, prefix="/entity", tags=["Entity Management"])
 app.include_router(source_crud.router, prefix="/source", tags=["Source Management"])
 app.include_router(entity_mappings_crud.router, prefix="/mapping", tags=["Entity Mappings Management"])
 app.include_router(task_crud.router, prefix="/task", tags=["Task Management"])
-# CORS middleware
 
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Configure appropriately for production
@@ -40,13 +41,17 @@ app.add_middleware(
 
 
 @app.post("/scrapedynamic", response_model=ScrapeResponse)
-def scrape_dynamic(request: ScrapeRequest):
+async def scrape_dynamic(request: ScrapeRequest):
+    """
+    Async version of dynamic scraping to avoid blocking
+    """
     try:
-        response = asyncio.run(extract_website(request))
+        response = await extract_website(request)
         return response
     except Exception as e:
         logger.error("Error during dynamic scraping", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Scraping error: {e}")
+
 
 @app.post("/scrapestatic", response_model=ScrapeResponse)
 async def scrape_website(request: ScrapeRequest):
@@ -133,7 +138,6 @@ async def scrape_website(request: ScrapeRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
-
 
     
 @app.get("/")
