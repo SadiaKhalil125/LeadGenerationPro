@@ -94,7 +94,7 @@ export default function EntityMappingScreen() {
           initialData[e.name] = {
             enabled: true,
             containerSelector: "",
-            fields: e.columns.map((col) => ({
+            fields: e.columns.filter((col) => col !== "modified_at").map((col) => ({
               attribute: col,
               selector: "",
               metadata: "", // Default to empty

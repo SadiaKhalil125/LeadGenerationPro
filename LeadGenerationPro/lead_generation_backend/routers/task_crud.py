@@ -334,7 +334,9 @@ async def execute_task(task_id: int):
             for column_name in table_columns.keys():
                 # Get value from scraped data, or None if not present
                 insert_data[column_name] = item.get(column_name)
-            
+
+            # Add timestamps if the columns exist
+            insert_data['modified_at'] = datetime.now()
             # Build dynamic INSERT statement
             columns = list(insert_data.keys())
             values = list(insert_data.values())

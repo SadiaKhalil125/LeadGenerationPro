@@ -37,6 +37,8 @@ async def save_entity(request: EntityRequest):
 
         # Build columns
         cols = [sql.SQL("id SERIAL PRIMARY KEY")]
+        modified_at = sql.SQL("modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        cols.append(modified_at)
         for attr in request.attributes:
             fname = attr.name.strip()
             dt = attr.datatype.strip().lower()
