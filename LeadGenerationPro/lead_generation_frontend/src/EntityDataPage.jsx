@@ -1,154 +1,171 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
 
-// Note (for teammates): still in work this page is ignore for now ty
-
-export default function EntityDataPage() {
+const EntityDataScreen = () => {
+  const API_BASE = "http://127.0.0.1:8000";
   const [entities, setEntities] = useState([]);
-  const [selectedEntity, setSelectedEntity] = useState("");
-  const [columns, setColumns] = useState([]);
-  const [rows, setRows] = useState([]);
+  const [selectedEntity, setSelectedEntity] = useState(null);
+  const [data, setData] = useState(null);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
   const [loading, setLoading] = useState(false);
-  const [totalRows, setTotalRows] = useState(0);
+  const [error, setError] = useState(null);
+  const [pageSize] = useState(10);  // or make it adjustable
 
-  const BASE_URL = "http://127.0.0.1:8000"; // Backend URL
 
-  // Fetch all entities
   useEffect(() => {
-    fetch(`${BASE_URL}/entity/entities`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success !== false) setEntities(data.entities);
-      })
-      .catch((err) => console.error("Failed to fetch entities:", err));
+    fetchEntities();
   }, []);
 
-  // Fetch entity data whenever selectedEntity or page changes
- useEffect(() => {
-  if (!selectedEntity) return;
+  useEffect(() => {
+    if (selectedEntity) {
+      fetchEntityData(selectedEntity, page);
+    }
+  }, [selectedEntity, page]);
 
-  setLoading(true);
-  fetch(
-    `${BASE_URL}/entity/entity-data/${selectedEntity}?page=${page}&page_size=${pageSize}`
-  )
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.success) {
-        const cols = data.columns.map((col) => col.name);
-        setColumns(cols);
+  const fetchEntities = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/entity/entities`);
+      const json = await res.json();
+      setEntities(json.entities || []);
+    } catch (err) {
+      setError("Failed to load entities.");
+    }
+  };
 
-        // Use same 'cols' array to map row objects
-        const mappedRows =
-          data.rows?.map((row, idx) =>
-            cols.map((col) => row[col] ?? "")
-          ) || [];
-        setRows(mappedRows);
+  const fetchEntityData = async (entityName, pageNum) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${API_BASE}/entity/entity-data/${entityName}?page=${pageNum}&page_size=${pageSize}`
+      );
 
-        setTotalRows(data.row_count || 0);
-      } else {
-        setColumns([]);
-        setRows([]);
-        setTotalRows(0);
-      }
+      if (!res.ok) throw new Error("Failed to fetch data");
+      const json = await res.json();
+      setData(json);
+    } catch (err) {
+      setError(err.message);
+      setData(null);
+    } finally {
       setLoading(false);
-    })
-    .catch((err) => {
-      console.error("Failed to fetch entity data:", err);
-      setLoading(false);
-    });
-}, [selectedEntity, page]);
-
-
-  const totalPages = Math.ceil(totalRows / pageSize);
+    }
+  };
 
   return (
-    <div className="p-6 font-sans text-gray-900">
-      <h1 className="text-2xl font-bold mb-4">View Entity Data</h1>
-
-      {/* Entity Dropdown */}
-      <div className="mb-4">
-        <label className="block mb-2 font-medium">Select Entity:</label>
-        <select
-          value={selectedEntity}
-          onChange={(e) => {
-            setSelectedEntity(e.target.value);
-            setPage(1);
-          }}
-          className="border rounded px-3 py-2 w-full max-w-xs"
-        >
-          <option value="">-- Select an entity --</option>
-          {entities.map((entity) => (
-            <option key={entity.name} value={entity.name}>
-              {entity.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Data Table */}
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        selectedEntity &&
-        rows.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full border border-gray-300 rounded">
-                              <thead className="bg-gray-100">
-                                  <tr>
-                                      {columns.map((col, idx) => (
-                                          <th key={`${col}-${idx}`} className="border px-4 py-2 text-left">
-                                              {col}
-                                          </th>
-                                      ))}
-                                  </tr>
-                              </thead>
-
-                              <tbody>
-                                  {rows.map((row, rowIdx) => (
-                                      <tr key={`row-${rowIdx}`} className="hover:bg-gray-50">
-                                          {row.map((cell, colIdx) => (
-                                              <td key={`cell-${rowIdx}-${colIdx}`} className="border px-4 py-2">
-                                                  {cell}
-                                              </td>
-                                          ))}
-                                      </tr>
-                                  ))}
-</tbody>
-
-
-            </table>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6 flex items-center gap-3">
+            <div className="bg-white/20 p-3 rounded-xl">
+              <Database size={28} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Entity Data Viewer</h1>
+              <p className="text-teal-100">Browse and inspect your database entities</p>
+            </div>
           </div>
-        )
-      )}
 
-      {/* Pagination */}
-      {selectedEntity && rows.length > 0 && (
-        <div className="mt-4 flex gap-2 items-center">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-3 py-1 bg-blue-500 text-white rounded disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span>
-            Page {page} of {totalPages || 1}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="px-3 py-1 bg-blue-500 text-white rounded disabled:opacity-50"
-          >
-            Next
-          </button>
+          <div className="p-6">
+            {/* Entity Selector */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Entity</label>
+              <select
+                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500"
+                value={selectedEntity || ""}
+                onChange={(e) => {
+                  setSelectedEntity(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">-- Choose an entity --</option>
+                {entities.map((ent, idx) => (
+                  <option key={idx} value={ent.name}>
+                    {ent.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 text-red-800 border border-red-200 rounded-xl flex items-center gap-2">
+                <AlertTriangle size={18} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Loading */}
+            {loading && (
+              <div className="flex justify-center items-center py-10">
+                <Loader2 className="animate-spin text-teal-600 mr-2" size={24} />
+                <span className="text-gray-600">Loading data...</span>
+              </div>
+            )}
+
+            {/* No Data */}
+            {!loading && data && data.rows && data.rows.length === 0 && (
+              <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                <Database size={48} className="mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700">No Data Found</h3>
+                <p className="text-gray-500 mt-1">This table has no records to display.</p>
+              </div>
+            )}
+
+            {/* Data Table */}
+            {!loading && data && data.rows && data.rows.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                  <thead className="bg-gray-100 text-gray-700">
+                    <tr>
+                      {data.columns.map((col, idx) => (
+                        <th key={idx} className="px-4 py-2 text-left text-sm font-semibold border-b border-gray-200">
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {data.rows.map((row, ridx) => (
+                      <tr key={ridx} className="hover:bg-gray-50">
+                        {row.map((cell, cidx) => (
+                          <td key={cidx} className="px-4 py-2 text-sm text-gray-700">
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {data && data.rows && (
+              <div className="flex justify-between items-center mt-6">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition-colors"
+                >
+                  <ChevronLeft size={18} className="mr-1" /> Previous
+                </button>
+                <span className="text-gray-600 text-sm">Page {page}</span>
+                <button
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={data.rows.length < pageSize}
+                  className="flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition-colors"
+                >
+                  Next <ChevronRight size={18} className="ml-1" />
+                </button>
+              </div>
+            )}
+
+          </div>
         </div>
-      )}
-
-      {/* No Data */}
-      {selectedEntity && !loading && rows.length === 0 && (
-        <p className="mt-4 text-gray-500">No data found for this entity.</p>
-      )}
+      </div>
     </div>
   );
-}
+};
+
+export default EntityDataScreen;

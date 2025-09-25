@@ -403,7 +403,8 @@ export default function EntityMappingScreen() {
             </button>
             <button
               onClick={() => navigate("/mappingmanager")}
-              className="px-8 py-5 rounded-2xl shadow-xl font-bold text-xl tracking-wide text-white bg-gradient-to-b from-blue-600 to-blue-400 hover:bg-blue-700 transition-all hover:scale-105"
+              className="px-8 py-5 rounded-2xl shadow-xl font-bold text-xl tracking-wide text-white transition-all hover:scale-105"
+              style={{ backgroundColor: "#1495b8ff", color: "white" }}
             >
               Go to Mappings
             </button>

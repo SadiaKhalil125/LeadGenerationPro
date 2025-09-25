@@ -23,6 +23,12 @@ const NavigationPage = () => {
         >
           Create Entity
         </button>
+        <button
+          onClick={() => navigate('/entity-data')}
+          className="text-white px-6 py-3 rounded-xl bg-gradient-to-b from-blue-600 to-blue-400 hover:bg-blue-700 shadow-md"
+        >
+            Entity Data Table
+        </button>
 
         <button
           onClick={() => navigate('/entitymappingform')}
@@ -61,6 +67,7 @@ const NavigationPage = () => {
         >
             Source Manager
         </button>
+        
 
       </div>
     </div>
