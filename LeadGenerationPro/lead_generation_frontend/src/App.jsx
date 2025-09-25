@@ -13,6 +13,7 @@ import NavigationPage from './NavigationPage'
 import TasksManagement from './TasksManagement'
 import TaskExecutor from './TaskExecutor'
 import SourceManagement from './SourceManager';
+import EntityDataPage from './EntityDataPage';
 function App() {
 
   return (
@@ -29,6 +30,7 @@ function App() {
         <Route path="/taskexecutor" element={<TaskExecutor />} />
         <Route path="/webscraperform" element={<WebScraperForm />} />
         <Route path="/sourcemanagement" element={<SourceManagement />} />
+        <Route path="/entity-data" element={<EntityDataPage />} />
       </Routes>
     </BrowserRouter>
   );

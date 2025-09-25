@@ -1,19 +1,18 @@
 from fastapi import HTTPException
 from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest
 from fastapi import APIRouter
-from .get_db_connection import get_db_cursor
+from routers.get_db_connection import get_db_cursor
 from datetime import datetime
 from crawl4Util import extract_website
 from models import ScrapeRequest
-import asyncio
-import sys
 from psycopg2 import sql
 from asyncio import WindowsProactorEventLoopPolicy 
 import sys
 import asyncio
+import httpx
+from psycopg2.extras import RealDictCursor
+from routers.scheduler_config import scheduler, run_task 
 
-# if sys.platform == "win32":
-#     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 router = APIRouter()
 
@@ -80,6 +79,13 @@ async def create_task(request: TaskRequest):
         
         task_id = cur.fetchone()[0]
         conn.commit()
+        scheduler.add_job(
+            lambda tid=task_id: asyncio.run(run_task(tid)),
+            "date",
+            run_date=request.scheduled_time,
+            id=str(task_id),
+            replace_existing=True
+        )
         cur.close()
         
         return {
@@ -165,6 +171,12 @@ async def delete_task(task_id: int):
         # Delete task
         cur.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
         conn.commit()
+
+        # Delete task from scheduler
+        tid = f"task_{task_id}"
+        if scheduler.get_job(tid):
+            scheduler.remove_job(tid)
+
         cur.close()
         
         return {
@@ -214,6 +226,15 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
             SET scheduled_time = %s, task_name = %s
             WHERE id = %s
         """, (request.scheduled_time, new_task_name, task_id))
+
+        # Reschedule the job in APScheduler
+        scheduler.add_job(
+            lambda tid=task_id: asyncio.run(run_task(tid)),
+            "date",
+            run_date=request.scheduled_time,
+            id=f"task_{task_id}",
+            replace_existing=True
+        )
         
         conn.commit()
         cur.close()
@@ -337,6 +358,10 @@ async def execute_task(task_id: int):
         
         # Commit all inserts
         conn.commit()
+
+        tid = f"task_{task_id}"
+        if scheduler.get_job(tid):
+            scheduler.remove_job(tid)
         
         return {
             "success": True,
@@ -413,3 +438,42 @@ async def get_task_execution_history(task_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get execution history: {str(e)}")
+    
+
+# scheduler = BackgroundScheduler()
+
+# # ---------- Scheduler helpers ----------
+# async def run_task(task_id: int):
+#     async with httpx.AsyncClient() as client:
+#         try:
+#             r = await client.post(f"http://127.0.0.1:8000/execute-task/{task_id}")
+#             print(f"[{datetime.now()}] Ran task {task_id}: {r.status_code}")
+#         except Exception as e:
+#             print(f"Error executing task {task_id}: {e}")
+
+# def schedule_from_db(conn):
+#     """Fetch tasks from DB and schedule them."""
+#     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+#         cur.execute("SELECT id, scheduled_time FROM tasks WHERE scheduled_time > NOW()")
+#         for row in cur.fetchall():
+#             tid, run_at = row["id"], row["scheduled_time"]
+#             scheduler.add_job(
+#                 lambda task_id=tid: asyncio.create_task(run_task(task_id)),
+#                 "date",
+#                 run_date=run_at,
+#                 id=str(tid),
+#                 replace_existing=True
+#             )
+#             print(f"Scheduled task {tid} for {run_at}")
+
+# # ---------- Lifespan context to replace @app.on_event ----------
+# @asynccontextmanager
+# async def task_lifespan(app):
+#     scheduler.start()
+#     conn, _ = get_db_cursor()
+#     schedule_from_db(conn)
+#     conn.close()
+#     print("Scheduler started and tasks loaded.")
+#     yield
+#     scheduler.shutdown()
+#     print("Scheduler stopped.")

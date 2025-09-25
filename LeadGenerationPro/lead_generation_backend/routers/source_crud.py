@@ -5,7 +5,7 @@ from models import SourceInfo, SourcesListResponse
 from utils import extract_value, fetch_page
 import asyncio
 from fastapi import APIRouter
-from .get_db_connection import get_db_cursor
+from routers.get_db_connection import get_db_cursor
 from pydantic import BaseModel
 
 router = APIRouter()

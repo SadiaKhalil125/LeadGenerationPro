@@ -1,9 +1,9 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 from models import EntityRequest,  EntityInfo, EntitiesListResponse
 from psycopg2 import sql
 from fastapi import APIRouter
 import os
-from .get_db_connection import get_db_cursor
+from routers.get_db_connection import get_db_cursor
 
 router = APIRouter()
 
@@ -311,3 +311,57 @@ async def get_all_entities():
     except Exception as e:
         print(f"Error fetching entities: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch entities: {str(e)}")
+    
+
+@router.get("/entity-data/{table_name}", response_model=dict)
+async def get_entity_data(
+    table_name: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100)
+):
+    """
+    Fetch data from the given entity/table with pagination.
+    page: 1-based page number
+    page_size: number of rows per page
+    """
+    try:
+        conn, cur = get_db_cursor()
+        table_name = table_name.strip()
+        if not table_name:
+            raise HTTPException(status_code=400, detail="Table name required.")
+
+        # Check if table exists
+        cur.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = %s
+        """, (table_name,))
+        columns = [row[0] for row in cur.fetchall()]
+        if not columns:
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found.")
+
+        offset = (page - 1) * page_size
+
+        # Fetch paginated data
+        query = sql.SQL("SELECT * FROM {} ORDER BY id LIMIT %s OFFSET %s").format(
+            sql.Identifier(table_name)
+        )
+        cur.execute(query, (page_size, offset))
+        rows = cur.fetchall()
+
+        cur.close()
+
+        return {
+            "success": True,
+            "table_name": table_name,
+            "columns": columns,
+            "page": page,
+            "page_size": page_size,
+            "rows": rows,
+            "row_count": len(rows)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get entity data: {str(e)}")

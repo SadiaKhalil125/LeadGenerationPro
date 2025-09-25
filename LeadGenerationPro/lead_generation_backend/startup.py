@@ -30,7 +30,7 @@ def run_server():
         port=8000,
         loop="asyncio",
         log_level="info",
-        reload = True
+        
     )
 
 if __name__ == "__main__":

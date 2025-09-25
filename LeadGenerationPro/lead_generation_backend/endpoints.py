@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from crawl4Util import extract_website
 from routers import entity_crud, source_crud, entity_mappings_crud, task_crud
+from routers.scheduler_config import scheduler, task_lifespan
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +23,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Dynamic Web Scraper API",
     description="A flexible web scraper that accepts entity configurations at runtime",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=task_lifespan
 )
 
 app.include_router(entity_crud.router, prefix="/entity", tags=["Entity Management"])

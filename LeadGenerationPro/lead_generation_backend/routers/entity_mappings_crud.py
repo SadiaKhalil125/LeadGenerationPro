@@ -4,9 +4,9 @@ from models import MappingsListResponse, MappingInfo, MappingFormRequest
 from psycopg2.extras import Json
 from urllib.parse import urlparse
 from psycopg2.extras import Json
-from .source_crud import save_source
+from routers.source_crud import save_source
 from fastapi import APIRouter
-from .get_db_connection import get_db_cursor
+from routers.get_db_connection import get_db_cursor
 
 router = APIRouter()
 
