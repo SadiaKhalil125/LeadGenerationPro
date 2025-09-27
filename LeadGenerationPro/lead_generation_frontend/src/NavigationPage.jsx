@@ -1,84 +1,113 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FiGrid, FiPlusSquare, FiDatabase, FiLink, FiList, FiClock, FiPlayCircle, FiServer, FiArrowRight } from 'react-icons/fi';
-
-// A reusable card component for grouping navigation items
-const DashboardCard = ({ title, children }) => (
-  <div className="bg-white rounded-lg shadow-md p-6">
-    <h2 className="text-xl font-bold text-gray-800 mb-4">{title}</h2>
-    <div className="space-y-3">
-      {children}
-    </div>
-  </div>
-);
-
-// A reusable button component for navigation links
-const NavButton = ({ onClick, icon, children }) => (
-  <button
-    onClick={onClick}
-    className="w-full flex items-center justify-between px-4 py-3 text-gray-700 rounded-lg bg-gray-50 hover:bg-teal-50 hover:text-teal-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
-  >
-    <div className="flex items-center">
-      {icon}
-      <span className="ml-3 font-medium">{children}</span>
-    </div>
-    <FiArrowRight />
-  </button>
-);
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ChevronDown, ChevronRight, Menu } from "lucide-react";
 
 const NavigationPage = () => {
+  const [openMenu, setOpenMenu] = useState(null); // which main menu is selected
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
+  const toggleMenu = (menu) => {
+    setOpenMenu(openMenu === menu ? null : menu);
+  };
+
+  // Define submenu options for each section
+  const menuContent = {
+    entity: [
+      { label: "Entity List", path: "/entitylist" },
+      { label: "Create Entity", path: "/entityform" },
+      { label: "Entity Data Table", path: "/entity-data" },
+    ],
+    mapping: [
+      { label: "Create Entity Mapping", path: "/entitymappingform" },
+      { label: "Entity Mapping List", path: "/mappingmanager" },
+    ],
+    task: [
+      { label: "Schedule a Task", path: "/taskscheduler" },
+      { label: "Task List", path: "/tasksmanagement" },
+      { label: "Task Executor", path: "/taskexecutor" },
+    ],
+    manager: [{ label: "Source Manager", path: "/sourcemanagement" }],
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <header className="mb-10">
-        <h1 className="text-4xl font-bold text-gray-800">Navigation Dashboard</h1>
-        <p className="mt-2 text-gray-600">Select a management task to begin.</p>
-      </header>
+    <div className="min-h-screen flex bg-gray-100 overflow-hidden">
+      {/* Sidebar */}
+      {sidebarOpen && (
+        <aside className="fixed top-0 left-0 h-full w-72 bg-white shadow-xl z-40 p-4 overflow-y-auto transition-all duration-300">
+          <h2 className="text-2xl font-bold text-center text-teal-600 mb-6">
+            Menu
+          </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {/* Entity Management Card */}
-        <DashboardCard title="Entity Management">
-          <NavButton onClick={() => navigate('/entitylist')} icon={<FiList size={20} className="text-teal-600" />}>
-            Entity List
-          </NavButton>
-          <NavButton onClick={() => navigate('/entityform')} icon={<FiPlusSquare size={20} className="text-teal-600" />}>
-            Create Entity
-          </NavButton>
-          <NavButton onClick={() => navigate('/entity-data')} icon={<FiGrid size={20} className="text-teal-600" />}>
-            Entity Data Table
-          </NavButton>
-        </DashboardCard>
+          {/* Sidebar Main Buttons */}
+          {["entity", "mapping", "task", "manager"].map((menu) => (
+            <div key={menu} className="mb-4">
+              <button
+                onClick={() => toggleMenu(menu)}
+                className={`w-full flex justify-between items-center px-4 py-3 rounded-lg text-lg font-semibold
+                  ${
+                    menu === "entity"
+                      ? "bg-blue-200 hover:bg-blue-300"
+                      : menu === "mapping"
+                      ? "bg-green-200 hover:bg-green-300"
+                      : menu === "task"
+                      ? "bg-purple-200 hover:bg-purple-300"
+                      : "bg-yellow-200 hover:bg-yellow-300"
+                  }`}
+              >
+                {menu.charAt(0).toUpperCase() + menu.slice(1)}
+                {openMenu === menu ? <ChevronDown /> : <ChevronRight />}
+              </button>
+            </div>
+          ))}
+        </aside>
+      )}
 
-        {/* Mapping Management Card */}
-        <DashboardCard title="Mapping Management">
-          <NavButton onClick={() => navigate('/entitymappingform')} icon={<FiPlusSquare size={20} className="text-teal-600" />}>
-            Create Entity Mapping
-          </NavButton>
-          <NavButton onClick={() => navigate('/mappingmanager')} icon={<FiLink size={20} className="text-teal-600" />}>
-            Entity Mapping List
-          </NavButton>
-        </DashboardCard>
+      {/* Main Content */}
+      <div
+        className={`flex-1 transition-all duration-300 ${
+          sidebarOpen ? "ml-72" : "ml-0"
+        }`}
+      >
+        {/* Header */}
+        <header className="w-full bg-gradient-to-r from-teal-600 to-teal-400 text-white py-5 flex items-center px-6 shadow-lg">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="mr-4">
+            <Menu size={32} />
+          </button>
+          <h1 className="text-3xl font-bold">Navigation</h1>
+        </header>
 
-        {/* Task Management Card */}
-        <DashboardCard title="Task Management">
-          <NavButton onClick={() => navigate('/taskscheduler')} icon={<FiClock size={20} className="text-teal-600" />}>
-            Schedule a Task
-          </NavButton>
-          <NavButton onClick={() => navigate('/tasksmanagement')} icon={<FiList size={20} className="text-teal-600" />}>
-            Task List
-          </NavButton>
-          <NavButton onClick={() => navigate('/taskexecutor')} icon={<FiPlayCircle size={20} className="text-teal-600" />}>
-            Task Executor
-          </NavButton>
-        </DashboardCard>
+        {/* Content Area */}
+        <div className="p-10">
+          {!openMenu && (
+            <>
+              <h2 className="text-2xl font-semibold mb-4">Main Content</h2>
+              <p className="text-gray-600">
+                Click a menu item from the sidebar. Sub-options will appear here
+                on the right side.
+              </p>
+            </>
+          )}
 
-        {/* Source Management Card */}
-        <DashboardCard title="Source Management">
-            <NavButton onClick={() => navigate('/sourcemanagement')} icon={<FiServer size={20} className="text-teal-600" />}>
-                Source Manager
-            </NavButton>
-        </DashboardCard>
+          {openMenu && (
+            <div>
+              <h2 className="text-2xl font-semibold mb-4">
+                {openMenu.charAt(0).toUpperCase() + openMenu.slice(1)} Options
+              </h2>
+              <div className="flex flex-col gap-3">
+                {menuContent[openMenu].map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => navigate(item.path)}
+                    className="px-6 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg text-left font-medium"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
