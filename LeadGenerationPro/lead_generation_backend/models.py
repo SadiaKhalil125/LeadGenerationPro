@@ -12,12 +12,14 @@ class EntityMappingRequest(BaseModel):
     entity_name: str              # e.g., "company", "job", "person" 
     container_selector: Optional[str] = None
     field_mappings: Dict[str, FieldMapping]
+    enabled: bool = True
     # key = field name (e.g., "company_name"), value = FieldMapping selector/extract info
 
 class MappingFormRequest(BaseModel):
     source:str
     url: HttpUrl
     entity_mappings: List[EntityMappingRequest]
+    
 
 
 class ScrapeRequest(BaseModel):
@@ -63,6 +65,7 @@ class MappingInfo(BaseModel):
     field_mappings: Dict[str, Any]
     created_at: datetime
     source_id: int
+    enabled:Optional[bool] = True
     source_name: str
     url: str
 
@@ -103,3 +106,10 @@ class TasksListResponse(BaseModel):
 class TaskUpdateRequest(BaseModel):
     scheduled_time: datetime
     task_name: Optional[str] = None
+
+
+class PreviewMappingRequest(BaseModel):
+    url: str
+    entity_name: str
+    container_selector: Optional[str] = None
+    field_mappings: Dict[str, FieldMapping]

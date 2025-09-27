@@ -64,7 +64,8 @@ const TaskScheduler = () => {
             const res = await fetch(`http://127.0.0.1:8000/mapping/mappings-by-source/${sourceId}`);
             const data = await res.json();
             if (data.success) {
-                setMappings(data.mappings || []);
+                const mappings = data.mappings.filter(m => m.enabled === true);
+                setMappings(mappings);
                 setSelectedMappingId('');
             } else {
                 setMappings([]);

@@ -13,6 +13,11 @@ function shortDate(ts) {
 }
 
 function statusForMapping(m) {
+  // Check enabled status first
+  if (m.enabled === false) {
+    return { label: "Disabled", color: "bg-red-100 text-red-800" };
+  }
+  // Then check if field mappings exist
   if (!m.field_mappings || Object.keys(m.field_mappings).length === 0) {
     return { label: "Broken", color: "bg-yellow-100 text-yellow-800" };
   }
@@ -61,10 +66,11 @@ const MappingManager = () => {
   const stats = useMemo(() => {
     const total = mappings.length;
     const active = mappings.filter((m) => {
-      return m.field_mappings && Object.keys(m.field_mappings).length > 0;
+      return m.enabled !== false && m.field_mappings && Object.keys(m.field_mappings).length > 0;
     }).length;
-    const broken = total - active;
-    return { total, active, broken };
+    const disabled = mappings.filter((m) => m.enabled === false).length;
+    const broken = total - active - disabled;
+    return { total, active, disabled, broken };
   }, [mappings]);
 
   const filtered = useMemo(() => {
@@ -100,6 +106,30 @@ const MappingManager = () => {
     }
   };
 
+  const toggleMappingStatus = async (mappingName, currentStatus) => {
+    try {
+      const res = await fetch(`${API_BASE}/toggle-mapping-status/${encodeURIComponent(mappingName)}`, {
+        method: 'PUT'
+      });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      
+      // Update local state
+      setMappings((prev) =>
+        prev.map((m) =>
+          m.mapping_name === mappingName ? { ...m, enabled: data.enabled } : m
+        )
+      );
+    } catch (err) {
+      console.error("Toggle status failed:", err);
+      alert("Failed to toggle mapping status — check console for details.");
+    }
+  };
+
   const onOpenEdit = (mapping) => {
     // Convert field_mappings object to array of key-value pairs for easier editing
     const fieldMappingsArray = Object.entries(mapping.field_mappings || {}).map(([key, value]) => ({
@@ -116,6 +146,7 @@ const MappingManager = () => {
         mapping_name: mapping.mapping_name,
         entity_name: mapping.entity_name,
         container_selector: mapping.container_selector ?? "",
+        enabled: mapping.enabled ?? true, // Add enabled status
         source_id: mapping.source_id,
         source_name: mapping.source_name,
       },
@@ -184,6 +215,7 @@ const MappingManager = () => {
         container_selector: editModal.mapping.container_selector,
         field_mappings: fieldMappingsObject,
         source_id: editModal.mapping.source_id,
+        enabled: editModal.mapping.enabled, // Include enabled status
       };
 
       const res = await fetch(`${API_BASE}/edit-mapping/${encodeURIComponent(editModal.originalName)}`, {
@@ -252,7 +284,7 @@ const MappingManager = () => {
         {/* Body */}
         <div className="bg-white p-6">
           {/* Top stat cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
             <div className="border rounded p-4">
               <div className="text-sm text-gray-500">Total Mappings</div>
               <div className="text-2xl font-bold mt-2">{stats.total}</div>
@@ -260,6 +292,10 @@ const MappingManager = () => {
             <div className="border rounded p-4">
               <div className="text-sm text-gray-500">Active</div>
               <div className="text-2xl font-bold text-green-600 mt-2">{stats.active}</div>
+            </div>
+            <div className="border rounded p-4">
+              <div className="text-sm text-gray-500">Disabled</div>
+              <div className="text-2xl font-bold text-red-600 mt-2">{stats.disabled}</div>
             </div>
             <div className="border rounded p-4">
               <div className="text-sm text-gray-500">Broken</div>
@@ -314,7 +350,9 @@ const MappingManager = () => {
               {filtered.map((m) => {
                 const st = statusForMapping(m);
                 return (
-                  <div key={m.id} className="border rounded shadow-sm p-4 bg-white">
+                  <div key={m.id} className={`border rounded shadow-sm p-4 transition-all ${
+                    m.enabled !== false ? 'bg-white' : 'bg-gray-50 opacity-75'
+                  }`}>
                     <div className="flex justify-between items-start">
                       <div>
                         <div className="flex items-center gap-3">
@@ -334,6 +372,19 @@ const MappingManager = () => {
 
                       <div className="flex items-center gap-3">
                         <div className={`px-2 py-1 rounded text-sm ${st.color}`}>{st.label}</div>
+
+                        {/* Toggle Enable/Disable Button */}
+                        <button
+                          onClick={() => toggleMappingStatus(m.mapping_name, m.enabled)}
+                          className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                            m.enabled !== false 
+                              ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                              : 'bg-red-100 text-red-800 hover:bg-red-200'
+                          }`}
+                          title={`Click to ${m.enabled !== false ? 'disable' : 'enable'} this mapping`}
+                        >
+                          {m.enabled !== false ? 'Disable' : 'Enable'}
+                        </button>
 
                         <button
                           onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}
@@ -414,6 +465,30 @@ const MappingManager = () => {
                   />
                 </label>
 
+                {/* Enable/Disable Toggle */}
+                <label className="block">
+                  <div className="text-sm text-gray-600 mb-1">Status</div>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditModal({
+                        ...editModal,
+                        mapping: { ...editModal.mapping, enabled: !editModal.mapping.enabled }
+                      })}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        editModal.mapping.enabled
+                          ? 'bg-green-100 text-green-800 border border-green-300'
+                          : 'bg-red-100 text-red-800 border border-red-300'
+                      }`}
+                    >
+                      {editModal.mapping.enabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                    <span className="text-sm text-gray-500">
+                      {editModal.mapping.enabled ? 'Mapping is active and will be processed' : 'Mapping is disabled and will be ignored'}
+                    </span>
+                  </div>
+                </label>
+
                 <label className="block md:col-span-2">
                   <div className="text-sm text-gray-600 mb-1">Container Selector</div>
                   <input
@@ -441,7 +516,7 @@ const MappingManager = () => {
                 </div>
 
                 <div className="space-y-3">
-                  {editModal.fieldMappingsArray.map((field, index) => (
+                  {editModal.fieldMappingsArray.map((field) => (
                     <div key={field.id} className="border rounded p-3 bg-gray-50">
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                         <div>

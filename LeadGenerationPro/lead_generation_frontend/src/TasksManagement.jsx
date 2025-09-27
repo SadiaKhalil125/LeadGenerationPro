@@ -13,7 +13,9 @@ import {
     Type,
     Database,
     Map,
-    List
+    List,
+    Clock,
+    Check
 } from 'lucide-react';
 
 const TasksManagement = () => {
@@ -46,7 +48,6 @@ const TasksManagement = () => {
 
     const handleEditClick = (task) => {
         setEditingTask(task.id);
-        // Format for datetime-local input: YYYY-MM-DDTHH:mm
         const localDate = new Date(task.scheduled_time);
         const formattedDate = localDate.getFullYear() + '-' +
             ('0' + (localDate.getMonth() + 1)).slice(-2) + '-' +
@@ -121,18 +122,17 @@ const TasksManagement = () => {
     };
 
     const getStatusBadge = (scheduledTime) => {
-        const isFuture = new Date(scheduledTime) > new Date();
+        const isUpcoming = new Date(scheduledTime) > new Date();
         return (
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isFuture ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                {isFuture ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                {isFuture ? 'Scheduled' : 'Overdue'}
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isUpcoming ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                {isUpcoming ? <Clock size={14} /> : <Check size={14} />}
+                {isUpcoming ? 'Upcoming' : 'Passed'}
             </span>
         );
     };
 
     const sortedTasks = [...tasks].sort((a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time));
-    const scheduledCount = tasks.filter(task => new Date(task.scheduled_time) > new Date()).length;
-    const overdueCount = tasks.length - scheduledCount;
+    const upcomingCount = tasks.filter(task => new Date(task.scheduled_time) > new Date()).length;
 
     if (pageLoading) {
         return (
@@ -168,18 +168,14 @@ const TasksManagement = () => {
 
                     <div className="p-6">
                         {/* Stats Section */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
-                                <h4 className="text-sm font-semibold text-gray-500">Total Tasks</h4>
+                                <h4 className="text-sm font-semibold text-gray-500">Total Scheduled</h4>
                                 <p className="text-3xl font-bold text-gray-900 mt-1">{tasks.length}</p>
                             </div>
                             <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                                <h4 className="text-sm font-semibold text-green-700">Scheduled</h4>
-                                <p className="text-3xl font-bold text-green-600 mt-1">{scheduledCount}</p>
-                            </div>
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
-                                <h4 className="text-sm font-semibold text-yellow-700">Overdue</h4>
-                                <p className="text-3xl font-bold text-yellow-600 mt-1">{overdueCount}</p>
+                                <h4 className="text-sm font-semibold text-green-700">Upcoming</h4>
+                                <p className="text-3xl font-bold text-green-600 mt-1">{upcomingCount}</p>
                             </div>
                         </div>
 

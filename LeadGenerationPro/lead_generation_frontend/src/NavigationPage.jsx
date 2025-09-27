@@ -31,7 +31,7 @@ const NavigationPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex bg-gray-100 overflow-hidden">
+    <div className="min-h-screen flex bg-teal-100 overflow-hidden">
       {/* Sidebar */}
       {sidebarOpen && (
         <aside className="fixed top-0 left-0 h-full w-72 bg-teal-900 shadow-xl z-40 p-4 overflow-y-auto transition-all duration-300">

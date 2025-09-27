@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest
+from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, PreviewMappingRequest
 from fastapi import APIRouter
 from routers.get_db_connection import get_db_cursor
 from datetime import datetime
@@ -440,7 +440,53 @@ async def get_task_execution_history(task_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get execution history: {str(e)}")
-    
+
+
+@router.post("/preview-mapping")
+async def preview_mapping(request: PreviewMappingRequest):
+    """Preview scraping results for a mapping configuration without saving."""
+    try:
+        # Build ScrapeRequest from the preview request
+        scrape_request = ScrapeRequest(
+            entity_name=request.entity_name,
+            url=request.url,
+            container_selector=request.container_selector,
+            field_mappings=request.field_mappings,
+            max_items=5,  # Limit to 5 items for preview
+            timeout=15
+        )
+        
+        # Execute scraping using the dynamic scraper
+        scrape_response = await extract_website(scrape_request)
+        
+        if not scrape_response.success:
+            return {
+                "success": False,
+                "message": f"Preview failed: {scrape_response.message}",
+                "data": [],
+                "total_items": 0
+            }
+        
+        # Limit to first 5 items for preview
+        preview_data = scrape_response.data[:5] if scrape_response.data else []
+        
+        return {
+            "success": True,
+            "message": f"Preview successful - showing first {len(preview_data)} items",
+            "data": preview_data,
+            "total_items": scrape_response.total_items,
+            "entity_name": request.entity_name,
+            "url": request.url,
+            "scraped_at": scrape_response.scraped_at.isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Preview error: {str(e)}",
+            "data": [],
+            "total_items": 0
+        }
 
 # scheduler = BackgroundScheduler()
 

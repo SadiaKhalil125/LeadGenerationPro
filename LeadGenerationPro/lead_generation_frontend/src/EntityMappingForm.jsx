@@ -1,16 +1,101 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X } from "lucide-react";
 
-// --- 1. Define reusable metadata options ---
+// Metadata options for the dropdown
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
 
-// --- 2. Create a new component for the Metadata Input with Dropdown ---
+// --- NEW: Preview Modal Component ---
+const PreviewModal = ({ data, onClose }) => {
+  if (!data) return null;
+
+  // Dynamically get headers from the first data item
+  const headers = data.data && data.data.length > 0 ? Object.keys(data.data[0]) : [];
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
+      onClick={onClose} // Close modal on backdrop click
+    >
+      <div 
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the modal
+      >
+        {/* Modal Header */}
+        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+          <h2 className="text-2xl font-bold text-teal-700">
+            Preview for: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{data.entity_name}</span>
+          </h2>
+          <button 
+            onClick={onClose} 
+            className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+            aria-label="Close modal"
+          >
+            <X size={24} className="text-gray-600" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto">
+          <div className="mb-6 p-4 bg-teal-50 border border-teal-200 rounded-lg">
+            <p className="font-semibold text-teal-800">{data.message}</p>
+            <p className="text-sm text-teal-600 mt-1">
+              Showing {data.data?.length || 0} of {data.total_items} total items found.
+            </p>
+          </div>
+
+          {/* Data Table */}
+          {data.data && data.data.length > 0 ? (
+            <div className="overflow-x-auto border border-gray-200 rounded-lg">
+              <table className="w-full text-sm text-left text-gray-700">
+                <thead className="bg-gray-100 text-xs text-gray-800 uppercase">
+                  <tr>
+                    {headers.map(header => (
+                      <th key={header} scope="col" className="px-6 py-3 font-semibold tracking-wider">
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.data.map((item, index) => (
+                    <tr key={index} className="bg-white border-b hover:bg-gray-50">
+                      {headers.map(header => (
+                        <td key={`${index}-${header}`} className="px-6 py-4">
+                          {String(item[header])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-10">
+              <p className="text-gray-500">No data was returned in the preview.</p>
+            </div>
+          )}
+        </div>
+        
+        {/* Modal Footer */}
+        <div className="flex justify-end p-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-teal-600 text-white font-bold rounded-lg shadow-md hover:bg-teal-700 transition-all"
+            >
+              Close
+            </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// Metadata Input Component (No changes)
 const MetadataInput = ({ value, onChange, options }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Effect to close the dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -24,8 +109,8 @@ const MetadataInput = ({ value, onChange, options }) => {
   }, []);
 
   const handleSelect = (option) => {
-    onChange(option); // Update the parent state
-    setIsOpen(false); // Close the dropdown
+    onChange(option);
+    setIsOpen(false);
   };
 
   return (
@@ -35,7 +120,7 @@ const MetadataInput = ({ value, onChange, options }) => {
         placeholder="Metadata (e.g., text, href)"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setIsOpen(true)} // Open dropdown on focus
+        onFocus={() => setIsOpen(true)}
         className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
       />
       <button
@@ -64,9 +149,7 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
-
 export default function EntityMappingScreen() {
-  const navigate = useNavigate();
   const [source, setSource] = useState("");
   const [url, setUrl] = useState("");
 
@@ -78,7 +161,11 @@ export default function EntityMappingScreen() {
   const [selectedEntities, setSelectedEntities] = useState([]);
   const [entityData, setEntityData] = useState({});
   const [entitiesDropdownOpen, setEntitiesDropdownOpen] = useState(false);
-  const entitiesDropdownRef = useRef(null);
+  const entitiesDropdownRef = useRef(null); 
+  
+  const [previewData, setPreviewData] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewEntity, setPreviewEntity] = useState(null);
 
   // Fetch available entities and columns
   useEffect(() => {
@@ -97,7 +184,7 @@ export default function EntityMappingScreen() {
             fields: e.columns.filter((col) => col !== "modified_at").map((col) => ({
               attribute: col,
               selector: "",
-              metadata: "", // Default to empty
+              metadata: "",
             })),
           };
         });
@@ -175,8 +262,68 @@ export default function EntityMappingScreen() {
     setSourcesDropdownOpen(false);
   };
 
-  const handleReview = (entity) => {
-    alert(`Reviewing ${entity}:\n${JSON.stringify(entityData[entity], null, 2)}`);
+  const handlePreview = async (entity) => {
+    if (!source.trim() || !url.trim()) {
+      alert("Source and URL are required for preview!");
+      return;
+    }
+
+    const entityInfo = entityData[entity];
+    if (!entityInfo) {
+      alert("Entity data not found!");
+      return;
+    }
+
+    const field_mappings = {};
+    let hasValidMappings = false;
+
+    (entityInfo.fields || [])
+      .filter((f) => f.attribute.toLowerCase() !== "id")
+      .forEach((f) => {
+        if (f.selector.trim()) {
+          field_mappings[f.attribute] = {
+            selector: f.selector,
+            extract: f.metadata || "text",
+          };
+          hasValidMappings = true;
+        }
+      });
+
+    if (!hasValidMappings) {
+      alert("Please add at least one field mapping with a selector before preview!");
+      return;
+    }
+
+    setPreviewLoading(true);
+    setPreviewEntity(entity);
+    setPreviewData(null);
+
+    try {
+      const previewPayload = {
+        url: url,
+        entity_name: entity,
+        container_selector: entityInfo.containerSelector || null,
+        field_mappings: field_mappings
+      };
+
+      const res = await fetch("http://127.0.0.1:8000/task/preview-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(previewPayload),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setPreviewData(data); // Set data to show the modal
+      } else {
+        alert(`Preview failed: ${data.message}`);
+      }
+    } catch (err) {
+      console.error("Preview error:", err);
+      alert(`Preview failed: ${err.message}`);
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -194,14 +341,18 @@ export default function EntityMappingScreen() {
         .forEach((f) => {
           field_mappings[f.attribute] = {
             selector: f.selector,
-            // Fallback to 'text' if metadata is empty
             extract: f.metadata || "text",
           };
         });
 
-      return { entity_name: entity, container_selector, field_mappings };
+      return { 
+        entity_name: entity, 
+        container_selector, 
+        field_mappings,
+        enabled: entityData[entity]?.enabled !== false 
+      };
     });
-
+    
     const payload = { source, url, entity_mappings };
 
     try {
@@ -314,13 +465,22 @@ export default function EntityMappingScreen() {
         {/* Mapping Boxes */}
         <div className="space-y-6">
           {selectedEntities.map((entity) => (
-            <div key={entity} className="p-6 rounded-2xl border border-gray-200 bg-gray-50 shadow-md">
+            <div 
+              key={entity} 
+              className={`p-6 rounded-2xl border shadow-md transition-all ${
+                entityData[entity]?.enabled 
+                  ? 'border-gray-200 bg-gray-50' 
+                  : 'border-gray-300 bg-gray-100 opacity-75'
+              }`}
+            >
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">{entity}</h2>
+                <h2 className={`text-2xl font-bold ${entityData[entity]?.enabled ? 'text-gray-800' : 'text-gray-500'}`}>
+                  {entity}
+                </h2>
                 <div className="flex gap-2">
                   <button
                     onClick={() => toggleEntityStatus(entity)}
-                    className="flex items-center gap-1 px-4 py-2 rounded-lg text-white shadow-md"
+                    className="flex items-center gap-1 px-4 py-2 rounded-lg text-white shadow-md transition-all"
                     style={{
                       backgroundColor: entityData[entity]?.enabled ? "#10b981" : "#6b7280",
                     }}
@@ -330,16 +490,24 @@ export default function EntityMappingScreen() {
                   </button>
 
                   <button
-                    onClick={() => handleReview(entity)}
-                    className="flex items-center gap-1 px-4 py-2 rounded-lg text-white shadow-md"
+                    onClick={() => handlePreview(entity)}
+                    className="flex items-center gap-1 px-4 py-2 rounded-lg text-white shadow-md transition-all"
                     style={{ backgroundColor: "#14b8a6" }}
+                    disabled={previewLoading}
                   >
-                    <Eye size={16} /> Review
+                    <Eye size={16} /> {previewLoading && previewEntity === entity ? 'Loading...' : 'Preview'}
                   </button>
                 </div>
               </div>
 
-              {/* Container selector field */}
+              {!entityData[entity]?.enabled && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-yellow-800 text-sm font-medium">
+                    ⚠️ This entity is disabled and will not be processed during scraping.
+                  </p>
+                </div>
+              )}
+
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-600 mb-2 text-left">
                   CONTAINER SELECTOR (optional)
@@ -364,7 +532,6 @@ export default function EntityMappingScreen() {
                 />
               </div>
 
-              {/* Field rows */}
               {(entityData[entity]?.fields || [])
                 .filter((field) => field.attribute.toLowerCase() !== "id")
                 .map((field) => (
@@ -380,7 +547,6 @@ export default function EntityMappingScreen() {
                       onChange={(e) => handleFieldChange(entity, field.attribute, "selector", e.target.value)}
                       className="p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
                     />
-                    {/* --- 3. Replace the old input with the new MetadataInput component --- */}
                     <MetadataInput
                       value={field.metadata}
                       onChange={(newValue) => handleFieldChange(entity, field.attribute, "metadata", newValue)}
@@ -402,7 +568,7 @@ export default function EntityMappingScreen() {
               Save Configuration
             </button>
             <button
-              onClick={() => navigate("/mappingmanager")}
+              onClick={() => window.location.href = "/mappingmanager"}
               className="px-8 py-5 rounded-2xl shadow-xl font-bold text-xl tracking-wide text-white transition-all hover:scale-105"
               style={{ backgroundColor: "#1495b8ff", color: "white" }}
             >
@@ -411,6 +577,14 @@ export default function EntityMappingScreen() {
           </div>
         )}
       </div>
+      
+      {/* --- NEW: Conditionally render the modal --- */}
+      {previewData && (
+        <PreviewModal 
+          data={previewData} 
+          onClose={() => setPreviewData(null)} 
+        />
+      )}
     </div>
   );
 }
