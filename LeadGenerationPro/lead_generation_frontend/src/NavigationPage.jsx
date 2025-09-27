@@ -34,8 +34,8 @@ const NavigationPage = () => {
     <div className="min-h-screen flex bg-gray-100 overflow-hidden">
       {/* Sidebar */}
       {sidebarOpen && (
-        <aside className="fixed top-0 left-0 h-full w-72 bg-white shadow-xl z-40 p-4 overflow-y-auto transition-all duration-300">
-          <h2 className="text-2xl font-bold text-center text-teal-600 mb-6">
+        <aside className="fixed top-0 left-0 h-full w-72 bg-teal-900 shadow-xl z-40 p-4 overflow-y-auto transition-all duration-300">
+          <h2 className="text-2xl font-bold text-center text-teal-400 mb-6">
             Menu
           </h2>
 
@@ -70,7 +70,7 @@ const NavigationPage = () => {
         }`}
       >
         {/* Header */}
-        <header className="w-full bg-gradient-to-r from-teal-600 to-teal-400 text-white py-5 flex items-center px-6 shadow-lg">
+        <header className="w-full bg-gradient-to-r from-teal-900 to-teal-900 text-teal-400 py-5 flex items-center px-6 shadow-lg">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="mr-4">
             <Menu size={32} />
           </button>
