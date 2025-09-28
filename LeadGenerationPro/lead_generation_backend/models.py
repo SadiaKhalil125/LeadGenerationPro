@@ -87,6 +87,8 @@ class TaskRequest(BaseModel):
     mapping_id: int  
     scheduled_time: datetime
     task_name: Optional[str] = None  # Optional custom task name
+    repeat: str = "once"  # once, weekly, monthly, yearly
+
 
 class TaskInfo(BaseModel):
     id: int
@@ -98,6 +100,8 @@ class TaskInfo(BaseModel):
     entity_name: str
     scheduled_time: datetime
     created_at: datetime
+    repeat: str
+    last_executed_at: Optional[datetime] = None
 
 class TasksListResponse(BaseModel):
     total_tasks: int
@@ -106,6 +110,7 @@ class TasksListResponse(BaseModel):
 class TaskUpdateRequest(BaseModel):
     scheduled_time: datetime
     task_name: Optional[str] = None
+    repeat: str = "once"  # once, weekly, monthly, yearly
 
 
 class PreviewMappingRequest(BaseModel):

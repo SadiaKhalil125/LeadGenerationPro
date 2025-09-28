@@ -128,11 +128,21 @@ const EntityDataScreen = () => {
                   <tbody className="divide-y divide-gray-200">
                     {data.rows.map((row, ridx) => (
                       <tr key={ridx} className="hover:bg-gray-50">
-                        {row.map((cell, cidx) => (
-                          <td key={cidx} className="px-4 py-2 text-sm text-gray-700">
-                            {cell}
-                          </td>
-                        ))}
+                        {row.map((cell, cidx) => {
+                          const colName = data.columns[cidx]; // get column name
+
+                          // format only for modified_at (or other timestamp columns)
+                          const displayValue =
+                            colName === 'modified_at' && cell
+                              ? new Date(cell).toLocaleString() //for friendlier display
+                              : cell;
+
+                          return (
+                            <td key={cidx} className="px-4 py-2 text-sm text-gray-700">
+                              {displayValue}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>

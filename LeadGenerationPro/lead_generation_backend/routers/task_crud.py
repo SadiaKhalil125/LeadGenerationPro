@@ -13,29 +13,75 @@ import httpx
 from psycopg2.extras import RealDictCursor
 from routers.scheduler_config import scheduler, run_task 
 
+VALID_REPEATS = {"once", "daily", "weekly", "monthly", "yearly"}
 
 router = APIRouter()
+
+def get_scheduler_args(repeat: str, scheduled_time: datetime):
+    """
+    Return (trigger_name, kwargs) for APScheduler based on repeat value.
+    """
+    if repeat == "once":
+        return "date", {"run_date": scheduled_time}
+
+    if repeat == "daily":
+        return "interval", {"days": 1, "start_date": scheduled_time}
+
+    if repeat == "weekly":
+        return "interval", {"weeks": 1, "start_date": scheduled_time}
+
+    if repeat == "monthly":
+        # run on same day-of-month each month
+        return "cron", {
+            "day": scheduled_time.day,
+            "hour": scheduled_time.hour,
+            "minute": scheduled_time.minute,
+            "second": scheduled_time.second,
+            "start_date": scheduled_time
+        }
+
+    if repeat == "yearly":
+        # run on same month/day each year
+        return "cron", {
+            "month": scheduled_time.month,
+            "day": scheduled_time.day,
+            "hour": scheduled_time.hour,
+            "minute": scheduled_time.minute,
+            "second": scheduled_time.second,
+            "start_date": scheduled_time
+        }
+
+    raise ValueError("Invalid repeat")
+
 
 @router.post("/create-task", response_model=dict)
 async def create_task(request: TaskRequest):
     """Create a scheduled scraping task."""
     try:
+        if request.repeat not in VALID_REPEATS:
+            raise HTTPException(status_code=400, detail="Invalid repeat value")
+        
+        if request.scheduled_time < datetime.now():
+            raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+
         conn, cur = get_db_cursor()
         # cur = conn.cursor()
         
         # Create tasks table if it doesn't exist
         cur.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
-                id SERIAL PRIMARY KEY,
-                task_name TEXT UNIQUE NOT NULL,
-                source_id INT REFERENCES sources(id) ON DELETE CASCADE,
-                mapping_id INT REFERENCES entity_mappings(id) ON DELETE CASCADE,
-                scheduled_time TIMESTAMP NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW(),
-                CONSTRAINT unique_task_mapping UNIQUE (source_id, mapping_id, scheduled_time)
+            id SERIAL PRIMARY KEY,
+            task_name TEXT UNIQUE NOT NULL,
+            source_id INT REFERENCES sources(id) ON DELETE CASCADE,
+            mapping_id INT REFERENCES entity_mappings(id) ON DELETE CASCADE,
+            scheduled_time TIMESTAMP NOT NULL,
+            repeat TEXT DEFAULT 'once' CHECK (repeat IN ('once', 'daily', 'weekly', 'monthly', 'yearly')),
+            last_executed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT unique_task_mapping UNIQUE (source_id, mapping_id, scheduled_time)
             );
         """)
-        
+
         # Verify source exists
         cur.execute("SELECT id FROM sources WHERE id = %s", (request.source_id,))
         if not cur.fetchone():
@@ -72,21 +118,24 @@ async def create_task(request: TaskRequest):
         
         # Insert task
         cur.execute("""
-            INSERT INTO tasks (task_name, source_id, mapping_id, scheduled_time)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO tasks (task_name, source_id, mapping_id, scheduled_time, repeat)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id
-        """, (task_name, request.source_id, request.mapping_id, request.scheduled_time))
+        """, (task_name, request.source_id, request.mapping_id, request.scheduled_time, request.repeat))
         
         task_id = cur.fetchone()[0]
         conn.commit()
+        cur.close()
+
+        trigger, trigger_args = get_scheduler_args(request.repeat, request.scheduled_time)
+
         scheduler.add_job(
             lambda tid=task_id: asyncio.run(run_task(tid)),
-            "date",
-            run_date=request.scheduled_time,
+            trigger,
             id=str(task_id),
-            replace_existing=True
+            replace_existing=True,
+            **trigger_args
         )
-        cur.close()
         
         return {
             "success": True,
@@ -119,7 +168,10 @@ async def get_all_tasks():
                 em.mapping_name,
                 em.entity_name,
                 t.scheduled_time,
-                t.created_at
+                t.created_at,
+                t.repeat,
+                t.last_executed_at
+                    
             FROM tasks t
             JOIN sources s ON t.source_id = s.id
             JOIN entity_mappings em ON t.mapping_id = em.id
@@ -139,7 +191,9 @@ async def get_all_tasks():
                 mapping_name=row[5],
                 entity_name=row[6],
                 scheduled_time=row[7],
-                created_at=row[8]
+                created_at=row[8],
+                repeat=row[9],
+                last_executed_at=row[10]
             ))
         
         cur.close()
@@ -173,7 +227,7 @@ async def delete_task(task_id: int):
         conn.commit()
 
         # Delete task from scheduler
-        tid = f"task_{task_id}"
+        tid = str(task_id)
         if scheduler.get_job(tid):
             scheduler.remove_job(tid)
 
@@ -195,8 +249,13 @@ async def delete_task(task_id: int):
 async def update_task(task_id: int, request: TaskUpdateRequest):
     """Update a task's scheduled time and optionally its name."""
     try:
+        if request.repeat not in VALID_REPEATS:
+            raise HTTPException(status_code=400, detail="Invalid repeat value")
+        
+        if request.scheduled_time < datetime.now():
+            raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+
         conn, cur = get_db_cursor()
-        # cur = conn.cursor()
         
         # Check if task exists
         cur.execute("SELECT task_name FROM tasks WHERE id = %s", (task_id,))
@@ -221,21 +280,23 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
                 counter += 1
         
         # Update task
+        
         cur.execute("""
             UPDATE tasks 
-            SET scheduled_time = %s, task_name = %s
+            SET scheduled_time = %s, task_name = %s, repeat = %s
             WHERE id = %s
-        """, (request.scheduled_time, new_task_name, task_id))
+        """, (request.scheduled_time, new_task_name, request.repeat, task_id))
 
-        # Reschedule the job in APScheduler
+        trigger, trigger_args = get_scheduler_args(request.repeat, request.scheduled_time)
+
         scheduler.add_job(
             lambda tid=task_id: asyncio.run(run_task(tid)),
-            "date",
-            run_date=request.scheduled_time,
-            id=f"task_{task_id}",
-            replace_existing=True
+            trigger,
+            id=str(task_id),
+            replace_existing=True,
+            **trigger_args
         )
-        
+
         conn.commit()
         cur.close()
         
@@ -268,6 +329,7 @@ async def execute_task(task_id: int):
                 s.name as source_name,
                 s.url as source_url,
                 t.mapping_id,
+                t.repeat,
                 em.mapping_name,
                 em.entity_name,
                 em.container_selector,
@@ -284,7 +346,7 @@ async def execute_task(task_id: int):
         
         # Extract task information
         (task_id_db, task_name, source_id, source_name, source_url, 
-         mapping_id, mapping_name, entity_name, container_selector, field_mappings) = task_data
+         mapping_id, repeat, mapping_name, entity_name, container_selector, field_mappings) = task_data
         
         # Build ScrapeRequest from task data
         scrape_request = ScrapeRequest(
@@ -358,12 +420,22 @@ async def execute_task(task_id: int):
                     # Continue with next item instead of failing completely
                     continue
         
-        # Commit all inserts
+        # update last_executed_at timestamp
+        cur.execute("""
+            UPDATE tasks
+            SET last_executed_at = %s
+            WHERE id = %s
+        """, (datetime.now(), task_id))
+
         conn.commit()
 
-        tid = f"task_{task_id}"
-        if scheduler.get_job(tid):
-            scheduler.remove_job(tid)
+        # For once-only tasks, remove job after execution        
+        job_id = str(task_id)
+        job = scheduler.get_job(job_id)
+        if repeat == "once" and job:
+            scheduler.remove_job(job_id)
+            print(f"Removed once-only job {job_id} after execution")
+
         
         return {
             "success": True,
@@ -408,7 +480,10 @@ async def get_task_execution_history(task_id: int):
                 s.name as source_name,
                 em.entity_name,
                 t.created_at,
-                t.scheduled_time
+                t.scheduled_time,
+                t.repeat,
+                t.last_executed_at
+                
             FROM tasks t
             JOIN sources s ON t.source_id = s.id
             JOIN entity_mappings em ON t.mapping_id = em.id
@@ -433,6 +508,8 @@ async def get_task_execution_history(task_id: int):
             "entity_name": task_info[3],
             "created_at": task_info[4],
             "scheduled_time": task_info[5],
+            "repeat": task_info[6],
+            "last_executed_at": task_info[7],
             "current_record_count": record_count
         }
         
@@ -487,41 +564,3 @@ async def preview_mapping(request: PreviewMappingRequest):
             "data": [],
             "total_items": 0
         }
-
-# scheduler = BackgroundScheduler()
-
-# # ---------- Scheduler helpers ----------
-# async def run_task(task_id: int):
-#     async with httpx.AsyncClient() as client:
-#         try:
-#             r = await client.post(f"http://127.0.0.1:8000/execute-task/{task_id}")
-#             print(f"[{datetime.now()}] Ran task {task_id}: {r.status_code}")
-#         except Exception as e:
-#             print(f"Error executing task {task_id}: {e}")
-
-# def schedule_from_db(conn):
-#     """Fetch tasks from DB and schedule them."""
-#     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-#         cur.execute("SELECT id, scheduled_time FROM tasks WHERE scheduled_time > NOW()")
-#         for row in cur.fetchall():
-#             tid, run_at = row["id"], row["scheduled_time"]
-#             scheduler.add_job(
-#                 lambda task_id=tid: asyncio.create_task(run_task(task_id)),
-#                 "date",
-#                 run_date=run_at,
-#                 id=str(tid),
-#                 replace_existing=True
-#             )
-#             print(f"Scheduled task {tid} for {run_at}")
-
-# # ---------- Lifespan context to replace @app.on_event ----------
-# @asynccontextmanager
-# async def task_lifespan(app):
-#     scheduler.start()
-#     conn, _ = get_db_cursor()
-#     schedule_from_db(conn)
-#     conn.close()
-#     print("Scheduler started and tasks loaded.")
-#     yield
-#     scheduler.shutdown()
-#     print("Scheduler stopped.")
