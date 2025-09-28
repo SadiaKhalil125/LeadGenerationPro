@@ -1,105 +1,137 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Menu } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Menu,
+  LayoutGrid,
+  ClipboardPlus,
+  CalendarCheck,
+  Settings,
+} from "lucide-react";
 
 const NavigationPage = () => {
-  const [openMenu, setOpenMenu] = useState(null); // which main menu is selected
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState("entity");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
 
   const toggleMenu = (menu) => {
     setOpenMenu(openMenu === menu ? null : menu);
   };
 
-  // Define submenu options for each section
   const menuContent = {
-    entity: [
-      { label: "Entity List", path: "/entitylist" },
-      { label: "Create Entity", path: "/entityform" },
-      { label: "Entity Data Table", path: "/entity-data" },
-    ],
-    mapping: [
-      { label: "Create Entity Mapping", path: "/entitymappingform" },
-      { label: "Entity Mapping List", path: "/mappingmanager" },
-    ],
-    task: [
-      { label: "Schedule a Task", path: "/taskscheduler" },
-      { label: "Task List", path: "/tasksmanagement" },
-      { label: "Task Executor", path: "/taskexecutor" },
-    ],
-    manager: [{ label: "Source Manager", path: "/sourcemanagement" }],
+    entity: {
+      label: "Entity",
+      icon: <LayoutGrid size={20} />,
+      items: [
+        { label: "Entity List", path: "/entitylist" },
+        { label: "Create Entity", path: "/entityform" },
+        { label: "Entity Data Table", path: "/entity-data" },
+      ],
+    },
+    mapping: {
+      label: "Mapping",
+      icon: <ClipboardPlus size={20} />,
+      items: [
+        { label: "Create Entity Mapping", path: "/entitymappingform" },
+        { label: "Entity Mapping List", path: "/mappingmanager" },
+      ],
+    },
+    task: {
+      label: "Task",
+      icon: <CalendarCheck size={20} />,
+      items: [
+        { label: "Schedule a Task", path: "/taskscheduler" },
+        { label: "Task List", path: "/tasksmanagement" },
+        { label: "Task Executor", path: "/taskexecutor" },
+      ],
+    },
+    manager: {
+      label: "Source",
+      icon: <Settings size={20} />,
+      items: [{ label: "Source Manager", path: "/sourcemanagement" }],
+    },
   };
 
   return (
-    <div className="min-h-screen flex bg-teal-100 overflow-hidden">
+    <div className="min-h-screen flex bg-gray-100 text-gray-800">
       {/* Sidebar */}
-      {sidebarOpen && (
-        <aside className="fixed top-0 left-0 h-full w-72 bg-teal-900 shadow-xl z-40 p-4 overflow-y-auto transition-all duration-300">
-          <h2 className="text-2xl font-bold text-center text-teal-400 mb-6">
-            Menu
+      <aside
+        className={`fixed top-0 left-0 h-full bg-teal-600 text-white shadow-2xl z-40 transition-all duration-300 ease-in-out ${
+          sidebarOpen ? "w-72" : "w-20"
+        }`}
+      >
+        <div className="p-4 h-full flex flex-col">
+          <h2
+            className={`text-2xl font-bold text-center text-white-400 mb-8 transition-opacity duration-300 ${
+              sidebarOpen ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            Dashboard
           </h2>
 
-          {/* Sidebar Main Buttons */}
-          {["entity", "mapping", "task", "manager"].map((menu) => (
-            <div key={menu} className="mb-4">
+          {Object.entries(menuContent).map(([key, { label, icon }]) => (
+            <div key={key} className="mb-2">
               <button
-                onClick={() => toggleMenu(menu)}
-                className={`w-full flex justify-between items-center px-4 py-3 rounded-lg text-lg font-semibold
-                  ${
-                    menu === "entity"
-                      ? "bg-blue-200 hover:bg-blue-300"
-                      : menu === "mapping"
-                      ? "bg-green-200 hover:bg-green-300"
-                      : menu === "task"
-                      ? "bg-purple-200 hover:bg-purple-300"
-                      : "bg-yellow-200 hover:bg-yellow-300"
-                  }`}
+                onClick={() => toggleMenu(key)}
+                className={`w-full flex items-center px-4 py-3 rounded-lg text-lg font-semibold transition-colors duration-200 ${
+                  openMenu === key
+                    ? "bg-teal-600 text-gray-600"
+                    : "hover:bg-gray-800 text-gray-600"
+                } ${!sidebarOpen && "justify-center"}`}
               >
-                {menu.charAt(0).toUpperCase() + menu.slice(1)}
-                {openMenu === menu ? <ChevronDown /> : <ChevronRight />}
+                {icon}
+                {sidebarOpen && <span className="ml-4 text-gray-600 flex-1 text-left">{label}</span>}
+                {sidebarOpen && (openMenu === key ? <ChevronDown /> : <ChevronRight />)}
               </button>
             </div>
           ))}
-        </aside>
-      )}
+        </div>
+      </aside>
 
       {/* Main Content */}
       <div
-        className={`flex-1 transition-all duration-300 ${
-          sidebarOpen ? "ml-72" : "ml-0"
+        className={`flex-1 transition-all duration-300 ease-in-out ${
+          sidebarOpen ? "ml-72" : "ml-20"
         }`}
       >
         {/* Header */}
-        <header className="w-full bg-gradient-to-r from-teal-900 to-teal-900 text-teal-400 py-5 flex items-center px-6 shadow-lg">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="mr-4">
-            <Menu size={32} />
-          </button>
-          <h1 className="text-3xl font-bold">Navigation</h1>
+        <header className="w-full bg-teal-600 text-white py-4 px-6 shadow-md flex items-center justify-between">
+          <div className="flex items-center">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="mr-4 p-2 text-gray-600 rounded-full hover:bg-gray-200 transition-colors duration-200"
+            >
+              <Menu size={28} />
+            </button>
+            <h1 className="text-2xl font-bold text-white">Navigation</h1>
+          </div>
         </header>
 
         {/* Content Area */}
-        <div className="p-10">
+        <main className="p-8">
           {!openMenu && (
-            <>
-              <h2 className="text-2xl font-semibold mb-4">Main Content</h2>
-              <p className="text-gray-600">
-                Click a menu item from the sidebar. Sub-options will appear here
-                on the right side.
+            <div className="text-center p-10 bg-white rounded-lg shadow-md">
+              <h2 className="text-3xl font-semibold mb-3 text-gray-700">
+                Welcome to Your Dashboard
+              </h2>
+              <p className="text-gray-500">
+                Select a category from the sidebar to view available options.
               </p>
-            </>
+            </div>
           )}
 
           {openMenu && (
-            <div>
-              <h2 className="text-2xl font-semibold mb-4">
-                {openMenu.charAt(0).toUpperCase() + openMenu.slice(1)} Options
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <h2 className="text-2xl font-semibold mb-6 border-b pb-3 text-teal-700">
+                {menuContent[openMenu].label} Options
               </h2>
-              <div className="flex flex-col gap-3">
-                {menuContent[openMenu].map((item, idx) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {menuContent[openMenu].items.map((item, idx) => (
                   <button
                     key={idx}
                     onClick={() => navigate(item.path)}
-                    className="px-6 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg text-left font-medium"
+                    className="px-6 py-4 bg-gray-50 hover:bg-teal-100 border border-gray-200 rounded-lg text-left font-medium text-gray-700 hover:text-teal-800 transition-all duration-200 transform hover:scale-105 shadow-sm"
                   >
                     {item.label}
                   </button>
@@ -107,7 +139,7 @@ const NavigationPage = () => {
               </div>
             </div>
           )}
-        </div>
+        </main>
       </div>
     </div>
   );

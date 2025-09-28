@@ -9,6 +9,7 @@ from psycopg2 import sql
 from asyncio import WindowsProactorEventLoopPolicy 
 import sys
 import asyncio
+from datetime import datetime, timezone
 import httpx
 from psycopg2.extras import RealDictCursor
 from routers.scheduler_config import scheduler, run_task 
@@ -61,7 +62,7 @@ async def create_task(request: TaskRequest):
         if request.repeat not in VALID_REPEATS:
             raise HTTPException(status_code=400, detail="Invalid repeat value")
         
-        if request.scheduled_time < datetime.now():
+        if request.scheduled_time < datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
 
         conn, cur = get_db_cursor()
@@ -148,7 +149,7 @@ async def create_task(request: TaskRequest):
         conn.rollback()
         raise
     except Exception as e:
-        conn.rollback()
+        # conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to create task: {str(e)}")
 
 @router.get("/tasks", response_model=TasksListResponse)
