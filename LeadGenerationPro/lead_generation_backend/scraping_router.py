@@ -5,7 +5,7 @@ import re
 
 # Google Maps supported fields with their canonical names and aliases
 GOOGLE_MAPS_SUPPORTED_FIELDS = {
-    'name': ['name', 'business_name', 'place_name', 'title'],
+    'name': ['name', 'business_name', 'place_name', 'title', 'company_name'],
     'address': ['address', 'location', 'street_address', 'full_address'],
     'phone': ['phone', 'phone_number', 'contact', 'telephone'],
     'website': ['website', 'url', 'web', 'site'],
@@ -91,7 +91,7 @@ async def route_scraping_request(request: ScrapeRequest) -> ScrapeResponse:
                 url=request.url,
                 container_selector=None,  # Google Maps doesn't use container selector
                 field_mappings=google_maps_mappings,
-                max_items=50,
+                max_items=request.max_items,
                 timeout=request.timeout
             )
             

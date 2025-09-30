@@ -80,6 +80,7 @@ async def create_task(request: TaskRequest):
             repeat TEXT DEFAULT 'once' CHECK (repeat IN ('once', 'daily', 'weekly', 'monthly', 'yearly')),
             last_executed_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT NOW(),
+            max_items INT DEFAULT 10,
             CONSTRAINT unique_task_mapping UNIQUE (source_id, mapping_id, scheduled_time)
             );
         """)
@@ -120,10 +121,10 @@ async def create_task(request: TaskRequest):
         
         # Insert task
         cur.execute("""
-            INSERT INTO tasks (task_name, source_id, mapping_id, scheduled_time, repeat)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO tasks (task_name, source_id, mapping_id, scheduled_time, repeat, max_items)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
-        """, (task_name, request.source_id, request.mapping_id, request.scheduled_time, request.repeat))
+        """, (task_name, request.source_id, request.mapping_id, request.scheduled_time, request.repeat, request.max_items))
         
         task_id = cur.fetchone()[0]
         conn.commit()
@@ -172,7 +173,8 @@ async def get_all_tasks():
                 t.scheduled_time,
                 t.created_at,
                 t.repeat,
-                t.last_executed_at
+                t.last_executed_at,
+                t.max_items
                     
             FROM tasks t
             JOIN sources s ON t.source_id = s.id
@@ -195,7 +197,9 @@ async def get_all_tasks():
                 scheduled_time=row[7],
                 created_at=row[8],
                 repeat=row[9],
-                last_executed_at=row[10]
+                last_executed_at=row[10],
+                max_items=row[11]
+
             ))
         
         cur.close()
@@ -246,7 +250,7 @@ async def delete_task(task_id: int):
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete task: {str(e)}")
     
-# Add this endpoint to your main.py file
+
 @router.put("/update-task/{task_id}", response_model=dict)
 async def update_task(task_id: int, request: TaskUpdateRequest):
     """Update a task's scheduled time and optionally its name."""
@@ -254,7 +258,7 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
         if request.repeat not in VALID_REPEATS:
             raise HTTPException(status_code=400, detail="Invalid repeat value")
         
-        if request.scheduled_time < datetime.now():
+        if request.scheduled_time < datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
 
         conn, cur = get_db_cursor()
@@ -282,12 +286,23 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
                 counter += 1
         
         # Update task
-        
+
         cur.execute("""
             UPDATE tasks 
-            SET scheduled_time = %s, task_name = %s, repeat = %s
+            SET scheduled_time = %s, task_name = %s, repeat = %s, max_items = %s
             WHERE id = %s
-        """, (request.scheduled_time, new_task_name, request.repeat, task_id))
+        """, (
+            request.scheduled_time,
+            new_task_name,
+            request.repeat,
+            request.max_items,  # goes into max_items
+            task_id             # goes into WHERE id = %s
+        ))
+        rows = cur.rowcount
+        print("Updated rows:", rows)
+        if rows == 0:
+         raise HTTPException(status_code=400, detail=f"No task updated for id={task_id}")
+
 
         trigger, trigger_args = get_scheduler_args(request.repeat, request.scheduled_time)
 
@@ -315,6 +330,37 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update task: {str(e)}")
     
+async def upsert_entity_record(cur, entity_name: str, source_name: str, item: dict):
+    """
+    Upsert row on (source, name).
+    """
+    name_val = item.get("name")  # adjust if column is named differently
+
+    # Ensure source & modified_at are present
+    item["source"] = source_name
+    item["modified_at"] = datetime.now()
+
+    columns = list(item.keys())
+    values = list(item.values())
+
+    insert_stmt = sql.SQL("""
+        INSERT INTO {} ({})
+        VALUES ({})
+        ON CONFLICT (source, name) DO UPDATE 
+        SET {}, modified_at = NOW()
+    """).format(
+        sql.Identifier(entity_name),
+        sql.SQL(', ').join(map(sql.Identifier, columns)),
+        sql.SQL(', ').join(sql.Placeholder() * len(columns)),
+        sql.SQL(', ').join(
+            sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
+            for col in columns if col not in ("source", "name", "modified_at")
+        )
+    )
+
+
+    cur.execute(insert_stmt, values)
+
 @router.post("/execute-task/{task_id}")
 async def execute_task(task_id: int):
     """Execute a task by scraping data and storing it in the corresponding entity table."""
@@ -332,6 +378,7 @@ async def execute_task(task_id: int):
                 s.url as source_url,
                 t.mapping_id,
                 t.repeat,
+                t.max_items,
                 em.mapping_name,
                 em.entity_name,
                 em.container_selector,
@@ -348,7 +395,7 @@ async def execute_task(task_id: int):
         
         # Extract task information
         (task_id_db, task_name, source_id, source_name, source_url, 
-         mapping_id, repeat, mapping_name, entity_name, container_selector, field_mappings) = task_data
+         mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings) = task_data
         
         # Build ScrapeRequest from task data
         scrape_request = ScrapeRequest(
@@ -356,7 +403,7 @@ async def execute_task(task_id: int):
             url=source_url,
             container_selector=container_selector,
             field_mappings=field_mappings,
-            max_items=None,  # You can make this configurable later
+            max_items=max_items,  
             timeout=30  # Increased timeout for better reliability
         )
         
@@ -390,38 +437,17 @@ async def execute_task(task_id: int):
                 detail=f"Entity table '{entity_name}' not found or has no columns"
             )
         
-        # Insert scraped data into entity table
+        # Insert / Update scraped data in the entity table
         items_stored = 0
         for item in scrape_response.data:
-            # Prepare data for insertion, matching table columns
-            insert_data = {}
-            for column_name in table_columns.keys():
-                # Get value from scraped data, or None if not present
-                insert_data[column_name] = item.get(column_name)
+            insert_data = {col: item.get(col) for col in table_columns.keys()}
+            try:
+                await upsert_entity_record(cur, entity_name, source_name, insert_data)
+                items_stored += 1
+            except Exception as e:
+                print(f"Error upserting row: {e}")
+                continue
 
-            # Add timestamps if the columns exist
-            insert_data['modified_at'] = datetime.now()
-            # Build dynamic INSERT statement
-            columns = list(insert_data.keys())
-            values = list(insert_data.values())
-            
-            if columns:  # Only insert if we have columns to insert
-                insert_stmt = sql.SQL(
-                    "INSERT INTO {} ({}) VALUES ({})"
-                ).format(
-                    sql.Identifier(entity_name),
-                    sql.SQL(', ').join(map(sql.Identifier, columns)),
-                    sql.SQL(', ').join(sql.Placeholder() * len(columns))
-                )
-                
-                try:
-                    cur.execute(insert_stmt, values)
-                    items_stored += 1
-                except Exception as e:
-                    print(f"Error inserting row: {e}")
-                    # Continue with next item instead of failing completely
-                    continue
-        
         # update last_executed_at timestamp
         cur.execute("""
             UPDATE tasks
@@ -484,7 +510,8 @@ async def get_task_execution_history(task_id: int):
                 t.created_at,
                 t.scheduled_time,
                 t.repeat,
-                t.last_executed_at
+                t.last_executed_at,
+                t.max_items
                 
             FROM tasks t
             JOIN sources s ON t.source_id = s.id
@@ -512,7 +539,9 @@ async def get_task_execution_history(task_id: int):
             "scheduled_time": task_info[5],
             "repeat": task_info[6],
             "last_executed_at": task_info[7],
+            "max_items": task_info[8],
             "current_record_count": record_count
+            
         }
         
     except HTTPException:

@@ -24,6 +24,7 @@ const TasksManagement = () => {
     const [editScheduledTime, setEditScheduledTime] = useState('');
     const [editTaskName, setEditTaskName] = useState('');
     const [editRepeat, setEditRepeat] = useState('');
+    const [editMaxItems, setEditMaxItems] = useState('');
     const [loading, setLoading] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
     const [response, setResponse] = useState(null);
@@ -58,6 +59,7 @@ const TasksManagement = () => {
         setEditScheduledTime(formattedDate);
         setEditTaskName(task.task_name);
         setEditRepeat(task.repeat || 'once');
+        setEditMaxItems(task.max_items || '');
         setResponse(null);
     };
 
@@ -66,6 +68,7 @@ const TasksManagement = () => {
         setEditScheduledTime('');
         setEditTaskName('');
         setEditRepeat('');
+        setEditMaxItems('');
     };
 
     const handleUpdateTask = async (taskId) => {
@@ -78,7 +81,8 @@ const TasksManagement = () => {
             const requestData = {
                 scheduled_time: new Date(editScheduledTime).toISOString(),
                 task_name: editTaskName || undefined,
-                repeat: editRepeat || undefined
+                repeat: editRepeat || undefined,
+                max_items: editMaxItems !== '' ? Number(editMaxItems) : 0
             };
             const res = await fetch(`http://127.0.0.1:8000/task/update-task/${taskId}`, {
                 method: 'PUT',
@@ -209,6 +213,18 @@ const TasksManagement = () => {
                                                         <label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Type size={16} />Task Name</label>
                                                         <input type="text" value={editTaskName} onChange={(e) => setEditTaskName(e.target.value)} className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500" />
                                                     </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                                                            Max Items
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            value={editMaxItems}
+                                                            onChange={(e) => setEditMaxItems(e.target.value)}
+                                                            className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                                        />
+                                                    </div>
+
                                                     <div className="space-y-1">
                                                         <label className="text-sm font-medium text-gray-700 flex items-center gap-2"><Calendar size={16} />Scheduled Time *</label>
                                                         <input type="datetime-local" value={editScheduledTime} onChange={(e) => setEditScheduledTime(e.target.value)} required className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500" />

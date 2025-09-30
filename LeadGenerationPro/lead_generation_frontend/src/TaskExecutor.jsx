@@ -284,12 +284,10 @@ const TaskExecution = () => {
                                 {formatDateTime(executionHistory[task.id].scheduled_time)}
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900">Status:</span>
-                                {new Date(executionHistory[task.id].scheduled_time) <= new Date() ?
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"><AlertCircle size={14} /> Ready</span> :
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><CheckCircle size={14} /> Waiting</span>
-                                }
+                                  <span className="font-medium text-gray-900">Max Items:</span>
+                                  {executionHistory[task.id].max_items}
                               </div>
+
                             </div>
                           )}
                         </div>

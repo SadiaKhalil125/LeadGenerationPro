@@ -35,25 +35,45 @@ async def save_entity(request: EntityRequest):
         if not table_name or not request.attributes:
             raise HTTPException(status_code=400, detail="Table name and attributes required.")
 
-        # Build columns
+        # Build base columns
         cols = [sql.SQL("id SERIAL PRIMARY KEY")]
-        modified_at = sql.SQL("modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-        cols.append(modified_at)
+        cols.append(sql.SQL("modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
+        cols.append(sql.SQL("source TEXT NULL"))
+
+        # Track whether we’ve already added a "name" column
+        name_column_added = False
+
         for attr in request.attributes:
             fname = attr.name.strip()
             dt = attr.datatype.strip().lower()
-            
+
             if not fname or dt not in TYPE_MAP:
                 raise HTTPException(status_code=400, detail=f"Invalid field or datatype: {dt}")
-            
-            cols.append(sql.SQL("{} {}").format(
-                sql.Identifier(fname),
-                sql.SQL(TYPE_MAP[dt])
-            ))
+
+            # Normalize any "name-like" column to just 'name'
+            if "name" in fname.lower():
+                if name_column_added:
+                    # Skip adding duplicate name-like column
+                    continue
+                fname = "name"
+                name_column_added = True
+
+            cols.append(
+                sql.SQL("{} {}").format(
+                    sql.Identifier(fname),
+                    sql.SQL(TYPE_MAP[dt])
+                )
+            )
+
+        # Add UNIQUE constraint at the end
+        cols.append(sql.SQL("UNIQUE (source, name)"))
 
         # Create table
-        
-        create_stmt = sql.SQL("CREATE TABLE IF NOT EXISTS {table} ( {fields} );").format(
+        create_stmt = sql.SQL("""
+            CREATE TABLE IF NOT EXISTS {table} (
+                {fields}
+            );
+        """).format(
             table=sql.Identifier(table_name),
             fields=sql.SQL(", ").join(cols)
         )
@@ -67,8 +87,10 @@ async def save_entity(request: EntityRequest):
             "table_name": table_name,
             "columns_created": len(cols)
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create entity: {str(e)}")
+
     
 @router.put("/edit-entity/{table_name}", response_model=dict)
 async def edit_entity(table_name: str, request: EntityRequest):
@@ -345,7 +367,7 @@ async def get_entity_data(
         offset = (page - 1) * page_size
 
         # Fetch paginated data
-        query = sql.SQL("SELECT * FROM {} ORDER BY id LIMIT %s OFFSET %s").format(
+        query = sql.SQL("SELECT * FROM {} ORDER BY modified_at DESC LIMIT %s OFFSET %s").format(
             sql.Identifier(table_name)
         )
         cur.execute(query, (page_size, offset))

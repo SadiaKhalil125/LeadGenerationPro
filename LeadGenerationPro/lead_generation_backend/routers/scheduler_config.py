@@ -52,7 +52,7 @@ async def run_task(task_id: int):
             r = await client.post(f"http://127.0.0.1:8000/task/execute-task/{task_id}")
             print(f"[{datetime.now()}] Ran task {task_id}: {r.status_code}")
         except Exception as e:
-            print(f"Error executing task {task_id}: {e}")
+            print(f"Error executing task {task_id}: {str(e)}")
 
 # Load tasks from DB at startup
 def schedule_from_db(conn):

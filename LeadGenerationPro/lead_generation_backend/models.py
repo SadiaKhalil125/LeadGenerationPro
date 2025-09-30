@@ -27,7 +27,7 @@ class ScrapeRequest(BaseModel):
     url: HttpUrl
     container_selector: Optional[str] = None
     field_mappings: Dict[str, FieldMapping]
-    max_items: Optional[int] = None
+    max_items: Optional[int] = 10
     timeout: Optional[int] = 15
 
 class ScrapeResponse(BaseModel):
@@ -87,6 +87,7 @@ class TaskRequest(BaseModel):
     mapping_id: int  
     scheduled_time: datetime
     task_name: Optional[str] = None  # Optional custom task name
+    max_items: Optional[int] = 10
     repeat: str = "once"  # once, weekly, monthly, yearly
 
 
@@ -102,6 +103,7 @@ class TaskInfo(BaseModel):
     created_at: datetime
     repeat: str
     last_executed_at: Optional[datetime] = None
+    max_items: Optional[int]
 
 class TasksListResponse(BaseModel):
     total_tasks: int
@@ -111,6 +113,7 @@ class TaskUpdateRequest(BaseModel):
     scheduled_time: datetime
     task_name: Optional[str] = None
     repeat: str = "once"  # once, weekly, monthly, yearly
+    max_items: Optional[int] = 10
 
 
 class PreviewMappingRequest(BaseModel):

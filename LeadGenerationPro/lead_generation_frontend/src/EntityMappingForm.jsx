@@ -460,23 +460,24 @@ export default function EntityMappingScreen() {
               {entities.map((entity) => (
                 <label
                   key={entity}
-                  className="flex justify-between items-center px-4 py-3 hover:bg-gray-100 cursor-pointer"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-100 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleEntityToggle(entity);
                   }}
                 >
-                  <span>{entity}</span>
                   <input
                     type="checkbox"
                     checked={selectedEntities.includes(entity)}
                     readOnly
                     className="h-5 w-5 accent-teal-500"
                   />
+                  <span>{entity}</span>
                 </label>
               ))}
             </div>
           )}
+
         </div>
 
         <div className="space-y-6">
