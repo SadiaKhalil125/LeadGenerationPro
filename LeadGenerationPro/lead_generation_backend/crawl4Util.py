@@ -5,6 +5,7 @@ from crawl4ai import JsonCssExtractionStrategy
 from models import ScrapeRequest, ScrapeResponse, FieldMapping
 from datetime import datetime
 
+
 async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
     # 1. Build schema from ScrapeRequest
     fields = []

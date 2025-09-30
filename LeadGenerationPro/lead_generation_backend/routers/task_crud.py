@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from routers.get_db_connection import get_db_cursor
 from datetime import datetime
 from crawl4Util import extract_website
+from scraping_router import route_scraping_request 
 from models import ScrapeRequest
 from psycopg2 import sql
 from asyncio import WindowsProactorEventLoopPolicy 
@@ -360,7 +361,7 @@ async def execute_task(task_id: int):
         )
         
         # Execute scraping using the dynamic scraper (now properly async)
-        scrape_response = await extract_website(scrape_request)
+        scrape_response = await route_scraping_request(scrape_request)
         
         if not scrape_response.success or not scrape_response.data:
             return {
@@ -535,7 +536,7 @@ async def preview_mapping(request: PreviewMappingRequest):
         )
         
         # Execute scraping using the dynamic scraper
-        scrape_response = await extract_website(scrape_request)
+        scrape_response = await route_scraping_request(scrape_request)
         
         if not scrape_response.success:
             return {
