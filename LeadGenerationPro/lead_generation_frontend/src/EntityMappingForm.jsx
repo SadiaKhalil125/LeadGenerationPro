@@ -480,7 +480,7 @@ export default function EntityMappingScreen() {
         throw new Error(data.detail || "Save failed");
       }
     } catch (err) {
-      alert(`❌ Failed: ${err.message}`);
+      alert(`❌Failed: ${err.message}`);
     }
   };
 
