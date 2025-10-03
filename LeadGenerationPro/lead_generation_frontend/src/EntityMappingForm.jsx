@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info } from "lucide-react";
+import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, RefreshCw } from "lucide-react";
 
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
 
@@ -21,11 +21,11 @@ const PreviewModal = ({ data, onClose }) => {
   const headers = data.data && data.data.length > 0 ? Object.keys(data.data[0]) : [];
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
-      <div 
+      <div
         className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -33,8 +33,8 @@ const PreviewModal = ({ data, onClose }) => {
           <h2 className="text-2xl font-bold text-teal-700">
             Preview: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{data.entity_name}</span>
           </h2>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="p-2 rounded-full hover:bg-gray-200 transition-colors"
           >
             <X size={24} className="text-gray-600" />
@@ -80,7 +80,7 @@ const PreviewModal = ({ data, onClose }) => {
             </div>
           )}
         </div>
-        
+
         <div className="flex justify-end p-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
           <button
             onClick={onClose}
@@ -146,6 +146,77 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
+// Component for iframe error state
+const FrameErrorState = ({ url, onRetry }) => (
+  <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100 p-8 text-center">
+    <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full">
+      {/* <div className="w-20 h-20 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
+        <AlertTriangle className="w-10 h-10 text-red-500" />
+      </div> */}
+      
+      <h3 className="text-xl font-bold text-gray-800 mb-3">
+        Cannot Display Website
+      </h3>
+      
+      <p className="text-gray-600 mb-4">
+        This website has security restrictions that prevent it from being displayed in a frame. This is a common security measure.
+      </p>
+      
+      <div className="bg-gray-50 rounded-lg p-4 mb-6">
+        <p className="text-sm text-gray-500 break-all font-mono">
+          {url}
+        </p>
+      </div>
+
+      <div className="space-y-3 text-sm text-gray-600 text-left">
+        <div className="flex items-start gap-2">
+          <div className="w-2 h-2 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></div>
+          <span><strong>X-Frame-Options</strong> or <strong>CSP</strong> headers are blocking the display.</span>
+        </div>
+        <div className="flex items-start gap-2">
+          <div className="w-2 h-2 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
+          <span>You can still configure mappings - the scraper will work on the server.</span>
+        </div>
+      </div>
+
+      {/* <button
+        onClick={onRetry}
+        className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-b from-teal-500 to-teal-600 text-white rounded-lg hover:bg-teal-600 transition-colors font-medium"
+      >
+        <RefreshCw size={18} />
+        Retry Preview
+      </button> */}
+    </div>
+  </div>
+);
+
+// Component for iframe loading state
+const FrameLoadingState = () => (
+    <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="text-center">
+        <div className="w-16 h-16 mx-auto mb-4 bg-teal-100 rounded-full flex items-center justify-center animate-pulse">
+          <Globe className="w-8 h-8 text-teal-600" />
+        </div>
+        <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading Preview</h3>
+        <p className="text-gray-500">Attempting to load website...</p>
+      </div>
+    </div>
+);
+
+// Component for empty state
+const FrameEmptyState = () => (
+    <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="text-center">
+        <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+          <Globe className="w-8 h-8 text-blue-500" />
+        </div>
+        <h3 className="text-lg font-semibold text-gray-700 mb-2">Website Preview</h3>
+        <p className="text-gray-500">Enter a URL to see a preview here.</p>
+      </div>
+    </div>
+);
+
+
 export default function EntityMappingScreen() {
   const [source, setSource] = useState("");
   const [url, setUrl] = useState("");
@@ -158,18 +229,15 @@ export default function EntityMappingScreen() {
   const [entityData, setEntityData] = useState({});
   const [entitiesDropdownOpen, setEntitiesDropdownOpen] = useState(false);
   const entitiesDropdownRef = useRef(null);
-  
+
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewEntity, setPreviewEntity] = useState(null);
 
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
-
-  // Check if URL is Google Maps
-  useEffect(() => {
-    const urlLower = url.toLowerCase();
-    setIsGoogleMaps(urlLower.includes('google.com/maps') || urlLower.includes('maps.google.com'));
-  }, [url]);
+  const [iframeStatus, setIframeStatus] = useState('empty'); // 'empty', 'loading', 'loaded', 'error'
+  const [iframeKey, setIframeKey] = useState(0);
+  const loadTimeoutRef = useRef(null); // Ref to hold the timeout ID
 
   useEffect(() => {
     const fetchEntities = async () => {
@@ -177,7 +245,7 @@ export default function EntityMappingScreen() {
         const res = await fetch("http://127.0.0.1:8000/entity/entities");
         const data = await res.json();
         setEntities(data.entities.map((e) => e.name));
-        
+
         const initialData = {};
         data.entities.forEach((e) => {
           initialData[e.name] = {
@@ -224,6 +292,49 @@ export default function EntityMappingScreen() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    // This effect controls the iframe state and uses a timeout for error handling
+    clearTimeout(loadTimeoutRef.current); // Clear any existing timeout
+
+    const urlLower = url.toLowerCase();
+    const isGmaps = urlLower.includes('google.com/maps') || urlLower.includes('maps.google.com');
+    setIsGoogleMaps(isGmaps);
+
+    if (isGmaps) {
+        // Immediately set to error for known non-embeddable sites
+        setIframeStatus('error');
+    } else if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        setIframeStatus('loading');
+        setIframeKey(prev => prev + 1); // Force iframe to re-render
+
+        // Set a timeout. If onLoad doesn't fire within 10s, assume it's blocked.
+        loadTimeoutRef.current = setTimeout(() => {
+            setIframeStatus('error');
+        }, 10000); // 10-second timeout
+    } else {
+        setIframeStatus('empty');
+    }
+
+    // Cleanup function to clear timeout if component unmounts or URL changes
+    return () => {
+        clearTimeout(loadTimeoutRef.current);
+    };
+  }, [url]);
+
+  const handleIframeLoad = () => {
+    // Success! The iframe loaded something. Clear the timeout and set status to loaded.
+    clearTimeout(loadTimeoutRef.current);
+    // Add a small delay to prevent flickering if the page loads very fast
+    setTimeout(() => setIframeStatus('loaded'), 200);
+  };
+
+  const handleRetryIframe = () => {
+    // Re-trigger the useEffect by updating the URL state (even to the same value)
+    // This is a clean way to restart the process.
+    setUrl(u => u + ' ');
+    setTimeout(() => setUrl(u => u.trim()), 0);
+  };
+
   const handleEntityToggle = (entity) => {
     setSelectedEntities((prev) =>
       prev.includes(entity) ? prev.filter((e) => e !== entity) : [...prev, entity]
@@ -255,7 +366,7 @@ export default function EntityMappingScreen() {
 
   const isGoogleMapsSupported = (fieldName) => {
     const normalized = fieldName.toLowerCase().replace(/_/g, '');
-    return Object.keys(GOOGLE_MAPS_FIELDS).some(key => 
+    return Object.keys(GOOGLE_MAPS_FIELDS).some(key =>
       normalized.includes(key) || key.includes(normalized)
     );
   };
@@ -273,7 +384,6 @@ export default function EntityMappingScreen() {
     entityInfo.fields
       .filter((f) => f.attribute.toLowerCase() !== "id")
       .forEach((f) => {
-        // For Google Maps, allow empty selectors for supported fields
         if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
           field_mappings[f.attribute] = {
             selector: f.selector || "",
@@ -335,7 +445,6 @@ export default function EntityMappingScreen() {
       entityData[entity]?.fields
         .filter((f) => f.attribute.toLowerCase() !== "id")
         .forEach((f) => {
-          // Allow empty selectors for Google Maps supported fields
           if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
             field_mappings[f.attribute] = {
               selector: f.selector || "",
@@ -363,7 +472,7 @@ export default function EntityMappingScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source, url, entity_mappings }),
       });
-      
+
       const data = await res.json();
       if (data.success) {
         alert(`✅ ${data.message}`);
@@ -376,228 +485,252 @@ export default function EntityMappingScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl border-t-8 border-teal-400 p-10">
-        <h1 className="text-3xl font-bold text-center text-teal-600 mb-8">
-          Entity Mapping Configuration
-        </h1>
+    <div className="flex h-screen bg-gray-50">
+      {/* Left Side: Configuration Panel */}
+      <div className="w-1/2 h-full overflow-y-auto p-8">
+        <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl border-t-8 border-teal-400 p-10">
+          <h1 className="text-3xl font-bold text-center text-teal-600 mb-8">
+            Entity Mapping Configuration
+          </h1>
 
-        {isGoogleMaps && (
-          <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg flex gap-3">
-            <Info className="text-blue-600 flex-shrink-0 mt-1" size={20} />
-            <div>
-              <p className="font-semibold text-blue-800">Google Maps Detected</p>
-              <p className="text-sm text-blue-700 mt-1">
-                For supported fields (name, address, phone, website, rating, reviews, category, hours, description), 
-                you can leave selectors empty - they'll be auto-extracted. Add custom selectors only if needed.
-              </p>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-6 mb-8">
-          <div>
-            <label className="block mb-2 text-gray-700 font-semibold text-sm uppercase">Source</label>
-            <div className="relative" ref={sourcesDropdownRef}>
-              <input
-                type="text"
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                onFocus={() => setSourcesDropdownOpen(true)}
-                placeholder="Enter or select source"
-                className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
-              />
-              <button
-                onClick={() => setSourcesDropdownOpen(!sourcesDropdownOpen)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-              >
-                {sourcesDropdownOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-              </button>
-
-              {sourcesDropdownOpen && existingSources.length > 0 && (
-                <div className="absolute mt-2 w-full bg-white border rounded-xl shadow-lg z-30 max-h-60 overflow-y-auto">
-                  {existingSources.map((s) => (
-                    <div
-                      key={s.id}
-                      onClick={() => handleSourceSelect(s)}
-                      className="px-4 py-3 hover:bg-teal-50 cursor-pointer"
-                    >
-                      <p className="font-semibold">{s.name}</p>
-                      <p className="text-sm text-gray-500">{s.url}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block mb-2 text-gray-700 font-semibold text-sm uppercase">URL</label>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Enter URL"
-              className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
-            />
-          </div>
-        </div>
-
-        <div className="mb-8 relative" ref={entitiesDropdownRef}>
-          <label className="block mb-4 text-gray-700 font-semibold text-sm uppercase">
-            Select Entities
-          </label>
-          <div
-            onClick={() => setEntitiesDropdownOpen(!entitiesDropdownOpen)}
-            className="flex justify-between items-center w-full p-4 rounded-xl bg-gray-50 border border-gray-300 cursor-pointer"
-          >
-            <span>{selectedEntities.length > 0 ? selectedEntities.join(", ") : "Choose entities..."}</span>
-            <ChevronDown className="w-5 h-5" />
-          </div>
-
-          {entitiesDropdownOpen && (
-            <div className="absolute mt-2 w-full bg-white border rounded-xl shadow-lg z-20">
-              {entities.map((entity) => (
-                <label
-                  key={entity}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-100 cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEntityToggle(entity);
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedEntities.includes(entity)}
-                    readOnly
-                    className="h-5 w-5 accent-teal-500"
-                  />
-                  <span>{entity}</span>
-                </label>
-              ))}
+          {isGoogleMaps && (
+            <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg flex gap-3">
+              <Info className="text-blue-600 flex-shrink-0 mt-1" size={20} />
+              <div>
+                <p className="font-semibold text-blue-800">Google Maps Detected</p>
+                <p className="text-sm text-blue-700 mt-1">
+                  Selectors can be left empty for auto-extraction of standard fields.
+                </p>
+              </div>
             </div>
           )}
 
-        </div>
+          <div className="space-y-6 mb-8">
+            <div>
+              <label className="block mb-2 text-gray-700 font-semibold text-sm uppercase">Source</label>
+              <div className="relative" ref={sourcesDropdownRef}>
+                <input
+                  type="text"
+                  value={source}
+                  onChange={(e) => setSource(e.target.value)}
+                  onFocus={() => setSourcesDropdownOpen(true)}
+                  placeholder="Enter or select source"
+                  className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
+                />
+                <button
+                  onClick={() => setSourcesDropdownOpen(!sourcesDropdownOpen)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                >
+                  {sourcesDropdownOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </button>
 
-        <div className="space-y-6">
-          {selectedEntities.map((entity) => (
-            <div 
-              key={entity} 
-              className={`p-6 rounded-2xl border shadow-md ${
-                entityData[entity]?.enabled 
-                  ? 'border-gray-200 bg-gray-50' 
-                  : 'border-gray-300 bg-gray-100 opacity-75'
-              }`}
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h2 className={`text-2xl font-bold ${entityData[entity]?.enabled ? 'text-gray-800' : 'text-gray-500'}`}>
-                  {entity}
-                </h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => toggleEntityStatus(entity)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-white shadow-md"
-                    style={{ backgroundColor: entityData[entity]?.enabled ? "#10b981" : "#6b7280" }}
-                  >
-                    {entityData[entity]?.enabled ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                    {entityData[entity]?.enabled ? "Enabled" : "Disabled"}
-                  </button>
-
-                  <button
-                    onClick={() => handlePreview(entity)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-teal-500 to-teal-600 text-white rounded-lg shadow-md hover:bg-teal-700"
-                    disabled={previewLoading}
-                  >
-                    <Eye size={16} />
-                    {previewLoading && previewEntity === entity ? 'Loading...' : 'Preview'}
-                  </button>
-                </div>
-              </div>
-
-              {!entityData[entity]?.enabled && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-yellow-800 text-sm font-medium">
-                    ⚠️ Disabled - won't be processed during scraping
-                  </p>
-                </div>
-              )}
-
-              {!isGoogleMaps && (
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-600 mb-2">
-                    CONTAINER SELECTOR (optional)
-                  </label>
-                  <input
-                    placeholder=".class or #main"
-                    value={entityData[entity]?.containerSelector || ""}
-                    onChange={(e) =>
-                      setEntityData((prev) => ({
-                        ...prev,
-                        [entity]: { ...prev[entity], containerSelector: e.target.value },
-                      }))
-                    }
-                    className="w-full p-3 rounded-xl bg-white border border-gray-300 focus:ring-2 focus:ring-teal-400"
-                  />
-                </div>
-              )}
-
-              {entityData[entity]?.fields
-                .filter((field) => field.attribute.toLowerCase() !== "id")
-                .map((field) => {
-                  const isSupported = isGoogleMaps && isGoogleMapsSupported(field.attribute);
-                  
-                  return (
-                    <div key={`${entity}-${field.attribute}`} className="mb-4">
-                      {isSupported && (
-                        <div className="text-xs text-green-600 mb-1 flex items-center gap-1">
-                          <Info size={12} />
-                          Google Maps auto-extract available
-                        </div>
-                      )}
-                      <div className="grid grid-cols-3 gap-4">
-                        <input
-                          value={field.attribute}
-                          disabled
-                          className="p-3 rounded-xl bg-gray-200 border border-gray-300 text-gray-600"
-                        />
-                        <input
-                          placeholder={isSupported ? "Auto (or custom CSS)" : "CSS Selector"}
-                          value={field.selector}
-                          onChange={(e) => handleFieldChange(entity, field.attribute, "selector", e.target.value)}
-                          className="p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
-                        />
-                        <MetadataInput
-                          value={field.metadata}
-                          onChange={(val) => handleFieldChange(entity, field.attribute, "metadata", val)}
-                          options={METADATA_OPTIONS}
-                        />
+                {sourcesDropdownOpen && existingSources.length > 0 && (
+                  <div className="absolute mt-2 w-full bg-white border rounded-xl shadow-lg z-30 max-h-60 overflow-y-auto">
+                    {existingSources.map((s) => (
+                      <div
+                        key={s.id}
+                        onClick={() => handleSourceSelect(s)}
+                        className="px-4 py-3 hover:bg-teal-50 cursor-pointer"
+                      >
+                        <p className="font-semibold">{s.name}</p>
+                        <p className="text-sm text-gray-500">{s.url}</p>
                       </div>
-                    </div>
-                  );
-                })}
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          ))}
-        </div>
 
-        {selectedEntities.length > 0 && (
-          <div className="mt-10 flex justify-center gap-6">
-            <button
-              onClick={handleSave}
-              className="px-16 py-5 bg-gradient-to-b from-teal-500 to-teal-600 text-white rounded-2xl shadow-xl font-bold text-xl hover:scale-105 transition-all"
-            >
-              Save Configuration
-            </button>
-            <button
-              onClick={() => window.location.href = "/mappingmanager"}
-              className="px-8 py-5 bg-gradient-to-b from-blue-500 to-blue-600 text-white rounded-2xl shadow-xl font-bold text-xl hover:scale-105 transition-all"
-            >
-              Go to Mappings
-            </button>
+            <div>
+              <label className="block mb-2 text-gray-700 font-semibold text-sm uppercase">URL</label>
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Enter URL"
+                className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
+              />
+            </div>
           </div>
-        )}
+
+          <div className="mb-8 relative" ref={entitiesDropdownRef}>
+            <label className="block mb-4 text-gray-700 font-semibold text-sm uppercase">
+              Select Entities
+            </label>
+            <div
+              onClick={() => setEntitiesDropdownOpen(!entitiesDropdownOpen)}
+              className="flex justify-between items-center w-full p-4 rounded-xl bg-gray-50 border border-gray-300 cursor-pointer"
+            >
+              <span>{selectedEntities.length > 0 ? selectedEntities.join(", ") : "Choose entities..."}</span>
+              <ChevronDown className="w-5 h-5" />
+            </div>
+
+            {entitiesDropdownOpen && (
+              <div className="absolute mt-2 w-full bg-white border rounded-xl shadow-lg z-20">
+                {entities.map((entity) => (
+                  <label
+                    key={entity}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEntityToggle(entity);
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedEntities.includes(entity)}
+                      readOnly
+                      className="h-5 w-5 accent-teal-500"
+                    />
+                    <span>{entity}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-6">
+            {selectedEntities.map((entity) => (
+              <div
+                key={entity}
+                className={`p-6 rounded-2xl border shadow-md ${
+                  entityData[entity]?.enabled
+                    ? 'border-gray-200 bg-gray-50'
+                    : 'border-gray-300 bg-gray-100 opacity-75'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className={`text-2xl font-bold ${entityData[entity]?.enabled ? 'text-gray-800' : 'text-gray-500'}`}>
+                    {entity}
+                  </h2>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => toggleEntityStatus(entity)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white shadow-md"
+                      style={{ backgroundColor: entityData[entity]?.enabled ? "#10b981" : "#6b7280" }}
+                    >
+                      {entityData[entity]?.enabled ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                      {entityData[entity]?.enabled ? "Enabled" : "Disabled"}
+                    </button>
+
+                    <button
+                      onClick={() => handlePreview(entity)}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-teal-500 to-teal-600 text-white rounded-lg shadow-md hover:bg-teal-700"
+                      disabled={previewLoading}
+                    >
+                      <Eye size={16} />
+                      {previewLoading && previewEntity === entity ? 'Loading...' : 'Preview'}
+                    </button>
+                  </div>
+                </div>
+
+                {!entityData[entity]?.enabled && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-yellow-800 text-sm font-medium">
+                      ⚠️ Disabled - won't be processed during scraping
+                    </p>
+                  </div>
+                )}
+
+                {!isGoogleMaps && (
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      CONTAINER SELECTOR (optional)
+                    </label>
+                    <input
+                      placeholder=".class or #main"
+                      value={entityData[entity]?.containerSelector || ""}
+                      onChange={(e) =>
+                        setEntityData((prev) => ({
+                          ...prev,
+                          [entity]: { ...prev[entity], containerSelector: e.target.value },
+                        }))
+                      }
+                      className="w-full p-3 rounded-xl bg-white border border-gray-300 focus:ring-2 focus:ring-teal-400"
+                    />
+                  </div>
+                )}
+
+                {entityData[entity]?.fields
+                  .filter((field) => field.attribute.toLowerCase() !== "id")
+                  .map((field) => {
+                    const isSupported = isGoogleMaps && isGoogleMapsSupported(field.attribute);
+                    return (
+                      <div key={`${entity}-${field.attribute}`} className="mb-4">
+                        {isSupported && (
+                          <div className="text-xs text-green-600 mb-1 flex items-center gap-1">
+                            <Info size={12} />
+                            Google Maps auto-extract available
+                          </div>
+                        )}
+                        <div className="grid grid-cols-3 gap-4">
+                          <input
+                            value={field.attribute}
+                            disabled
+                            className="p-3 rounded-xl bg-gray-200 border border-gray-300 text-gray-600"
+                          />
+                          <input
+                            placeholder={isSupported ? "Auto (or custom CSS)" : "CSS Selector"}
+                            value={field.selector}
+                            onChange={(e) => handleFieldChange(entity, field.attribute, "selector", e.target.value)}
+                            className="p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
+                          />
+                          <MetadataInput
+                            value={field.metadata}
+                            onChange={(val) => handleFieldChange(entity, field.attribute, "metadata", val)}
+                            options={METADATA_OPTIONS}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            ))}
+          </div>
+
+          {selectedEntities.length > 0 && (
+            <div className="mt-10 flex justify-center gap-6">
+              <button
+                onClick={handleSave}
+                className="px-16 py-5 bg-gradient-to-b from-teal-500 to-teal-600 text-white rounded-2xl shadow-xl font-bold text-xl hover:scale-105 transition-all"
+              >
+                Save Configuration
+              </button>
+              <button
+                onClick={() => window.location.href = "/mappingmanager"}
+                className="px-8 py-5 bg-gradient-to-b from-blue-500 to-blue-600 text-white rounded-2xl shadow-xl font-bold text-xl hover:scale-105 transition-all"
+              >
+                Go to Mappings
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-      
+
+      {/* Right Side: Iframe Preview with Improved State Handling */}
+      <div className="w-1/2 p-8">
+        <div className="bg-white w-full  h-full rounded-2xl shadow-xl border-t-8 border-blue-400 overflow-hidden">
+          {/* Conditional rendering based on the robust iframeStatus state */}
+          {iframeStatus === 'empty' && <FrameEmptyState />}
+          {iframeStatus === 'loading' && <FrameLoadingState />}
+          {iframeStatus === 'error' && <FrameErrorState url={url} onRetry={handleRetryIframe} />}
+          
+          {/* The iframe is now rendered conditionally and hidden while loading */}
+          {(iframeStatus === 'loading' || iframeStatus === 'loaded') && (
+            <iframe
+              key={iframeKey}
+              src={url}
+              title="Source Preview"
+              className={`w-full m-6 h-full transition-opacity duration-300 ${
+                iframeStatus === 'loaded' ? 'opacity-100' : 'opacity-0'
+              }`}
+              onLoad={handleIframeLoad}
+              onError={handleIframeLoad} // Treat generic error same as blocked for simplicity
+            />
+          )}
+        </div>
+      </div>
+
       {previewData && <PreviewModal data={previewData} onClose={() => setPreviewData(null)} />}
     </div>
   );

@@ -1,10 +1,10 @@
 import sys
 import asyncio
-
+import httpx
 # Set event loop policy FIRST, before any other imports
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
+from fastapi.responses import HTMLResponse
 from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import asyncio
@@ -40,6 +40,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.get("/proxy", response_class=HTMLResponse)
+async def proxy(url: str):
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            resp = await client.get(url, timeout=10)
+            # Return the HTML content
+            return HTMLResponse(content=resp.text)
+    except Exception as e:
+        return HTMLResponse(content=f"<h3>Error fetching URL:</h3><p>{str(e)}</p>")
 
 
 @app.post("/scrapedynamic", response_model=ScrapeResponse)
