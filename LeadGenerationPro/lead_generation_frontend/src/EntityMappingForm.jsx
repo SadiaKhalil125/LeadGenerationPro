@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, RefreshCw } from "lucide-react";
+import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, Code } from "lucide-react";
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
 
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
 
-// Google Maps supported fields
 const GOOGLE_MAPS_FIELDS = {
   name: "Business/Place Name",
   address: "Full Address",
@@ -80,7 +82,7 @@ const PreviewModal = ({ data, onClose }) => {
             </div>
           )}
         </div>
-
+        
         <div className="flex justify-end p-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
           <button
             onClick={onClose}
@@ -146,76 +148,95 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
-// Component for iframe error state
-const FrameErrorState = ({ url, onRetry }) => (
-  <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100 p-8 text-center">
-    <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full">
-      {/* <div className="w-20 h-20 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
-        <AlertTriangle className="w-10 h-10 text-red-500" />
-      </div> */}
+const ServerHtmlPreview = ({ url }) => {
+  const [status, setStatus] = useState('idle');
+  const [htmlContent, setHtmlContent] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        fetchContent(url);
+      } else {
+        setStatus('idle');
+      }
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [url]);
+
+  const fetchContent = async (urlToFetch) => {
+    setStatus('loading');
+    setHtmlContent('');
+    setErrorMessage('');
+    try {
+      const res = await fetch("http://127.0.0.1:8000/utils/fetch-url-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: urlToFetch }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to fetch content from the server.');
+      }
       
-      <h3 className="text-xl font-bold text-gray-800 mb-3">
-        Cannot Display Website
-      </h3>
-      
-      <p className="text-gray-600 mb-4">
-        This website has security restrictions that prevent it from being displayed in a frame. This is a common security measure.
-      </p>
-      
-      <div className="bg-gray-50 rounded-lg p-4 mb-6">
-        <p className="text-sm text-gray-500 break-all font-mono">
-          {url}
-        </p>
-      </div>
+      setHtmlContent(data.content); // We use the raw content directly
+      setStatus('success');
+    } catch (err) {
+      setErrorMessage(err.message);
+      setStatus('error');
+    }
+  };
 
-      <div className="space-y-3 text-sm text-gray-600 text-left">
-        <div className="flex items-start gap-2">
-          <div className="w-2 h-2 bg-red-400 rounded-full mt-1.5 flex-shrink-0"></div>
-          <span><strong>X-Frame-Options</strong> or <strong>CSP</strong> headers are blocking the display.</span>
+  return (
+    <div className="w-full h-full flex flex-col bg-gray-800">
+      {status === 'idle' && (
+        <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
+          <Code size={48} className="mb-4 text-gray-500" />
+          <h3 className="text-lg font-semibold">HTML Source View</h3>
+          <p>Enter a URL to see the raw HTML source code.</p>
         </div>
-        <div className="flex items-start gap-2">
-          <div className="w-2 h-2 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
-          <span>You can still configure mappings - the scraper will work on the server.</span>
+      )}
+      {status === 'loading' && (
+        <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
+          <div className="animate-spin text-teal-500"><Code size={48} /></div>
+          <p className="mt-4 font-semibold">Fetching HTML Source...</p>
         </div>
-      </div>
-
-      {/* <button
-        onClick={onRetry}
-        className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-b from-teal-500 to-teal-600 text-white rounded-lg hover:bg-teal-600 transition-colors font-medium"
-      >
-        <RefreshCw size={18} />
-        Retry Preview
-      </button> */}
+      )}
+      {status === 'error' && (
+        <div className="flex-grow flex flex-col items-center justify-center text-red-400 p-4">
+          <AlertTriangle size={48} className="mb-4 text-red-500" />
+          <h3 className="text-lg font-bold">Fetch Failed</h3>
+          <p className="text-center mt-2 bg-red-900 bg-opacity-30 p-3 rounded-md">{errorMessage}</p>
+        </div>
+      )}
+      {status === 'success' && (
+        <div className="w-full h-full overflow-auto">
+          <SyntaxHighlighter
+            language="html"
+            style={vscDarkPlus}
+            showLineNumbers={true}
+            wrapLines={true}
+            customStyle={{ 
+              margin: 0,
+              height: '100%',
+              width: '100%',
+              padding: '1rem'
+            }}
+            codeTagProps={{
+              style: {
+                fontFamily: '"Fira Code", "Dank Mono", monospace',
+                fontSize: '14px',
+              }
+            }}
+          >
+            {htmlContent}
+          </SyntaxHighlighter>
+        </div>
+      )}
     </div>
-  </div>
-);
-
-// Component for iframe loading state
-const FrameLoadingState = () => (
-    <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-4 bg-teal-100 rounded-full flex items-center justify-center animate-pulse">
-          <Globe className="w-8 h-8 text-teal-600" />
-        </div>
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading Preview</h3>
-        <p className="text-gray-500">Attempting to load website...</p>
-      </div>
-    </div>
-);
-
-// Component for empty state
-const FrameEmptyState = () => (
-    <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
-          <Globe className="w-8 h-8 text-blue-500" />
-        </div>
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Website Preview</h3>
-        <p className="text-gray-500">Enter a URL to see a preview here.</p>
-      </div>
-    </div>
-);
-
+  );
+};
 
 export default function EntityMappingScreen() {
   const [source, setSource] = useState("");
@@ -229,15 +250,17 @@ export default function EntityMappingScreen() {
   const [entityData, setEntityData] = useState({});
   const [entitiesDropdownOpen, setEntitiesDropdownOpen] = useState(false);
   const entitiesDropdownRef = useRef(null);
-
+  
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewEntity, setPreviewEntity] = useState(null);
 
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
-  const [iframeStatus, setIframeStatus] = useState('empty'); // 'empty', 'loading', 'loaded', 'error'
-  const [iframeKey, setIframeKey] = useState(0);
-  const loadTimeoutRef = useRef(null); // Ref to hold the timeout ID
+
+  useEffect(() => {
+    const urlLower = url.toLowerCase();
+    setIsGoogleMaps(urlLower.includes('google.com/maps') || urlLower.includes('maps.google.com'));
+  }, [url]);
 
   useEffect(() => {
     const fetchEntities = async () => {
@@ -245,13 +268,13 @@ export default function EntityMappingScreen() {
         const res = await fetch("http://127.0.0.1:8000/entity/entities");
         const data = await res.json();
         setEntities(data.entities.map((e) => e.name));
-
+        
         const initialData = {};
         data.entities.forEach((e) => {
           initialData[e.name] = {
             enabled: true,
             containerSelector: "",
-            fields: e.columns.filter((col) => col !== "modified_at").map((col) => ({
+            fields: e.columns.filter((col) => col !== "modified_at" && col !== "source").map((col) => ({
               attribute: col,
               selector: "",
               metadata: "text",
@@ -292,49 +315,6 @@ export default function EntityMappingScreen() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    // This effect controls the iframe state and uses a timeout for error handling
-    clearTimeout(loadTimeoutRef.current); // Clear any existing timeout
-
-    const urlLower = url.toLowerCase();
-    const isGmaps = urlLower.includes('google.com/maps') || urlLower.includes('maps.google.com');
-    setIsGoogleMaps(isGmaps);
-
-    if (isGmaps) {
-        // Immediately set to error for known non-embeddable sites
-        setIframeStatus('error');
-    } else if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-        setIframeStatus('loading');
-        setIframeKey(prev => prev + 1); // Force iframe to re-render
-
-        // Set a timeout. If onLoad doesn't fire within 10s, assume it's blocked.
-        loadTimeoutRef.current = setTimeout(() => {
-            setIframeStatus('error');
-        }, 10000); // 10-second timeout
-    } else {
-        setIframeStatus('empty');
-    }
-
-    // Cleanup function to clear timeout if component unmounts or URL changes
-    return () => {
-        clearTimeout(loadTimeoutRef.current);
-    };
-  }, [url]);
-
-  const handleIframeLoad = () => {
-    // Success! The iframe loaded something. Clear the timeout and set status to loaded.
-    clearTimeout(loadTimeoutRef.current);
-    // Add a small delay to prevent flickering if the page loads very fast
-    setTimeout(() => setIframeStatus('loaded'), 200);
-  };
-
-  const handleRetryIframe = () => {
-    // Re-trigger the useEffect by updating the URL state (even to the same value)
-    // This is a clean way to restart the process.
-    setUrl(u => u + ' ');
-    setTimeout(() => setUrl(u => u.trim()), 0);
-  };
-
   const handleEntityToggle = (entity) => {
     setSelectedEntities((prev) =>
       prev.includes(entity) ? prev.filter((e) => e !== entity) : [...prev, entity]
@@ -366,7 +346,7 @@ export default function EntityMappingScreen() {
 
   const isGoogleMapsSupported = (fieldName) => {
     const normalized = fieldName.toLowerCase().replace(/_/g, '');
-    return Object.keys(GOOGLE_MAPS_FIELDS).some(key =>
+    return Object.keys(GOOGLE_MAPS_FIELDS).some(key => 
       normalized.includes(key) || key.includes(normalized)
     );
   };
@@ -472,7 +452,7 @@ export default function EntityMappingScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source, url, entity_mappings }),
       });
-
+      
       const data = await res.json();
       if (data.success) {
         alert(`✅ ${data.message}`);
@@ -480,13 +460,12 @@ export default function EntityMappingScreen() {
         throw new Error(data.detail || "Save failed");
       }
     } catch (err) {
-      alert(`❌Failed: ${err.message}`);
+      alert(`❌ Failed: ${err.message}`);
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Left Side: Configuration Panel */}
       <div className="w-1/2 h-full overflow-y-auto p-8">
         <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl border-t-8 border-teal-400 p-10">
           <h1 className="text-3xl font-bold text-center text-teal-600 mb-8">
@@ -499,7 +478,7 @@ export default function EntityMappingScreen() {
               <div>
                 <p className="font-semibold text-blue-800">Google Maps Detected</p>
                 <p className="text-sm text-blue-700 mt-1">
-                  Selectors can be left empty for auto-extraction of standard fields.
+                  For supported fields, you can leave selectors empty for auto-extraction.
                 </p>
               </div>
             </div>
@@ -591,11 +570,11 @@ export default function EntityMappingScreen() {
 
           <div className="space-y-6">
             {selectedEntities.map((entity) => (
-              <div
-                key={entity}
+              <div 
+                key={entity} 
                 className={`p-6 rounded-2xl border shadow-md ${
-                  entityData[entity]?.enabled
-                    ? 'border-gray-200 bg-gray-50'
+                  entityData[entity]?.enabled 
+                    ? 'border-gray-200 bg-gray-50' 
                     : 'border-gray-300 bg-gray-100 opacity-75'
                 }`}
               >
@@ -706,31 +685,13 @@ export default function EntityMappingScreen() {
           )}
         </div>
       </div>
-
-      {/* Right Side: Iframe Preview with Improved State Handling */}
-      <div className="w-1/2 p-8">
-        <div className="bg-white w-full  h-full rounded-2xl shadow-xl border-t-8 border-blue-400 overflow-hidden">
-          {/* Conditional rendering based on the robust iframeStatus state */}
-          {iframeStatus === 'empty' && <FrameEmptyState />}
-          {iframeStatus === 'loading' && <FrameLoadingState />}
-          {iframeStatus === 'error' && <FrameErrorState url={url} onRetry={handleRetryIframe} />}
-          
-          {/* The iframe is now rendered conditionally and hidden while loading */}
-          {(iframeStatus === 'loading' || iframeStatus === 'loaded') && (
-            <iframe
-              key={iframeKey}
-              src={url}
-              title="Source Preview"
-              className={`w-full m-6 h-full transition-opacity duration-300 ${
-                iframeStatus === 'loaded' ? 'opacity-100' : 'opacity-0'
-              }`}
-              onLoad={handleIframeLoad}
-              onError={handleIframeLoad} // Treat generic error same as blocked for simplicity
-            />
-          )}
+      
+      <div className="w-1/2 h-full p-8 flex flex-col">
+        <div className="bg-white w-full flex-grow rounded-2xl shadow-xl border-t-8 border-blue-400 overflow-hidden">
+          <ServerHtmlPreview url={url} />
         </div>
       </div>
-
+      
       {previewData && <PreviewModal data={previewData} onClose={() => setPreviewData(null)} />}
     </div>
   );
