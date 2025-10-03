@@ -4,7 +4,9 @@ import asyncio
 # Set event loop policy FIRST, before any other imports
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
+from models import FetchURLRequest
+import httpx
+from fastapi.responses import JSONResponse
 from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import asyncio
@@ -40,6 +42,48 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+
+@app.post("/utils/fetch-url-content")
+async def fetch_url_content(request: FetchURLRequest):
+    """
+    Fetches the HTML content of a given URL from the server-side to bypass browser restrictions.
+    """
+    url_to_fetch = request.url
+    # Use a realistic browser User-Agent to avoid being blocked
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
+    }
+    try:
+        # Use a timeout to prevent the request from hanging indefinitely
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+            response = await client.get(url_to_fetch, headers=headers)
+            # Raise an exception for bad status codes like 404 or 500
+            response.raise_for_status()
+
+            return {
+                "success": True,
+                "content": response.text,
+                "final_url": str(response.url), # The final URL after any redirects
+            }
+
+    except httpx.HTTPStatusError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": f"Website returned an error (Status {e.response.status_code})"},
+        )
+    except httpx.RequestError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": f"Could not connect to the website: {type(e).__name__}"},
+        )
+    except Exception as e:
+        # Catch any other unexpected errors
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 
 @app.post("/scrapedynamic", response_model=ScrapeResponse)
