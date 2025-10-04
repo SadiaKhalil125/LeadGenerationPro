@@ -35,7 +35,7 @@ const EntityList = () => {
   const fetchEntities = async () => {
     try {
       setLoading(true);
-      const response = await fetch("https://trustworthy-wilburn-retroactively.ngrok-free.dev/entity/entities");
+      const response = await fetch("http://localhost:8000/entity/entities");
       const data = await response.json();
       
       if (data.entities) {
@@ -73,7 +73,7 @@ const EntityList = () => {
 
   const fetchEntityInfo = async (entityName) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/entity/entity-info/${entityName}`);
+      const response = await fetch(`http://localhost:8000/entity/entity-info/${entityName}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -179,7 +179,7 @@ const EntityList = () => {
           attributes: toAdd.map(attr => ({ name: attr.name, datatype: attr.datatype }))
         };
 
-        const addResponse = await fetch(`http://127.0.0.1:8000/entity/edit-entity/${editingEntity}`, {
+        const addResponse = await fetch(`http://localhost:8000/entity/edit-entity/${editingEntity}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(addPayload),
@@ -195,7 +195,7 @@ const EntityList = () => {
 
       // 2. Remove columns
       for (const attr of toRemove) {
-        const removeResponse = await fetch(`http://127.0.0.1:8000/entity/delete-column/${editingEntity}/${attr.originalName}`, {
+        const removeResponse = await fetch(`http://localhost:8000/entity/delete-column/${editingEntity}/${attr.originalName}`, {
           method: "DELETE"
         });
         const removeData = await removeResponse.json();
@@ -210,7 +210,7 @@ const EntityList = () => {
       // 3. Rename columns (using ALTER TABLE RENAME COLUMN)
       for (const attr of toRename) {
         // Note: You'll need to add a rename endpoint to your backend
-        const renameResponse = await fetch(`http://127.0.0.1:8000/entity/rename-column/${editingEntity}/${attr.originalName}/${attr.name}`, {
+        const renameResponse = await fetch(`http://localhost:8000/entity/rename-column/${editingEntity}/${attr.originalName}/${attr.name}`, {
           method: "PUT"
         });
         
@@ -257,7 +257,7 @@ const EntityList = () => {
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/entity/delete-entity/${entityName}`, {
+      const response = await fetch(`http://localhost:8000/entity/delete-entity/${entityName}`, {
         method: "DELETE"
       });
       const data = await response.json();
