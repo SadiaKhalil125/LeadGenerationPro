@@ -255,6 +255,7 @@ export default function EntityMappingScreen() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewEntity, setPreviewEntity] = useState(null);
 
+
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
 
   useEffect(() => {

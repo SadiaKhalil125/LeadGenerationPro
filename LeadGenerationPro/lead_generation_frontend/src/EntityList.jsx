@@ -35,7 +35,7 @@ const EntityList = () => {
   const fetchEntities = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://127.0.0.1:8000/entity/entities");
+      const response = await fetch("https://trustworthy-wilburn-retroactively.ngrok-free.dev/entity/entities");
       const data = await response.json();
       
       if (data.entities) {
