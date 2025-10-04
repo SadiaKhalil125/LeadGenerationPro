@@ -14,12 +14,15 @@ import TasksManagement from './TasksManagement'
 import TaskExecutor from './TaskExecutor'
 import SourceManagement from './SourceManager';
 import EntityDataPage from './EntityDataPage';
+import SimpleEntityTest from './SimpleEntityTest';
+
 function App() {
 
   return (
    <BrowserRouter> 
       {/* <NavigationPage /> */}
       <Routes>
+        <Route path="/simpleentitytest" element={<SimpleEntityTest />} />
         <Route path="/" element={<NavigationPage />} />
         <Route path="/entityform" element={<EntityForm />} />
         <Route path="/entitylist" element={<EntityList />} />

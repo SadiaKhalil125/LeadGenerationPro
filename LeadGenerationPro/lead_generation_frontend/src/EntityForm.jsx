@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Save, List, Database, Columns, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import API_BASE from "./api_base";
 
 const EntityForm = () => {
   const [entityName, setEntityName] = useState("");
   const [attributes, setAttributes] = useState([]);
   const navigate = useNavigate();
-
+  
   const addAttribute = () => {
     setAttributes([...attributes, { name: "", datatype: "text" }]);
   };
@@ -39,9 +40,12 @@ const EntityForm = () => {
     console.log("Submitting:", payload);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/entity/save-entity", {
+      const response = await fetch(`${API_BASE}/entity/save-entity`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json",
+                  "ngrok-skip-browser-warning": "true"
+         },
+
         body: JSON.stringify(payload),
       });
       const data = await response.json();

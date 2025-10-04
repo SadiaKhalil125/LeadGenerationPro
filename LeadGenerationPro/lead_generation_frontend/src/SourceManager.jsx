@@ -17,7 +17,7 @@ import {
   List,
   Calendar
 } from 'lucide-react';
-
+import API_BASE from "./api_base";
 const SourceManagement = () => {
   const [sources, setSources] = useState([]);
   const [expandedSource, setExpandedSource] = useState(null);
@@ -32,8 +32,6 @@ const SourceManagement = () => {
   const [newSourceForm, setNewSourceForm] = useState({ name: '', url: '' });
   const [response, setResponse] = useState(null);
 
-  const API_BASE = 'http://127.0.0.1:8000';
-
   useEffect(() => {
     fetchSources();
   }, []);
@@ -41,7 +39,10 @@ const SourceManagement = () => {
   const fetchSources = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/source/sources`);
+      const response = await fetch(`${API_BASE}/source/sources`,{
+        method: "GET",
+        headers: { "ngrok-skip-browser-warning": "true" }
+      });
       if (!response.ok) throw new Error('Failed to fetch sources');
       const data = await response.json();
       setSources(data.sources || []);
@@ -57,7 +58,10 @@ const SourceManagement = () => {
   const fetchDependencies = async (sourceId) => {
     try {
       // Fetch mappings that use this source
-      const mappingsResponse = await fetch(`${API_BASE}/mapping/mappings`);
+      const mappingsResponse = await fetch(`${API_BASE}/mapping/mappings`,{
+        method: "GET",
+        headers: { "ngrok-skip-browser-warning": "true" }
+      });
       if (mappingsResponse.ok) {
         const mappingsData = await mappingsResponse.json();
         const sourceMappings = mappingsData.mappings?.filter(m => m.source_id === sourceId) || [];
@@ -104,7 +108,7 @@ const SourceManagement = () => {
       setLoading(true);
       const response = await fetch(`${API_BASE}/source/source/${editingSource}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true" },
         body: JSON.stringify(editForm)
       });
 
@@ -132,9 +136,9 @@ const SourceManagement = () => {
       const endpoint = force ? 
         `${API_BASE}/source/source/${sourceId}/force` : 
         `${API_BASE}/source/source/${sourceId}`;
-      
-      const response = await fetch(endpoint, { method: 'DELETE' });
-      
+
+      const response = await fetch(endpoint, { method: 'DELETE' , headers: {"ngrok-skip-browser-warning": "true"} });
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Failed to delete source');
@@ -157,7 +161,8 @@ const SourceManagement = () => {
     try {
       setLoading(true);
       const response = await fetch(`${API_BASE}/source/save-source?name=${encodeURIComponent(newSourceForm.name)}&url=${encodeURIComponent(newSourceForm.url)}`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { "ngrok-skip-browser-warning": "true" }
       });
 
       if (!response.ok) {

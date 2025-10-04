@@ -3,6 +3,7 @@ import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, A
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+import API_BASE from "./api_base";
 
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
 
@@ -170,9 +171,11 @@ const ServerHtmlPreview = ({ url }) => {
     setHtmlContent('');
     setErrorMessage('');
     try {
-      const res = await fetch("http://127.0.0.1:8000/utils/fetch-url-content", {
+      const res = await fetch(`${API_BASE}/fetchcontent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json",
+                   "ngrok-skip-browser-warning": "true"
+         },
         body: JSON.stringify({ url: urlToFetch }),
       });
       const data = await res.json();
@@ -266,7 +269,10 @@ export default function EntityMappingScreen() {
   useEffect(() => {
     const fetchEntities = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/entity/entities");
+        const res = await fetch(`${API_BASE}/entity/entities`,{
+          method: "GET",
+          headers: {"ngrok-skip-browser-warning": "true"}
+        });
         const data = await res.json();
         setEntities(data.entities.map((e) => e.name));
         
@@ -293,7 +299,12 @@ export default function EntityMappingScreen() {
   useEffect(() => {
     const fetchSources = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/source/sources");
+        const res = await fetch(`${API_BASE}/source/sources`, {
+          method: "GET",
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
         const data = await res.json();
         setExistingSources(data.sources || []);
       } catch (err) {
@@ -389,9 +400,11 @@ export default function EntityMappingScreen() {
     setPreviewEntity(entity);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/task/preview-mapping", {
+      const res = await fetch(`${API_BASE}/task/preview-mapping`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json",
+                   "ngrok-skip-browser-warning": "true"
+         },
         body: JSON.stringify({
           url,
           entity_name: entity,
@@ -448,9 +461,11 @@ export default function EntityMappingScreen() {
     });
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/mapping/save-entity-mapping", {
+      const res = await fetch(`${API_BASE}/mapping/save-entity-mapping`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json",
+                   "ngrok-skip-browser-warning": "true"
+         },
         body: JSON.stringify({ source, url, entity_mappings }),
       });
       

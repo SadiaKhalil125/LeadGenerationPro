@@ -20,7 +20,8 @@ class MappingFormRequest(BaseModel):
     url: HttpUrl
     entity_mappings: List[EntityMappingRequest]
     
-
+class FetchContentRequest(BaseModel):
+    url: str
 
 class ScrapeRequest(BaseModel):
     entity_name: str

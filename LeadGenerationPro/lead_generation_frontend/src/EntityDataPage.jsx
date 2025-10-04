@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
-
+import API_BASE from "./api_base";
 const EntityDataScreen = () => {
-  const API_BASE = "http://127.0.0.1:8000";
   const [entities, setEntities] = useState([]);
   const [selectedEntity, setSelectedEntity] = useState(null);
   const [data, setData] = useState(null);
@@ -24,7 +23,12 @@ const EntityDataScreen = () => {
 
   const fetchEntities = async () => {
     try {
-      const res = await fetch(`${API_BASE}/entity/entities`);
+      const res = await fetch(`${API_BASE}/entity/entities`,{
+        method: "GET",
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
       const json = await res.json();
       setEntities(json.entities || []);
     } catch (err) {
@@ -37,7 +41,13 @@ const EntityDataScreen = () => {
     setError(null);
     try {
       const res = await fetch(
-        `${API_BASE}/entity/entity-data/${entityName}?page=${pageNum}&page_size=${pageSize}`
+        `${API_BASE}/entity/entity-data/${entityName}?page=${pageNum}&page_size=${pageSize}`,
+        {
+          method: "GET",
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
+        }
       );
 
       if (!res.ok) throw new Error("Failed to fetch data");

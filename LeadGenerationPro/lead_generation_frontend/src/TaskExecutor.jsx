@@ -13,6 +13,8 @@ import {
   List // For entity detail
 } from 'lucide-react';
 
+import API_BASE from "./api_base";
+
 const TaskExecution = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -28,7 +30,12 @@ const TaskExecution = () => {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://127.0.0.1:8000/task/tasks');
+      const res = await fetch(`${API_BASE}/http://127.0.0.1:8000/task/tasks`,{
+        method: 'GET',
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
       const data = await res.json();
       setTasks(data.tasks || []);
     } catch (error) {
@@ -49,8 +56,11 @@ const TaskExecution = () => {
       setExecutingTask(taskId);
       setResponse(null); // Clear previous response
 
-      const res = await fetch(`http://127.0.0.1:8000/task/execute-task/${taskId}`, {
+      const res = await fetch(`${API_BASE}/task/execute-task/${taskId}`, {
         method: 'POST',
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
       });
 
       const data = await res.json();
@@ -98,7 +108,10 @@ const TaskExecution = () => {
         [taskId]: { loading: true } // Mark as loading
       }));
 
-      const res = await fetch(`http://127.0.0.1:8000/task/task-execution-history/${taskId}`);
+      const res = await fetch(`${API_BASE}/task/task-execution-history/${taskId}`,{
+        method: 'GET',
+        headers: { "ngrok-skip-browser-warning": "true" }
+      });
       const data = await res.json();
 
       setExecutionHistory(prev => ({

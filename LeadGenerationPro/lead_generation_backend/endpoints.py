@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import asyncio
-from models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest
+from models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, FetchContentRequest
 from utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -40,16 +40,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-@app.get("/proxy", response_class=HTMLResponse)
-async def proxy(url: str):
+@app.post("/fetchcontent")
+async def fetch_content(request: FetchContentRequest):
     try:
         async with httpx.AsyncClient(follow_redirects=True) as client:
-            resp = await client.get(url, timeout=10)
-            # Return the HTML content
-            return HTMLResponse(content=resp.text)
+            resp = await client.get(request.url, timeout=10000)
+            return {"success": True, "content": resp.text}
     except Exception as e:
-        return HTMLResponse(content=f"<h3>Error fetching URL:</h3><p>{str(e)}</p>")
-
+        return {"success": False, "error": str(e)}
 
 @app.post("/scrapedynamic", response_model=ScrapeResponse)
 async def scrape_dynamic(request: ScrapeRequest):
