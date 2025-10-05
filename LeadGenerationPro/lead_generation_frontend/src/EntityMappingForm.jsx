@@ -528,7 +528,7 @@ export default function EntityMappingScreen() {
                         className="px-4 py-3 hover:bg-teal-50 cursor-pointer"
                       >
                         <p className="font-semibold">{s.name}</p>
-                        <p className="text-sm text-gray-500">{s.url}</p>
+                        {/* <p className="text-sm text-gray-500">{s.url}</p> */}
                       </div>
                     ))}
                   </div>
