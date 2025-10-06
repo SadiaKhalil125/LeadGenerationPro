@@ -1,83 +1,115 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from psycopg2.extras import RealDictCursor
 from contextlib import asynccontextmanager
-from datetime import datetime
 import asyncio, httpx
 from routers.get_db_connection import get_db_cursor
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+from kafka import KafkaProducer
+import json
+import os
 
-# Shared scheduler instance
+BOOTSTRAP = "localhost:9092"
+
+
 scheduler = BackgroundScheduler()
-def get_scheduler_args(repeat: str, scheduled_time: datetime):
-    """
-    Return (trigger_name, kwargs) for APScheduler based on repeat value.
-    """
+producer: KafkaProducer = None  # will initialize in startup
+
+async def send_to_kafka(message: dict):
+    """Send message to Kafka without blocking."""
+    global producer
+    try:
+        await asyncio.to_thread(producer.send, 'scraping_tasks', message)
+        print(f"✅ Published task {message['task_id']} to Kafka")
+    except Exception as e:
+        print(f"❌ Failed to publish task {message['task_id']}: {e}")
+
+def enqueue_task(task_id: int, payload: dict = None):
+    """Prepare message and send to Kafka synchronously."""
+    message = {
+        "task_id": task_id,
+        "payload": payload or {},
+        "scheduled_at": datetime.now().isoformat()
+    }
+    try:
+        future = producer.send('scraping_tasks', message)
+        record_metadata = future.get(timeout=10)
+        print(f"✅ Published task {task_id} to Kafka "
+              f"(topic={record_metadata.topic}, partition={record_metadata.partition}, offset={record_metadata.offset})")
+    except Exception as e:
+        print(f"❌ Failed to publish task {task_id}: {e}")
+
+def get_next_scheduled_time(repeat: str, current_time: datetime):
+    """Return the next scheduled_time based on repeat type."""
     if repeat == "once":
-        return "date", {"run_date": scheduled_time}
-
+        return None
     if repeat == "daily":
-        return "interval", {"days": 1, "start_date": scheduled_time}
-
+        return current_time + timedelta(days=1)
     if repeat == "weekly":
-        return "interval", {"weeks": 1, "start_date": scheduled_time}
-
+        return current_time + timedelta(weeks=1)
     if repeat == "monthly":
-        # run on same day-of-month each month
-        return "cron", {
-            "day": scheduled_time.day,
-            "hour": scheduled_time.hour,
-            "minute": scheduled_time.minute,
-            "second": scheduled_time.second,
-            "start_date": scheduled_time
-        }
-
+        return current_time + relativedelta(months=+1)
     if repeat == "yearly":
-        # run on same month/day each year
-        return "cron", {
-            "month": scheduled_time.month,
-            "day": scheduled_time.day,
-            "hour": scheduled_time.hour,
-            "minute": scheduled_time.minute,
-            "second": scheduled_time.second,
-            "start_date": scheduled_time
-        }
+        return current_time + relativedelta(years=+1)
+    raise ValueError(f"Invalid repeat: {repeat}")
 
-    raise ValueError("Invalid repeat")
-
-
-# Execute a task via HTTP request
-async def run_task(task_id: int):
-    print(f"🚀 Task {task_id} started!")
-    async with httpx.AsyncClient() as client:
-        try:
-            r = await client.post(f"http://127.0.0.1:8000/task/execute-task/{task_id}")
-            print(f"[{datetime.now()}] Ran task {task_id}: {r.status_code}")
-        except Exception as e:
-            print(f"Error executing task {task_id}: {str(e)}")
-
-# Load tasks from DB at startup
 def schedule_from_db(conn):
+    """Load tasks from DB and schedule them."""
+    now = datetime.now()
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("SELECT id, scheduled_time, repeat FROM tasks")
+        cur.execute("""
+            SELECT id, scheduled_time, repeat FROM tasks
+            WHERE scheduled_time > %s
+        """, (now,))
         for row in cur.fetchall():
             tid = row["id"]
             run_at = row["scheduled_time"]
-            repeat = row["repeat"]
-
-            trigger, trigger_args = get_scheduler_args(repeat, run_at)
-
             scheduler.add_job(
-                lambda t=tid: asyncio.create_task(run_task(t)),
-                trigger,
+                lambda t=tid: enqueue_and_reschedule(t),
+                'date',
                 id=str(tid),
                 replace_existing=True,
-                **trigger_args
+                run_date=run_at
             )
-            print(f"Scheduled task {tid} ({repeat}) for {run_at}")
+            print(f"Scheduled Kafka enqueue for task {tid} at {run_at}")
 
+def enqueue_and_reschedule(task_id: int):
+    """Send task to Kafka and reschedule if repeating."""
+    enqueue_task(task_id)
+    
+    conn, _ = get_db_cursor()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT repeat, scheduled_time FROM tasks WHERE id=%s", (task_id,))
+            row = cur.fetchone()
+            if not row:
+                return
+            repeat, scheduled_time = row["repeat"], row["scheduled_time"]
+            next_time = get_next_scheduled_time(repeat, scheduled_time)
+            if next_time:
+                cur.execute("UPDATE tasks SET scheduled_time=%s WHERE id=%s",
+                            (next_time, task_id))
+                conn.commit()
+                scheduler.add_job(
+                    lambda t=task_id: enqueue_and_reschedule(t),
+                    'date',
+                    id=str(task_id),
+                    replace_existing=True,
+                    run_date=next_time
+                )
+                print(f"Rescheduled Kafka enqueue for task {task_id} at {next_time}")
+    finally:
+        conn.close()
 
-# Lifespan context for FastAPI
+# FastAPI lifespan context
 @asynccontextmanager
 async def task_lifespan(app):
+    global producer
+    # Initialize Kafka producer on startup
+    producer = KafkaProducer(
+        bootstrap_servers=BOOTSTRAP,
+        value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    )
     scheduler.start()
     conn, _ = get_db_cursor()
     schedule_from_db(conn)
@@ -85,4 +117,5 @@ async def task_lifespan(app):
     print("Scheduler started and tasks loaded.")
     yield
     scheduler.shutdown()
-    print("Scheduler stopped.")
+    producer.close()
+    print("Scheduler stopped and Kafka producer closed.")

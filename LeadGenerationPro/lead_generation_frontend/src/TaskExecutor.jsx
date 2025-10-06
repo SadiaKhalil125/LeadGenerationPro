@@ -30,7 +30,7 @@ const TaskExecution = () => {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/http://127.0.0.1:8000/task/tasks`,{
+      const res = await fetch(`${API_BASE}/task/tasks`,{
         method: 'GET',
         headers: {
           "ngrok-skip-browser-warning": "true"
