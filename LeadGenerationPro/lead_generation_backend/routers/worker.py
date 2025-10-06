@@ -13,14 +13,14 @@ API_URL_FOR_CONTAINER = "http://host.docker.internal:8000"
 # --- Docker Client Setup (Unchanged) ---
 try:
     docker_client = docker.from_env()
-    print("✅ Connected to Docker daemon.")
+    print("Connected to Docker daemon.")
     docker_client.images.get(DOCKER_IMAGE)
-    print(f"✅ Found Docker image: {DOCKER_IMAGE}")
+    print(f"Found Docker image: {DOCKER_IMAGE}")
 except docker.errors.ImageNotFound:
-    print(f"❌ Docker image '{DOCKER_IMAGE}' not found. Please build it first.")
+    print(f"Docker image '{DOCKER_IMAGE}' not found. Please build it first.")
     sys.exit(1)
 except Exception as e:
-    print(f"❌ Failed to connect to Docker daemon: {e}")
+    print(f"Failed to connect to Docker daemon: {e}")
     sys.exit(1)
 
 # --- Kafka Consumer Setup (CHANGED) ---
@@ -36,10 +36,10 @@ try:
     consumer = Consumer(conf)
     # Subscribe to the topic
     consumer.subscribe([KAFKA_TOPIC])
-    print("✅ Worker started, listening for tasks to launch as containers...")
+    print("Worker started, listening for tasks to launch as containers...")
 
 except Exception as e:
-    print(f"❌ Failed to create KafkaConsumer: {e}")
+    print(f"Failed to create KafkaConsumer: {e}")
     traceback.print_exc()
     sys.exit(1)
 
@@ -69,7 +69,7 @@ try:
                 data = json.loads(msg.value().decode('utf-8'))
                 task_id = data.get("task_id")
                 if not task_id:
-                    print("❌ Skipping message with no task_id.")
+                    print("Skipping message with no task_id.")
                     continue
 
                 print(f"➡ Received task {task_id}. Launching container...")
@@ -84,16 +84,16 @@ try:
                         environment={"API_URL": API_URL_FOR_CONTAINER},
                         extra_hosts={"host.docker.internal": "host-gateway"}
                     )
-                    print(f"✅ Launched container {container.short_id} for task {task_id}")
+                    print(f"Launched container {container.short_id} for task {task_id}")
 
                 except Exception as docker_err:
-                    print(f"❌ Failed to launch container for task {task_id}: {docker_err}")
+                    print(f"Failed to launch container for task {task_id}: {docker_err}")
                     traceback.print_exc()
 
             except json.JSONDecodeError:
-                print(f"❌ Could not decode message value: {msg.value()}")
+                print(f"Could not decode message value: {msg.value()}")
             except Exception as processing_err:
-                print(f"❌ Error processing message: {processing_err}")
+                print(f"Error processing message: {processing_err}")
                 traceback.print_exc()
 
 except KeyboardInterrupt:
