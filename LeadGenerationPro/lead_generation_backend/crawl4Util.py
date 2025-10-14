@@ -85,3 +85,4 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
             success=False,
             message=f"Error during scraping: {str(e)}"
         )
+
