@@ -1,0 +1,14 @@
+# Filename: dockerfile.api
+
+FROM python:3.11-slim
+WORKDIR /app
+
+# Install dependencies first to leverage Docker's build cache
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy all your application code into the image
+COPY . .
+
+# Command to run when the container starts
+CMD ["python", "startup.py"]

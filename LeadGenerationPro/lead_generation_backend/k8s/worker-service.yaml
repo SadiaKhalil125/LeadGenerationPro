@@ -1,0 +1,25 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-deployment
+  namespace: scraping-system
+spec:
+  replicas: 2 # You can run multiple workers for more parallelism
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+      - name: worker
+        image: sadia2004/scraping-worker:latest
+        imagePullPolicy: IfNotPresent   
+        env:
+        - name: KAFKA_BOOTSTRAP
+          value: "host.docker.internal:9092"
+        - name: DATABASE_URL
+          value: "postgresql://postgres:9042c98a@host.docker.internal:5432/LeadGenerationPro"
