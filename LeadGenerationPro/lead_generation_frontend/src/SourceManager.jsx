@@ -15,9 +15,14 @@ import {
   Loader2,
   Map,
   List,
-  Calendar
+  Calendar,
+  Settings
 } from 'lucide-react';
 import API_BASE from "./api_base";
+import { useNavigate } from 'react-router-dom';
+
+
+
 const SourceManagement = () => {
   const [sources, setSources] = useState([]);
   const [expandedSource, setExpandedSource] = useState(null);
@@ -28,9 +33,12 @@ const SourceManagement = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [dependencies, setDependencies] = useState({});
   const [editForm, setEditForm] = useState({ name: '', url: '' });
+  const [editPaginationType, setEditPaginationType] = useState('');
+  const [editPaginationConfig, setEditPaginationConfig] = useState({});
   const [showNewSourceForm, setShowNewSourceForm] = useState(false);
   const [newSourceForm, setNewSourceForm] = useState({ name: '', url: '' });
   const [response, setResponse] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchSources();
@@ -101,16 +109,36 @@ const SourceManagement = () => {
   const handleEdit = (source) => {
     setEditingSource(source.id);
     setEditForm({ name: source.name, url: source.url });
+
+    // if pagination config exists in source, prefill
+    if (source.pagination_config) {
+      setEditPaginationType(source.pagination_config.type || '');
+      setEditPaginationConfig(source.pagination_config);
+    } else {
+      setEditPaginationType('');
+      setEditPaginationConfig({});
+    }
   };
+
 
   const handleSaveEdit = async () => {
     try {
       setLoading(true);
+
+      const payload = {
+        name: editForm.name.trim(),
+        url: editForm.url.trim(),
+        pagination_config: editPaginationType
+          ? { type: editPaginationType, ...editPaginationConfig }
+          : null,
+      };
+
       const response = await fetch(`${API_BASE}/source/source/${editingSource}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true" },
-        body: JSON.stringify(editForm)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
+
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -120,8 +148,12 @@ const SourceManagement = () => {
       const data = await response.json();
       setResponse({ type: 'success', message: data.message });
       await fetchSources();
+
+      // reset form state
       setEditingSource(null);
       setEditForm({ name: '', url: '' });
+      setEditPaginationType('');
+      setEditPaginationConfig({});
     } catch (err) {
       setError(err.message);
       setResponse({ type: 'error', message: err.message });
@@ -129,6 +161,7 @@ const SourceManagement = () => {
       setLoading(false);
     }
   };
+
 
   const handleDelete = async (sourceId, force = false) => {
     try {
@@ -230,7 +263,7 @@ const SourceManagement = () => {
                   <RefreshCw size={18} className="mr-2" /> Refresh
                 </button>
                 <button
-                  onClick={() => setShowNewSourceForm(true)}
+                  onClick={() => navigate("/addsource")}
                   className="flex items-center px-4 py-2.5 bg-white text-teal-600 rounded-xl hover:bg-gray-100 transition-colors duration-200 font-medium"
                 >
                   <Plus size={18} className="mr-2" />
@@ -271,7 +304,7 @@ const SourceManagement = () => {
               </div>
             )}
 
-            {/* New Source Form */}
+            {/* New Source Form -> NOT IN USE NOW, MADE A SEPERATE PAGE*/}
             {showNewSourceForm && (
               <div className="mb-6 p-5 bg-gray-50/70 border border-gray-200 rounded-xl">
                 <div className="flex items-center justify-between mb-4">
@@ -368,6 +401,152 @@ const SourceManagement = () => {
                               className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                             />
                           </div>
+                          
+                          {/* Pagination Type Dropdown */}
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                              <Settings size={16} /> Pagination Type
+                            </label>
+                            <select
+                              value={editPaginationType}
+                              onChange={(e) => {
+                                const selected = e.target.value;
+                                setEditPaginationType(selected);
+                                setEditPaginationConfig({ type: selected }); // reset fields when changing type
+                              }}
+                              className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                            >
+                              <option value="">None</option>
+                              <option value="query_param">Query Param</option>
+                              <option value="offset">Offset</option>
+                              <option value="path">Path</option>
+                              <option value="button_click">Button Click</option>
+                              <option value="scroll">Scroll</option>
+                              <option value="ajax_click">Ajax Click</option>
+                            </select>
+                          </div>
+
+                          {/* Dynamic Fields Depending on Pagination Type */}
+                          {editPaginationType && (
+                            <div className="mt-2 space-y-3 bg-white/40 p-3 rounded-lg border border-gray-200">
+                              {(editPaginationType === "query_param" || editPaginationType === "offset") && (
+                                <>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700">Param Name</label>
+                                    <input
+                                      type="text"
+                                      value={editPaginationConfig.param_name || ""}
+                                      placeholder="e.g. page"
+                                      onChange={(e) =>
+                                        setEditPaginationConfig((prev) => ({ ...prev, param_name: e.target.value }))
+                                      }
+                                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700">Start Page</label>
+                                    <input
+                                      type="number"
+                                      value={editPaginationConfig.start_page || ""}
+                                      placeholder="1"
+                                      onChange={(e) =>
+                                        setEditPaginationConfig((prev) => ({ ...prev, start_page: Number(e.target.value) }))
+                                      }
+                                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                    />
+                                  </div>
+                                  {editPaginationType === "offset" && (
+                                    <>
+                                      <div>
+                                        <label className="block text-sm font-medium text-gray-700">Page Size</label>
+                                        <input
+                                          type="number"
+                                          value={editPaginationConfig.page_size || ""}
+                                          placeholder="10"
+                                          onChange={(e) =>
+                                            setEditPaginationConfig((prev) => ({ ...prev, page_size: Number(e.target.value) }))
+                                          }
+                                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-sm font-medium text-gray-700">Max Pages</label>
+                                        <input
+                                          type="number"
+                                          value={editPaginationConfig.max_pages || ""}
+                                          placeholder="Optional"
+                                          onChange={(e) =>
+                                            setEditPaginationConfig((prev) => ({ ...prev, max_pages: Number(e.target.value) }))
+                                          }
+                                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                        />
+                                      </div>
+                                    </>
+                                  )}
+                                </>
+                              )}
+
+                              {editPaginationType === "path" && (
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700">Path Pattern</label>
+                                  <input
+                                    type="text"
+                                    value={editPaginationConfig.path_pattern || ""}
+                                    placeholder="e.g. /page/{page_num}"
+                                    onChange={(e) =>
+                                      setEditPaginationConfig((prev) => ({ ...prev, path_pattern: e.target.value }))
+                                    }
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                  />
+                                </div>
+                              )}
+
+                              {(editPaginationType === "button_click" || editPaginationType === "ajax_click") && (
+                                <>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700">Button Selector</label>
+                                    <input
+                                      type="text"
+                                      value={editPaginationConfig.button_selector || ""}
+                                      placeholder="e.g .load-more-btn"
+                                      onChange={(e) =>
+                                        setEditPaginationConfig((prev) => ({ ...prev, button_selector: e.target.value }))
+                                      }
+                                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700">Wait Selector</label>
+                                    <input
+                                      type="text"
+                                      value={editPaginationConfig.wait_selector || ""}
+                                      placeholder="e.g .item-loaded"
+                                      onChange={(e) =>
+                                        setEditPaginationConfig((prev) => ({ ...prev, wait_selector: e.target.value }))
+                                      }
+                                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                    />
+                                  </div>
+                                </>
+                              )}
+
+                              {editPaginationType === "scroll" && (
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700">Scroll Steps</label>
+                                  <input
+                                    type="number"
+                                    value={editPaginationConfig.scroll_steps || ""}
+                                    placeholder="5"
+                                    onChange={(e) =>
+                                      setEditPaginationConfig((prev) => ({ ...prev, scroll_steps: Number(e.target.value) }))
+                                    }
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           <div className="flex justify-end items-center gap-3 pt-2">
                             <button
                               onClick={handleSaveEdit}
@@ -381,6 +560,8 @@ const SourceManagement = () => {
                               onClick={() => {
                                 setEditingSource(null);
                                 setEditForm({ name: '', url: '' });
+                                setEditPaginationType('');
+                                setEditPaginationConfig({});
                               }}
                               className="inline-flex items-center justify-center gap-2 px-4 py-2 font-medium bg-gradient-to-b text-gray-700 from-gray-200 to-gray-300 hover:bg-gradient-to-t rounded-lg transition-colors"
                             >
@@ -421,6 +602,15 @@ const SourceManagement = () => {
                                 <span className="font-medium text-gray-800">ID:</span>
                                 {source.id}
                               </div>
+                              {source.pagination_config && (
+                                  <div className="flex items-center gap-2">
+                                    <Settings size={16} className="text-teal-500" />
+                                    <span className="font-medium text-gray-800">Pagination:</span>
+                                    
+                                      {source.pagination_config.type || 'None'}
+                                    
+                                  </div>
+                                )}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">

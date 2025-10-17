@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, PreviewMappingRequest
+from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig
 from fastapi import APIRouter
 from routers.get_db_connection import get_db_cursor
 from datetime import datetime
@@ -340,6 +340,7 @@ async def execute_task(task_id: int):
                 t.source_id,
                 s.name as source_name,
                 s.url as source_url,
+                s.pagination_config,
                 t.mapping_id,
                 t.repeat,
                 t.max_items,
@@ -357,18 +358,29 @@ async def execute_task(task_id: int):
         if not task_data:
             raise HTTPException(status_code=404, detail="Task not found")
         
-        # Extract task information
-        (task_id_db, task_name, source_id, source_name, source_url, 
-         mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings) = task_data
         
+        # Extract task information
+        (task_id_db, task_name, source_id, source_name, source_url, pagination_config,
+         mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings) = task_data
+
+        # # ✅ Fix pagination_config parsing - NO NEED OF THIS ANYMORE
+        # if pagination_config:
+        #     if isinstance(pagination_config, dict):
+        #         pagination_config = PaginationConfig(**pagination_config)
+        #     elif isinstance(pagination_config, str):
+        #         import json
+        #         pagination_config = PaginationConfig(**json.loads(pagination_config))
+        #     # else: already PaginationConfig object
+
         # Build ScrapeRequest from task data
         scrape_request = ScrapeRequest(
             entity_name=entity_name,
             url=source_url,
+            pagination_config=pagination_config,
             container_selector=container_selector,
             field_mappings=field_mappings,
-            max_items=max_items,  
-            timeout=30  # Increased timeout for better reliability
+            max_items=max_items,
+            timeout=30
         )
         
         # Execute scraping using the dynamic scraper (now properly async)
@@ -420,14 +432,6 @@ async def execute_task(task_id: int):
         """, (datetime.now(), task_id))
 
         conn.commit()
-
-        # # For once-only tasks, remove job after execution        
-        # job_id = str(task_id)
-        # job = scheduler.get_job(job_id)
-        # if repeat == "once" and job:
-        #     scheduler.remove_job(job_id)
-        #     print(f"Removed once-only job {job_id} after execution")
-
         
         return {
             "success": True,

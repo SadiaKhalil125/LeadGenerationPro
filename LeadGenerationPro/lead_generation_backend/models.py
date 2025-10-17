@@ -23,6 +23,22 @@ class MappingFormRequest(BaseModel):
 class FetchContentRequest(BaseModel):
     url: str
 
+class PaginationConfig(BaseModel):
+    type: str  # "query_param" | "offset" | "path" | "button_click" | "scroll" | "ajax_click"
+    param_name: Optional[str] = "page"  # for query or offset
+    start_page: Optional[int] = 1
+    page_size: Optional[int] = None   # for offset
+    max_pages: Optional[int] = None
+
+    # for path
+    path_pattern: Optional[str] = None
+
+    # for button click or ajax
+    button_selector: Optional[str] = None
+    wait_selector: Optional[str] = None
+
+    # for scroll
+    scroll_steps: Optional[int] = None
 class ScrapeRequest(BaseModel):
     entity_name: str
     url: HttpUrl
@@ -30,6 +46,7 @@ class ScrapeRequest(BaseModel):
     field_mappings: Dict[str, FieldMapping]
     max_items: Optional[int] = 10
     timeout: Optional[int] = 15
+    pagination_config: Optional[PaginationConfig] = None
 
 class ScrapeResponse(BaseModel):
     entity_name: str
@@ -74,14 +91,36 @@ class MappingsListResponse(BaseModel):
     total_mappings: int
     mappings: List[MappingInfo]
 
+class PaginationConfig(BaseModel):
+    type: str  # "query_param" | "offset" | "path" | "button_click" | "scroll" | "ajax_click"
+    param_name: Optional[str] = "page"  # for query or offset
+    start_page: Optional[int] = 1
+    page_size: Optional[int] = None   # for offset
+    max_pages: Optional[int] = None
+
+    # for path
+    path_pattern: Optional[str] = None
+
+    # for button click or ajax
+    button_selector: Optional[str] = None
+    wait_selector: Optional[str] = None
+
+    # for scroll
+    scroll_steps: Optional[int] = None
 class SourceInfo(BaseModel):
     id: int
     name: str
     url: str
+    pagination_config: Optional[PaginationConfig] = None
 
 class SourcesListResponse(BaseModel):
     total_sources: int
     sources: List[SourceInfo]
+
+class SourceUpdateRequest(BaseModel):
+    name: str
+    url: str
+    pagination_config: Optional[PaginationConfig] = None
 
 class TaskRequest(BaseModel):
     source_id: int
