@@ -1,60 +1,23 @@
 from fastapi import HTTPException
-from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, PreviewMappingRequest
+from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig
 from fastapi import APIRouter
-from routers.get_db_connection import get_db_cursor
+# from routers.get_db_connection import get_db_cursor
 from datetime import datetime
-from crawl4Util import extract_website
 from scraping_router import route_scraping_request 
 from models import ScrapeRequest
 from psycopg2 import sql
-from asyncio import WindowsProactorEventLoopPolicy 
-import sys
-import asyncio
 from datetime import datetime, timezone
-import httpx
-from psycopg2.extras import RealDictCursor
-from routers.scheduler_config import scheduler, run_task 
-
+from routers.scheduler_config import scheduler, enqueue_and_reschedule
+import psycopg2
+import os
 VALID_REPEATS = {"once", "daily", "weekly", "monthly", "yearly"}
 
+DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
 router = APIRouter()
 
-def get_scheduler_args(repeat: str, scheduled_time: datetime):
-    """
-    Return (trigger_name, kwargs) for APScheduler based on repeat value.
-    """
-    if repeat == "once":
-        return "date", {"run_date": scheduled_time}
-
-    if repeat == "daily":
-        return "interval", {"days": 1, "start_date": scheduled_time}
-
-    if repeat == "weekly":
-        return "interval", {"weeks": 1, "start_date": scheduled_time}
-
-    if repeat == "monthly":
-        # run on same day-of-month each month
-        return "cron", {
-            "day": scheduled_time.day,
-            "hour": scheduled_time.hour,
-            "minute": scheduled_time.minute,
-            "second": scheduled_time.second,
-            "start_date": scheduled_time
-        }
-
-    if repeat == "yearly":
-        # run on same month/day each year
-        return "cron", {
-            "month": scheduled_time.month,
-            "day": scheduled_time.day,
-            "hour": scheduled_time.hour,
-            "minute": scheduled_time.minute,
-            "second": scheduled_time.second,
-            "start_date": scheduled_time
-        }
-
-    raise ValueError("Invalid repeat")
-
+def get_db_cursor():
+    connection = psycopg2.connect(DATABASE_URL)
+    return connection, connection.cursor()
 
 @router.post("/create-task", response_model=dict)
 async def create_task(request: TaskRequest):
@@ -128,18 +91,15 @@ async def create_task(request: TaskRequest):
         
         task_id = cur.fetchone()[0]
         conn.commit()
-        cur.close()
-
-        trigger, trigger_args = get_scheduler_args(request.repeat, request.scheduled_time)
-
         scheduler.add_job(
-            lambda tid=task_id: asyncio.run(run_task(tid)),
-            trigger,
+            lambda t=task_id: enqueue_and_reschedule(t),
+            'date',
             id=str(task_id),
             replace_existing=True,
-            **trigger_args
+            run_date=request.scheduled_time
         )
-        
+        cur.close()
+
         return {
             "success": True,
             "task_id": task_id,
@@ -251,6 +211,9 @@ async def delete_task(task_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to delete task: {str(e)}")
     
 
+def schedule_task(tid):
+    enqueue_and_reschedule(tid)
+
 @router.put("/update-task/{task_id}", response_model=dict)
 async def update_task(task_id: int, request: TaskUpdateRequest):
     """Update a task's scheduled time and optionally its name."""
@@ -303,18 +266,19 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
         if rows == 0:
          raise HTTPException(status_code=400, detail=f"No task updated for id={task_id}")
 
+        conn.commit()
 
-        trigger, trigger_args = get_scheduler_args(request.repeat, request.scheduled_time)
-
+        # Update scheduler job
+        
+    
         scheduler.add_job(
-            lambda tid=task_id: asyncio.run(run_task(tid)),
-            trigger,
+            schedule_task,
+            'date',
             id=str(task_id),
             replace_existing=True,
-            **trigger_args
+            run_date=request.scheduled_time,
+            args=[task_id]    # <-- pass task_id here
         )
-
-        conn.commit()
         cur.close()
         
         return {
@@ -376,6 +340,7 @@ async def execute_task(task_id: int):
                 t.source_id,
                 s.name as source_name,
                 s.url as source_url,
+                s.pagination_config,
                 t.mapping_id,
                 t.repeat,
                 t.max_items,
@@ -393,18 +358,29 @@ async def execute_task(task_id: int):
         if not task_data:
             raise HTTPException(status_code=404, detail="Task not found")
         
-        # Extract task information
-        (task_id_db, task_name, source_id, source_name, source_url, 
-         mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings) = task_data
         
+        # Extract task information
+        (task_id_db, task_name, source_id, source_name, source_url, pagination_config,
+         mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings) = task_data
+
+        # # ✅ Fix pagination_config parsing - NO NEED OF THIS ANYMORE
+        # if pagination_config:
+        #     if isinstance(pagination_config, dict):
+        #         pagination_config = PaginationConfig(**pagination_config)
+        #     elif isinstance(pagination_config, str):
+        #         import json
+        #         pagination_config = PaginationConfig(**json.loads(pagination_config))
+        #     # else: already PaginationConfig object
+
         # Build ScrapeRequest from task data
         scrape_request = ScrapeRequest(
             entity_name=entity_name,
             url=source_url,
+            pagination_config=pagination_config,
             container_selector=container_selector,
             field_mappings=field_mappings,
-            max_items=max_items,  
-            timeout=30  # Increased timeout for better reliability
+            max_items=max_items,
+            timeout=30
         )
         
         # Execute scraping using the dynamic scraper (now properly async)
@@ -456,14 +432,6 @@ async def execute_task(task_id: int):
         """, (datetime.now(), task_id))
 
         conn.commit()
-
-        # For once-only tasks, remove job after execution        
-        job_id = str(task_id)
-        job = scheduler.get_job(job_id)
-        if repeat == "once" and job:
-            scheduler.remove_job(job_id)
-            print(f"Removed once-only job {job_id} after execution")
-
         
         return {
             "success": True,

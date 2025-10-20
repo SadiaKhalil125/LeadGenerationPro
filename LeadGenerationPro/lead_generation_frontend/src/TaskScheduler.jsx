@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Calendar,
     Clock,
@@ -11,13 +11,20 @@ import {
     AlertCircle,
     Type,
     RefreshCw,
-    Loader2
+    Loader2,
+    Search // Added Search Icon
 } from 'lucide-react';
+import API_BASE from "./api_base";
 
 const TaskScheduler = () => {
     const [sources, setSources] = useState([]);
     const [selectedSourceId, setSelectedSourceId] = useState('');
+    
+    // State for all mappings to power the search
+    const [allMappings, setAllMappings] = useState([]);
+    // State for mappings filtered by a selected source
     const [mappings, setMappings] = useState([]);
+
     const [selectedMappingId, setSelectedMappingId] = useState('');
     const [scheduledTime, setScheduledTime] = useState('');
     const [taskName, setTaskName] = useState('');
@@ -25,20 +32,27 @@ const TaskScheduler = () => {
     const [loading, setLoading] = useState(false);
     const [response, setResponse] = useState(null);
     const [activeTab, setActiveTab] = useState('create');
-    const [repeat, setRepeat] = useState('once'); // default once
-    const [maxItems, setMaxItems] = useState(10); // default 10
+    const [repeat, setRepeat] = useState('once');
+    const [maxItems, setMaxItems] = useState(10);
+
+    // State for the mapping search input
+    const [mappingSearch, setMappingSearch] = useState('');
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
 
 
-
-    // Fetch initial data
+    // Fetch initial data on component mount
     useEffect(() => {
         fetchSources();
+        fetchAllMappings(); // Fetch all mappings for the search functionality
         fetchTasks();
     }, []);
 
     const fetchSources = async () => {
         try {
-            const res = await fetch('http://127.0.0.1:8000/source/sources');
+            const res = await fetch(`${API_BASE}/source/sources`, {
+                method: "GET",
+                headers: { "ngrok-skip-browser-warning": "true" }
+            });
             const data = await res.json();
             setSources(data.sources || []);
         } catch (error) {
@@ -47,9 +61,28 @@ const TaskScheduler = () => {
         }
     };
 
+    // New function to fetch all mappings at once
+    const fetchAllMappings = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/mapping/mappings`, {
+                method: "GET",
+                headers: { "ngrok-skip-browser-warning": "true" }
+            });
+            const data = await res.json();
+            // We only want enabled mappings to be schedulable
+            const enabledMappings = (data.mappings || []).filter(m => m.enabled);
+            setAllMappings(enabledMappings);
+        } catch (error) {
+            console.error('Error fetching all mappings:', error);
+        }
+    };
+    
     const fetchTasks = async () => {
         try {
-            const res = await fetch('http://127.0.0.1:8000/task/tasks');
+            const res = await fetch(`${API_BASE}/task/tasks`,{
+                method: "GET",
+                headers: { "ngrok-skip-browser-warning": "true" }
+            });
             const data = await res.json();
             setTasks(data.tasks || []);
         } catch (error) {
@@ -58,32 +91,37 @@ const TaskScheduler = () => {
         }
     };
 
-    const fetchMappings = async (sourceId) => {
+    // This function now just filters the already loaded mappings
+    const getMappingsForSource = (sourceId) => {
         if (!sourceId) {
             setMappings([]);
-            setSelectedMappingId('');
             return;
         }
-        try {
-            const res = await fetch(`http://127.0.0.1:8000/mapping/mappings-by-source/${sourceId}`);
-            const data = await res.json();
-            if (data.success) {
-                const mappings = data.mappings.filter(m => m.enabled === true);
-                setMappings(mappings);
-                setSelectedMappingId('');
-            } else {
-                setMappings([]);
-                setResponse({ type: 'error', message: data.message || 'No mappings found.' });
-            }
-        } catch (error) {
-            setMappings([]);
-            setResponse({ type: 'error', message: 'Failed to fetch mappings.' });
-        }
+        const filtered = allMappings.filter(m => m.source_id === parseInt(sourceId));
+        setMappings(filtered);
     };
 
     const handleSourceChange = (sourceId) => {
         setSelectedSourceId(sourceId);
-        fetchMappings(sourceId);
+        setSelectedMappingId(''); // Reset mapping selection
+        setMappingSearch(''); // Clear search input
+        getMappingsForSource(sourceId);
+    };
+
+    // This is the main logic for when a user selects a mapping from the search results
+    const handleMappingSelect = (mapping) => {
+        setMappingSearch(mapping.mapping_name); // Set the search bar to the selected mapping name
+        
+        // Auto-select the source
+        setSelectedSourceId(mapping.source_id);
+        
+        // Populate the mapping dropdown with mappings from the auto-selected source
+        getMappingsForSource(mapping.source_id);
+
+        // Auto-select the mapping
+        setSelectedMappingId(mapping.id);
+
+        setIsSearchFocused(false); // Hide the search results dropdown
     };
 
     const handleCreateTask = async (e) => {
@@ -102,18 +140,22 @@ const TaskScheduler = () => {
                 task_name: taskName || undefined,
                 max_items: maxItems ? parseInt(maxItems) : 10
             };
-            const res = await fetch('http://127.0.0.1:8000/task/create-task', {
+            const res = await fetch(`${API_BASE}/task/create-task` , {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json',
+                           "ngrok-skip-browser-warning": "true"
+                 },
                 body: JSON.stringify(requestData),
             });
             const data = await res.json();
             if (res.ok && data.success) {
                 setResponse({ type: 'success', message: data.message });
+                // Reset form fields
                 setSelectedSourceId('');
                 setSelectedMappingId('');
                 setScheduledTime('');
                 setTaskName('');
+                setMappingSearch('');
                 setMappings([]);
                 fetchTasks();
                 setActiveTab('manage');
@@ -131,7 +173,9 @@ const TaskScheduler = () => {
         if (!confirm(`Are you sure you want to delete task "${taskName}"?`)) return;
 
         try {
-            const res = await fetch(`http://127.0.0.1:8000/task/delete-task/${taskId}`, { method: 'DELETE' });
+            const res = await fetch(`${API_BASE}/task/delete-task/${taskId}`, { method: 'DELETE',
+               headers: { "ngrok-skip-browser-warning": "true" }
+            });
             const data = await res.json();
             if (res.ok && data.success) {
                 setResponse({ type: 'success', message: data.message });
@@ -145,6 +189,7 @@ const TaskScheduler = () => {
     };
 
     const formatDateTime = (dateString) => {
+        if (!dateString) return "N/A";
         return new Date(dateString).toLocaleString([], {
             year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
@@ -160,13 +205,21 @@ const TaskScheduler = () => {
         );
     };
 
+    // Memoized calculation for search results
+    const filteredMappings = useMemo(() => {
+        if (!mappingSearch) return [];
+        return allMappings.filter(m =>
+            m.mapping_name.toLowerCase().includes(mappingSearch.toLowerCase())
+        );
+    }, [mappingSearch, allMappings]);
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-5xl mx-auto">
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                     {/* Header */}
                     <div className="bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                             <div className="flex items-center mb-4 md:mb-0">
                                 <div className="bg-white/20 p-3 rounded-xl mr-4">
                                     <Clock size={28} />
@@ -191,7 +244,7 @@ const TaskScheduler = () => {
                         <div className="flex bg-gray-100 rounded-lg p-1 mb-8">
                             <button
                                 onClick={() => setActiveTab('create')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${activeTab === 'create' ? 'bg-white text-teal-600 shadow-sm' : 'text-gray-600 hover:bg-white/80'}`}
+                                className={`flex-1 flex items-center justify-center  gap-2 mr-2 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${activeTab === 'create' ? 'bg-white text-teal-600 shadow-sm' : 'text-gray-600 hover:bg-white/80'}`}
                             >
                                 <Plus size={16} /> Create Task
                             </button>
@@ -210,72 +263,110 @@ const TaskScheduler = () => {
                             </div>
                         )}
 
-                        {activeTab === 'create' && (
-                            <form onSubmit={handleCreateTask} className="space-y-6">
-                                <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700"><Database size={16} className="text-teal-500" />Select Source *</label>
-                                    <select value={selectedSourceId} onChange={(e) => handleSourceChange(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-                                        <option value="">Choose a source...</option>
-                                        {sources.map(s => <option key={s.id} value={s.id}>{s.name} - {s.url}</option>)}
-                                    </select>
-                                </div>
-                                <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700"><Map size={16} className="text-teal-500" />Select Mapping *</label>
-                                    <select value={selectedMappingId} onChange={(e) => setSelectedMappingId(e.target.value)} required disabled={!selectedSourceId} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                                        <option value="">Choose a mapping...</option>
-                                        {mappings.map(m => <option key={m.id} value={m.id}>{m.mapping_name} ({m.entity_name})</option>)}
-                                    </select>
-                                </div>
-                                <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700"><Type size={16} className="text-teal-500" />Task Name (Optional)</label>
-                                    <input type="text" value={taskName} onChange={(e) => setTaskName(e.target.value)} placeholder="Auto-generated if empty" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500" />
-                                </div>
-                                <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                                        <Type size={16} className="text-teal-500" />Max Items
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={maxItems}
-                                        onChange={(e) => setMaxItems(e.target.value)}
-                                        min={1}
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                                    />
-                                </div>
+                        
 
-                                <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700"><Calendar size={16} className="text-teal-500" />Scheduled Time *</label>
-                                    <input type="datetime-local" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500" />
-                                </div>
-                                <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                                        <RefreshCw size={16} className="text-teal-500" />Repeat *
-                                    </label>
-                                    <select
-                                        value={repeat}
-                                        onChange={(e) => setRepeat(e.target.value)}
-                                        required
-                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                                    >
-                                        <option value="once">Once</option>
-                                        <option value="daily">Daily</option>
-                                        <option value="weekly">Weekly</option>
-                                        <option value="monthly">Monthly</option>
-                                        <option value="yearly">Yearly</option>
-                                    </select>
-                                </div>
+{                   activeTab === 'create' && (
+    <form onSubmit={handleCreateTask} className="space-y-6">
+        {/* MAPPING SEARCH BAR - This remains as is */}
+        <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2 relative">
+             <label className="flex items-center gap-2 text-sm font-medium text-gray-700"><Search size={16} className="text-teal-500" />Find Mapping</label>
+             <input
+                type="text"
+                value={mappingSearch}
+                onChange={(e) => setMappingSearch(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setTimeout(() => setIsSearchFocused(false), 150)}
+                placeholder="Search all mappings by name..."
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+            />
+            {isSearchFocused && filteredMappings.length > 0 && (
+                <ul className="absolute z-10 w-[calc(100%-40px)] bg-white border border-gray-300 rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
+                    {filteredMappings.map(m => (
+                        <li
+                            key={m.id}
+                            onMouseDown={() => handleMappingSelect(m)}
+                            className="p-3 hover:bg-teal-100 cursor-pointer text-sm"
+                        >
+                            {m.mapping_name} <span className="text-gray-500">({m.source_name})</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
 
-                                <div className="flex justify-end pt-2">
-                                    <button type="submit" disabled={loading} className="inline-flex items-center justify-center gap-2 px-6 py-3 font-medium text-white bg-gradient-to-b from-teal-600 to-teal-400 rounded-lg shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                                        {loading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
-                                        {loading ? 'Creating...' : 'Create Task'}
-                                    </button>
-                                </div>
-                            </form>
-                        )}
+        {/* --- Start of Corrected Layout --- */}
+        {/* Each item is now a direct child of the form, restoring the vertical layout */}
+
+        <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700"><Database size={16} className="text-teal-500" />Select Source *</label>
+            <select value={selectedSourceId} onChange={(e) => handleSourceChange(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                <option value="">Choose a source...</option>
+                {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+        </div>
+
+        <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700"><Map size={16} className="text-teal-500" />Select Mapping *</label>
+            <select value={selectedMappingId} onChange={(e) => setSelectedMappingId(e.target.value)} required disabled={!selectedSourceId} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                <option value="">{selectedSourceId ? 'Choose a mapping...' : 'Select a source first...'}</option>
+                {mappings.map(m => <option key={m.id} value={m.id}>{m.mapping_name} ({m.entity_name})</option>)}
+            </select>
+        </div>
+        
+        <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700"><Type size={16} className="text-teal-500" />Task Name (Optional)</label>
+            <input type="text" value={taskName} onChange={(e) => setTaskName(e.target.value)} placeholder="Auto-generated if empty" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500" />
+        </div>
+
+        <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <List size={16} className="text-teal-500" />Max Items
+            </label>
+            <input
+                type="number"
+                value={maxItems}
+                onChange={(e) => setMaxItems(e.target.value)}
+                min={1}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+            />
+        </div>
+
+        <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700"><Calendar size={16} className="text-teal-500" />Scheduled Time *</label>
+            <input type="datetime-local" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500" />
+        </div>
+
+        <div className="p-5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <RefreshCw size={16} className="text-teal-500" />Repeat *
+            </label>
+            <select
+                value={repeat}
+                onChange={(e) => setRepeat(e.target.value)}
+                required
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+            >
+                <option value="once">Once</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+            </select>
+        </div>
+
+        {/* --- End of Corrected Layout --- */}
+
+        <div className="flex justify-end pt-2">
+            <button type="submit" disabled={loading} className="inline-flex items-center justify-center gap-2 px-6 py-3 font-medium text-white bg-gradient-to-b from-teal-600 to-teal-400 rounded-lg shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                {loading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
+                {loading ? 'Creating...' : 'Create Task'}
+            </button>
+        </div>
+    </form>
+)}
 
                         {activeTab === 'manage' && (
-                            <div className="space-y-4">
+                           <div className="space-y-4">
                                 {tasks.length === 0 ? (
                                     <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
                                         <Clock size={48} className="mx-auto text-gray-400 mb-4" />

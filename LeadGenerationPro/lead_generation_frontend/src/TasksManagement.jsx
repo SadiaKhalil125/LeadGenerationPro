@@ -17,6 +17,7 @@ import {
     Clock,
     Check
 } from 'lucide-react';
+import API_BASE from "./api_base";
 
 const TasksManagement = () => {
     const [tasks, setTasks] = useState([]);
@@ -36,7 +37,10 @@ const TasksManagement = () => {
     const fetchTasks = async () => {
         try {
             setLoading(true);
-            const res = await fetch('http://127.0.0.1:8000/task/tasks');
+            const res = await fetch(`${API_BASE}/task/tasks`, {
+                method: "GET",
+                headers: { "ngrok-skip-browser-warning": "true" }
+            });
             const data = await res.json();
             setTasks(data.tasks || []);
         } catch (error) {
@@ -84,9 +88,11 @@ const TasksManagement = () => {
                 repeat: editRepeat || undefined,
                 max_items: editMaxItems !== '' ? Number(editMaxItems) : 0
             };
-            const res = await fetch(`http://127.0.0.1:8000/task/update-task/${taskId}`, {
+            const res = await fetch(`${API_BASE}/task/update-task/${taskId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json',
+                           "ngrok-skip-browser-warning": "true"
+                 },
                 body: JSON.stringify(requestData),
             });
             const data = await res.json();
@@ -108,7 +114,9 @@ const TasksManagement = () => {
         if (!confirm(`Are you sure you want to delete task "${taskName}"?`)) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://127.0.0.1:8000/task/delete-task/${taskId}`, { method: 'DELETE' });
+            const res = await fetch(`${API_BASE}/task/delete-task/${taskId}`, { method: 'DELETE',
+               headers: { "ngrok-skip-browser-warning": "true" }
+            });
             const data = await res.json();
             if (res.ok && data.success) {
                 setResponse({ type: 'success', message: data.message });

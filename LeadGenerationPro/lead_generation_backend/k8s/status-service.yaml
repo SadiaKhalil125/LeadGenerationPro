@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: status-updater-deployment
+  namespace: scraping-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: status-updater
+  template:
+    metadata:
+      labels:
+        app: status-updater
+    spec:
+      containers:
+      - name: status-updater
+        image: sadia2004/scraping-status:latest
+        imagePullPolicy: IfNotPresent   
+        env:
+        - name: KAFKA_BOOTSTRAP
+          value: "host.docker.internal:9092"
+        - name: DATABASE_URL
+          value: "postgresql://postgres:9042c98a@host.docker.internal:5432/LeadGenerationPro"

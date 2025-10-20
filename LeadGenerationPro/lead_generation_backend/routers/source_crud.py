@@ -1,18 +1,17 @@
 from fastapi import HTTPException
 from datetime import datetime
 import asyncio
-from models import SourceInfo, SourcesListResponse
+from models import SourceInfo, SourcesListResponse, PaginationConfig, SourceUpdateRequest
 from utils import extract_value, fetch_page
 import asyncio
 from fastapi import APIRouter
 from routers.get_db_connection import get_db_cursor
 from pydantic import BaseModel
+from psycopg2.extras import Json
 
 router = APIRouter()
 
-class SourceUpdateRequest(BaseModel):
-    name: str
-    url: str
+
 
 @router.get("/sources", response_model=SourcesListResponse)
 async def get_all_sources():
@@ -23,7 +22,7 @@ async def get_all_sources():
         conn, cur = get_db_cursor()
         #fetch all sources sorted by creation order (id descending for newest first)
         cur.execute("""
-            SELECT id, name, url
+            SELECT id, name, url, pagination_config
             FROM sources
             ORDER BY id DESC;
         """)
@@ -36,7 +35,8 @@ async def get_all_sources():
             sources.append(SourceInfo(
                 id=row[0],
                 name=row[1],
-                url=row[2]
+                url=row[2],
+                pagination_config=PaginationConfig(**row[3]) if row[3] else None
             ))
 
         return SourcesListResponse(
@@ -56,7 +56,7 @@ async def get_source_by_id(source_id: int):
     try:
         conn, cur = get_db_cursor()
         cur.execute("""
-            SELECT id, name, url
+            SELECT id, name, url, pagination_config
             FROM sources
             WHERE id = %s;
         """, (source_id,))
@@ -70,7 +70,8 @@ async def get_source_by_id(source_id: int):
         return SourceInfo(
             id=row[0],
             name=row[1],
-            url=row[2]
+            url=row[2],
+            pagination_config=PaginationConfig(**row[3]) if row[3] else None
         )
 
     except HTTPException:
@@ -79,12 +80,12 @@ async def get_source_by_id(source_id: int):
         print(f"Error fetching source: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch source: {str(e)}")
 
+
 @router.post("/save-source", response_model=dict)
-async def save_source(name: str, url: str):
+async def save_source(name: str, url: str, pagination_config: PaginationConfig=None):
     """Save a website source in 'sources' table or reuse if it already exists."""
     conn, cur = get_db_cursor()
     try:
-
         name = name.strip()
         url = url.strip()
         if not name or not url:
@@ -95,11 +96,17 @@ async def save_source(name: str, url: str):
             CREATE TABLE IF NOT EXISTS sources (
                 id SERIAL PRIMARY KEY,
                 name TEXT UNIQUE NOT NULL,
-                url TEXT NOT NULL
+                url TEXT NOT NULL,
+                pagination_config JSONB DEFAULT NULL
             );
         """)
 
-        # 2 Check if source already exists (reuse if found)
+        cur.execute("""
+            ALTER TABLE sources
+            ADD COLUMN IF NOT EXISTS pagination_config JSONB DEFAULT NULL;
+        """)
+
+        # 2 Check if source already exists
         cur.execute("SELECT id FROM sources WHERE name = %s;", (name,))
         existing = cur.fetchone()
         if existing:
@@ -112,8 +119,8 @@ async def save_source(name: str, url: str):
 
         # 3 Insert a new source
         cur.execute(
-            "INSERT INTO sources (name, url) VALUES (%s, %s) RETURNING id;",
-            (name, url)
+            "INSERT INTO sources (name, url, pagination_config) VALUES (%s, %s, %s) RETURNING id;",
+            (name, url, Json(pagination_config.model_dump() if pagination_config else None))
         )
         new_id = cur.fetchone()[0]
         conn.commit()
@@ -126,6 +133,7 @@ async def save_source(name: str, url: str):
     finally:
         cur.close()
 
+
 @router.put("/source/{source_id}", response_model=dict)
 async def update_source(source_id: int, update_request: SourceUpdateRequest):
     """
@@ -135,7 +143,8 @@ async def update_source(source_id: int, update_request: SourceUpdateRequest):
     try:
         name = update_request.name.strip()
         url = update_request.url.strip()
-        
+        pagination_config = getattr(update_request, "pagination_config", None)
+
         if not name or not url:
             raise HTTPException(status_code=400, detail="Source name and URL are required.")
         
@@ -144,19 +153,29 @@ async def update_source(source_id: int, update_request: SourceUpdateRequest):
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail=f"Source with ID {source_id} not found")
         
-        # Check if name conflicts with another source (exclude current source)
+        # Check for duplicate name
         cur.execute("SELECT id FROM sources WHERE name = %s AND id != %s;", (name, source_id))
         if cur.fetchone():
             raise HTTPException(
                 status_code=400, 
                 detail=f"Another source with name '{name}' already exists"
             )
-        
-        # Update the source
-        cur.execute(
-            "UPDATE sources SET name = %s, url = %s WHERE id = %s;",
-            (name, url, source_id)
-        )
+
+        # Update query (include pagination_config if provided)
+        if pagination_config is not None:
+            cur.execute("""
+                UPDATE sources 
+                SET name = %s, url = %s, pagination_config = %s 
+                WHERE id = %s;
+            """, (name, url, Json(pagination_config.model_dump()), source_id))
+        else:
+            # explicitly clear pagination_config
+            cur.execute("""
+                UPDATE sources 
+                SET name = %s, url = %s, pagination_config = NULL
+                WHERE id = %s;
+            """, (name, url, source_id))
+
         
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail=f"Source with ID {source_id} not found")
@@ -177,6 +196,7 @@ async def update_source(source_id: int, update_request: SourceUpdateRequest):
         raise HTTPException(status_code=500, detail=f"Failed to update source: {str(e)}")
     finally:
         cur.close()
+
 
 @router.delete("/source/{source_id}", response_model=dict)
 async def delete_source(source_id: int):

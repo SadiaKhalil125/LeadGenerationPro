@@ -1,16 +1,14 @@
 import sys
 import asyncio
-
+import httpx
 # Set event loop policy FIRST, before any other imports
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-from models import FetchURLRequest
-import httpx
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import asyncio
-from models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest
+from models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, FetchContentRequest, FetchURLRequest
 from utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -42,7 +40,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+@app.post("/fetchcontent")
+async def fetch_content(request: FetchContentRequest):
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            resp = await client.get(request.url, timeout=10000)
+            return {"success": True, "content": resp.text}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/utils/fetch-url-content")

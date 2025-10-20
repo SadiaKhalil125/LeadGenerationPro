@@ -49,7 +49,10 @@ const NavigationPage = () => {
     manager: {
       label: "Source",
       icon: <Settings size={20} />,
-      items: [{ label: "Source Manager", path: "/sourcemanagement" }],
+      items: [
+        { label: "Source Manager", path: "/sourcemanagement" },
+        { label: "Add New Source", path: "/addsource" }
+      ],
     },
   };
 

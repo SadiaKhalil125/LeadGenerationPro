@@ -1,0 +1,14 @@
+# Filename: dockerfile.status
+
+FROM python:3.11-slim
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy all your application code
+COPY . .
+
+# Command to run when the container starts
+CMD ["python", "status_updater.py"]

@@ -18,6 +18,7 @@ import {
   Shield,
   Type
 } from "lucide-react";
+import API_BASE from "./api_base";
 
 const EntityList = () => {
   const [entities, setEntities] = useState([]);
@@ -35,7 +36,16 @@ const EntityList = () => {
   const fetchEntities = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://127.0.0.1:8000/entity/entities");
+      const response = await fetch(`${API_BASE}/entity/entities`, {
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data.entities) {
@@ -64,7 +74,8 @@ const EntityList = () => {
         setEntities([]);
       }
     } catch (error) {
-      setResponse({ type: "error", message: "Failed to fetch entities" });
+      console.error("Error fetching entities:", error);
+      setResponse({ type: "error", message: `Failed to fetch entities: ${error.message}` });
       setEntities([]);
     } finally {
       setLoading(false);
@@ -73,10 +84,16 @@ const EntityList = () => {
 
   const fetchEntityInfo = async (entityName) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/entity/entity-info/${entityName}`);
+      const response = await fetch(`${API_BASE}/entity/entity-info/${entityName}`, {
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
       const data = await response.json();
       if (data.success) {
         return data;
@@ -179,9 +196,12 @@ const EntityList = () => {
           attributes: toAdd.map(attr => ({ name: attr.name, datatype: attr.datatype }))
         };
 
-        const addResponse = await fetch(`http://127.0.0.1:8000/entity/edit-entity/${editingEntity}`, {
+        const addResponse = await fetch(`${API_BASE}/entity/edit-entity/${editingEntity}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
           body: JSON.stringify(addPayload),
         });
         const addData = await addResponse.json();
@@ -195,8 +215,11 @@ const EntityList = () => {
 
       // 2. Remove columns
       for (const attr of toRemove) {
-        const removeResponse = await fetch(`http://127.0.0.1:8000/entity/delete-column/${editingEntity}/${attr.originalName}`, {
-          method: "DELETE"
+        const removeResponse = await fetch(`${API_BASE}/entity/delete-column/${editingEntity}/${attr.originalName}`, {
+          method: "DELETE",
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
         });
         const removeData = await removeResponse.json();
         
@@ -207,11 +230,13 @@ const EntityList = () => {
         }
       }
 
-      // 3. Rename columns (using ALTER TABLE RENAME COLUMN)
+      // 3. Rename columns
       for (const attr of toRename) {
-        // Note: You'll need to add a rename endpoint to your backend
-        const renameResponse = await fetch(`http://127.0.0.1:8000/entity/rename-column/${editingEntity}/${attr.originalName}/${attr.name}`, {
-          method: "PUT"
+        const renameResponse = await fetch(`${API_BASE}/entity/rename-column/${editingEntity}/${attr.originalName}/${attr.name}`, {
+          method: "PUT",
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
         });
         
         if (renameResponse.ok) {
@@ -222,7 +247,6 @@ const EntityList = () => {
             allSuccessful = false;
           }
         } else {
-          // If rename endpoint doesn't exist, show warning
           operations.push(`Warning: Rename not supported for '${attr.originalName}' to '${attr.name}'`);
         }
       }
@@ -245,7 +269,8 @@ const EntityList = () => {
       fetchEntities(); // Refresh the list
 
     } catch (error) {
-      setResponse({ type: "error", message: "Something went wrong during update!" });
+      console.error("Error saving changes:", error);
+      setResponse({ type: "error", message: `Something went wrong during update: ${error.message}` });
     }
 
     setTimeout(() => setResponse(null), 7000);
@@ -257,8 +282,11 @@ const EntityList = () => {
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/entity/delete-entity/${entityName}`, {
-        method: "DELETE"
+      const response = await fetch(`${API_BASE}/entity/delete-entity/${entityName}`, {
+        method: "DELETE",
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
       });
       const data = await response.json();
 
@@ -271,7 +299,8 @@ const EntityList = () => {
         setResponse({ type: "error", message: "Failed to delete entity" });
       }
     } catch (error) {
-      setResponse({ type: "error", message: "Something went wrong!" });
+      console.error("Error deleting entity:", error);
+      setResponse({ type: "error", message: `Something went wrong: ${error.message}` });
     }
 
     setTimeout(() => setResponse(null), 5000);

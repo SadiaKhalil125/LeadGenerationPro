@@ -14,12 +14,15 @@ import TasksManagement from './TasksManagement'
 import TaskExecutor from './TaskExecutor'
 import SourceManagement from './SourceManager';
 import EntityDataPage from './EntityDataPage';
+import SourceCreator from './SourceCreator';
+
 function App() {
 
   return (
    <BrowserRouter> 
       {/* <NavigationPage /> */}
       <Routes>
+
         <Route path="/" element={<NavigationPage />} />
         <Route path="/entityform" element={<EntityForm />} />
         <Route path="/entitylist" element={<EntityList />} />
@@ -31,6 +34,7 @@ function App() {
         <Route path="/webscraperform" element={<WebScraperForm />} />
         <Route path="/sourcemanagement" element={<SourceManagement />} />
         <Route path="/entity-data" element={<EntityDataPage />} />
+        <Route path="/addsource" element={<SourceCreator />} />
       </Routes>
     </BrowserRouter>
   );

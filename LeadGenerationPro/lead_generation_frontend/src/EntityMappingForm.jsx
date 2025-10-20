@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, Code } from "lucide-react";
+<<<<<<< HEAD
+=======
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+import API_BASE from "./api_base";
+>>>>>>> c7168abbc0cd2f5742d6d7409c4363259d8064e9
 
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
 
@@ -167,15 +174,24 @@ const ServerHtmlPreview = ({ url }) => {
     setHtmlContent('');
     setErrorMessage('');
     try {
+<<<<<<< HEAD
       const res = await fetch("http://127.0.0.1:8000/utils/fetch-url-content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+=======
+      const res = await fetch(`${API_BASE}/fetchcontent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json",
+                   "ngrok-skip-browser-warning": "true"
+         },
+>>>>>>> c7168abbc0cd2f5742d6d7409c4363259d8064e9
         body: JSON.stringify({ url: urlToFetch }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Failed to fetch content from the server.');
       }
+<<<<<<< HEAD
       let finalHtml = data.content;
       const baseTag = `<base href="${data.final_url}">`;
       if (finalHtml.includes('<head>')) {
@@ -184,6 +200,10 @@ const ServerHtmlPreview = ({ url }) => {
         finalHtml = baseTag + finalHtml;
       }
       setHtmlContent(finalHtml);
+=======
+      
+      setHtmlContent(data.content); // We use the raw content directly
+>>>>>>> c7168abbc0cd2f5742d6d7409c4363259d8064e9
       setStatus('success');
     } catch (err) {
       setErrorMessage(err.message);
@@ -192,6 +212,7 @@ const ServerHtmlPreview = ({ url }) => {
   };
 
   return (
+<<<<<<< HEAD
     <div className="w-full h-full flex flex-col">
       {status === 'idle' && (
         <div className="flex-grow flex flex-col items-center justify-center text-gray-500">
@@ -220,6 +241,52 @@ const ServerHtmlPreview = ({ url }) => {
           className="w-full h-full border-none flex-grow"
           sandbox="allow-scripts allow-same-origin"
         />
+=======
+    <div className="w-full h-full flex flex-col bg-gray-800">
+      {status === 'idle' && (
+        <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
+          <Code size={48} className="mb-4 text-gray-500" />
+          <h3 className="text-lg font-semibold">HTML Source View</h3>
+          <p>Enter a URL to see the raw HTML source code.</p>
+        </div>
+      )}
+      {status === 'loading' && (
+        <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
+          <div className="animate-spin text-teal-500"><Code size={48} /></div>
+          <p className="mt-4 font-semibold">Fetching HTML Source...</p>
+        </div>
+      )}
+      {status === 'error' && (
+        <div className="flex-grow flex flex-col items-center justify-center text-red-400 p-4">
+          <AlertTriangle size={48} className="mb-4 text-red-500" />
+          <h3 className="text-lg font-bold">Fetch Failed</h3>
+          <p className="text-center mt-2 bg-red-900 bg-opacity-30 p-3 rounded-md">{errorMessage}</p>
+        </div>
+      )}
+      {status === 'success' && (
+        <div className="w-full h-full overflow-auto">
+          <SyntaxHighlighter
+            language="html"
+            style={vscDarkPlus}
+            showLineNumbers={true}
+            wrapLines={true}
+            customStyle={{ 
+              margin: 0,
+              height: '100%',
+              width: '100%',
+              padding: '1rem'
+            }}
+            codeTagProps={{
+              style: {
+                fontFamily: '"Fira Code", "Dank Mono", monospace',
+                fontSize: '14px',
+              }
+            }}
+          >
+            {htmlContent}
+          </SyntaxHighlighter>
+        </div>
+>>>>>>> c7168abbc0cd2f5742d6d7409c4363259d8064e9
       )}
     </div>
   );
@@ -242,6 +309,7 @@ export default function EntityMappingScreen() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewEntity, setPreviewEntity] = useState(null);
 
+
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
 
   useEffect(() => {
@@ -252,7 +320,10 @@ export default function EntityMappingScreen() {
   useEffect(() => {
     const fetchEntities = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/entity/entities");
+        const res = await fetch(`${API_BASE}/entity/entities`,{
+          method: "GET",
+          headers: {"ngrok-skip-browser-warning": "true"}
+        });
         const data = await res.json();
         setEntities(data.entities.map((e) => e.name));
         
@@ -279,7 +350,12 @@ export default function EntityMappingScreen() {
   useEffect(() => {
     const fetchSources = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/source/sources");
+        const res = await fetch(`${API_BASE}/source/sources`, {
+          method: "GET",
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
         const data = await res.json();
         setExistingSources(data.sources || []);
       } catch (err) {
@@ -375,9 +451,11 @@ export default function EntityMappingScreen() {
     setPreviewEntity(entity);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/task/preview-mapping", {
+      const res = await fetch(`${API_BASE}/task/preview-mapping`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json",
+                   "ngrok-skip-browser-warning": "true"
+         },
         body: JSON.stringify({
           url,
           entity_name: entity,
@@ -434,9 +512,11 @@ export default function EntityMappingScreen() {
     });
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/mapping/save-entity-mapping", {
+      const res = await fetch(`${API_BASE}/mapping/save-entity-mapping`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json",
+                   "ngrok-skip-browser-warning": "true"
+         },
         body: JSON.stringify({ source, url, entity_mappings }),
       });
       
@@ -499,7 +579,11 @@ export default function EntityMappingScreen() {
                         className="px-4 py-3 hover:bg-teal-50 cursor-pointer"
                       >
                         <p className="font-semibold">{s.name}</p>
+<<<<<<< HEAD
                         <p className="text-sm text-gray-500">{s.url}</p>
+=======
+                        {/* <p className="text-sm text-gray-500">{s.url}</p> */}
+>>>>>>> c7168abbc0cd2f5742d6d7409c4363259d8064e9
                       </div>
                     ))}
                   </div>

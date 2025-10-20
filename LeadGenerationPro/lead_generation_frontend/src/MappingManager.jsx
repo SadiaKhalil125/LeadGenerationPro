@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 
-const API_BASE = "http://127.0.0.1:8000/mapping";
+import API_BASE from "./api_base";
+
 
 function shortDate(ts) {
   if (!ts) return "-";
@@ -44,7 +45,12 @@ const MappingManager = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/mappings`);
+      const res = await fetch(`${API_BASE}/mapping/mappings`,{
+        method: "GET",
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
       const data = await res.json();
       const list = data?.mappings ?? [];
       setMappings(list);
@@ -89,8 +95,11 @@ const MappingManager = () => {
     if (!window.confirm(`Delete mapping '${mappingName}'? This cannot be undone.`)) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${API_BASE}/delete-mapping/${encodeURIComponent(mappingName)}`, {
-        method: 'DELETE'
+      const res = await fetch(`${API_BASE}/mapping/delete-mapping/${encodeURIComponent(mappingName)}`, {
+        method: 'DELETE',
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
       });
       
       if (!res.ok) {
@@ -108,8 +117,11 @@ const MappingManager = () => {
 
   const toggleMappingStatus = async (mappingName, currentStatus) => {
     try {
-      const res = await fetch(`${API_BASE}/toggle-mapping-status/${encodeURIComponent(mappingName)}`, {
-        method: 'PUT'
+      const res = await fetch(`${API_BASE}/mapping/toggle-mapping-status/${encodeURIComponent(mappingName)}`, {
+        method: 'PUT',
+        headers:{
+          "ngrok-skip-browser-warning": "true"
+        }
       });
       
       if (!res.ok) {
@@ -218,10 +230,11 @@ const MappingManager = () => {
         enabled: editModal.mapping.enabled, // Include enabled status
       };
 
-      const res = await fetch(`${API_BASE}/edit-mapping/${encodeURIComponent(editModal.originalName)}`, {
+      const res = await fetch(`${API_BASE}/mapping/edit-mapping/${encodeURIComponent(editModal.originalName)}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          "ngrok-skip-browser-warning": "true"
         },
         body: JSON.stringify(payload)
       });
