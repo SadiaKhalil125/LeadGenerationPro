@@ -165,7 +165,6 @@ const MappingManager = () => {
       fieldMappingsArray: fieldMappingsArray
     });
   };
-
   const addFieldMapping = () => {
     if (!editModal) return;
     const newField = {

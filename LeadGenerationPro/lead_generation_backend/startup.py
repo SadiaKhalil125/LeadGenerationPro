@@ -26,7 +26,7 @@ def run_server():
     # Run the server
     uvicorn.run(
         app,
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=8000,
         loop="asyncio",
         log_level="info",
