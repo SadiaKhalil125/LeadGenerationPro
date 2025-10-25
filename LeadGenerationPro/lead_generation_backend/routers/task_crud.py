@@ -1,23 +1,23 @@
 from fastapi import HTTPException
 from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig
 from fastapi import APIRouter
-from routers.get_db_connection import get_db_cursor
 from datetime import datetime
 from crawl4Util import extract_website
 from scraping_router import route_scraping_request 
 from models import ScrapeRequest
 from psycopg2 import sql
-from asyncio import WindowsProactorEventLoopPolicy 
-import sys
-import asyncio
 from datetime import datetime, timezone
-import httpx
-from psycopg2.extras import RealDictCursor
+import os
+import psycopg2
 from routers.scheduler_config import scheduler, enqueue_and_reschedule
 
 VALID_REPEATS = {"once", "daily", "weekly", "monthly", "yearly"}
-
+DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
 router = APIRouter()
+
+def get_db_cursor():
+    connection = psycopg2.connect(DATABASE_URL)
+    return connection, connection.cursor()
 
 @router.post("/create-task", response_model=dict)
 async def create_task(request: TaskRequest):
@@ -108,7 +108,7 @@ async def create_task(request: TaskRequest):
         }
         
     except HTTPException:
-        conn.rollback()
+        # conn.rollback()
         raise
     except Exception as e:
         # conn.rollback()

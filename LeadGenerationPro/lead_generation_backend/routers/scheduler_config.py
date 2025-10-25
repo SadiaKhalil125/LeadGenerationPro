@@ -2,27 +2,32 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from psycopg2.extras import RealDictCursor
 from contextlib import asynccontextmanager
 import asyncio, httpx
-from routers.get_db_connection import get_db_cursor
+# from routers.get_db_connection import get_db_cursor
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from kafka import KafkaProducer
 import json
 import os
-
-BOOTSTRAP = "localhost:9092"
-
-
+import psycopg2
+# BOOTSTRAP = "localhost:9092"
+BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
+DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
 scheduler = BackgroundScheduler()
 producer: KafkaProducer = None  # will initialize in startup
+
+
+def get_db_connection():
+    connection = psycopg2.connect(DATABASE_URL)
+    return connection, connection.cursor()
 
 async def send_to_kafka(message: dict):
     """Send message to Kafka without blocking."""
     global producer
     try:
         await asyncio.to_thread(producer.send, 'scraping_tasks', message)
-        print(f"✅ Published task {message['task_id']} to Kafka")
+        print(f"Published task {message['task_id']} to Kafka")
     except Exception as e:
-        print(f"❌ Failed to publish task {message['task_id']}: {e}")
+        print(f"Failed to publish task {message['task_id']}: {e}")
 
 def enqueue_task(task_id: int, payload: dict = None):
     """Prepare message and send to Kafka synchronously."""
@@ -34,10 +39,10 @@ def enqueue_task(task_id: int, payload: dict = None):
     try:
         future = producer.send('scraping_tasks', message)
         record_metadata = future.get(timeout=10)
-        print(f"✅ Published task {task_id} to Kafka "
+        print(f"Published task {task_id} to Kafka "
               f"(topic={record_metadata.topic}, partition={record_metadata.partition}, offset={record_metadata.offset})")
     except Exception as e:
-        print(f"❌ Failed to publish task {task_id}: {e}")
+        print(f"Failed to publish task {task_id}: {e}")
 
 def get_next_scheduled_time(repeat: str, current_time: datetime):
     """Return the next scheduled_time based on repeat type."""
@@ -77,7 +82,7 @@ def enqueue_and_reschedule(task_id: int):
     """Send task to Kafka and reschedule if repeating."""
     enqueue_task(task_id)
     
-    conn, _ = get_db_cursor()
+    conn, _ = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT repeat, scheduled_time FROM tasks WHERE id=%s", (task_id,))
@@ -108,10 +113,11 @@ async def task_lifespan(app):
     # Initialize Kafka producer on startup
     producer = KafkaProducer(
         bootstrap_servers=BOOTSTRAP,
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+        api_version=(2, 6, 0)
     )
     scheduler.start()
-    conn, _ = get_db_cursor()
+    conn, _ = get_db_connection()
     schedule_from_db(conn)
     conn.close()
     print("Scheduler started and tasks loaded.")

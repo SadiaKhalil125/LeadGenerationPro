@@ -1,3 +1,4 @@
+
 from kafka import KafkaConsumer
 import json
 import psycopg2

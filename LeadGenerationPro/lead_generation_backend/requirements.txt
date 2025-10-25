@@ -8,6 +8,7 @@ pydantic
 lxml
 playwright
 asyncio
+
 httpx
 pytest
 pytest-asyncio
