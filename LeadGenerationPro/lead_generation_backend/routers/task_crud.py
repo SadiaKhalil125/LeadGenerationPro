@@ -294,10 +294,11 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update task: {str(e)}")
     
-async def upsert_entity_record(cur, entity_name: str, source_name: str, item: dict):
+async def upsert_entity_record(entity_name: str, source_name: str, item: dict):
     """
     Upsert row on (source, name).
     """
+    conn, cur = get_db_cursor()
     name_val = item.get("name")  # adjust if column is named differently
 
     # Ensure source & modified_at are present
@@ -321,9 +322,9 @@ async def upsert_entity_record(cur, entity_name: str, source_name: str, item: di
             for col in columns if col not in ("source", "name", "modified_at")
         )
     )
-
-
     cur.execute(insert_stmt, values)
+    conn.commit()
+    cur.close()
 
 @router.post("/execute-task/{task_id}")
 async def execute_task(task_id: int):
@@ -362,15 +363,6 @@ async def execute_task(task_id: int):
         # Extract task information
         (task_id_db, task_name, source_id, source_name, source_url, pagination_config,
          mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings) = task_data
-
-        # # ✅ Fix pagination_config parsing - NO NEED OF THIS ANYMORE
-        # if pagination_config:
-        #     if isinstance(pagination_config, dict):
-        #         pagination_config = PaginationConfig(**pagination_config)
-        #     elif isinstance(pagination_config, str):
-        #         import json
-        #         pagination_config = PaginationConfig(**json.loads(pagination_config))
-        #     # else: already PaginationConfig object
 
         # Build ScrapeRequest from task data
         scrape_request = ScrapeRequest(
@@ -418,7 +410,7 @@ async def execute_task(task_id: int):
         for item in scrape_response.data:
             insert_data = {col: item.get(col) for col in table_columns.keys()}
             try:
-                await upsert_entity_record(cur, entity_name, source_name, insert_data)
+                await upsert_entity_record(entity_name, source_name, insert_data)
                 items_stored += 1
             except Exception as e:
                 print(f"Error upserting row: {e}")
