@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime
 from kafka import KafkaConsumer, KafkaProducer
 from routers.task_crud import execute_task
-
+import httpx
 sys.path.append('/app')
 
 
@@ -80,8 +80,10 @@ for message in consumer:
             print(f"➡ Received task {task_id}. Handing off to execute_task function.")
             send_status_update(task_id, "processing", "Worker picked up the task.")
 
-            
+
             result = asyncio.run(execute_task(task_id))
+            # async with httpx.AsyncClient() as client:
+            #     result = await client.post(f"https://trustworthy-wilburn-retroactively.ngrok-free.dev/task/execute-task/{task_id}")
 
             if result and result.get("success"):
                 success_msg = f"Task completed. Stored {result.get('items_stored', 0)} items."

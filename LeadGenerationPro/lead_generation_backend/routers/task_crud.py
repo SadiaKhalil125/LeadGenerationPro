@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig
 from fastapi import APIRouter
 from datetime import datetime
+from routers.get_db_connection import get_db_cursor
 from crawl4Util import extract_website
 from scraping_router import route_scraping_request 
 from models import ScrapeRequest
@@ -10,12 +11,13 @@ from datetime import datetime, timezone
 import os
 import psycopg2
 from routers.scheduler_config import scheduler, enqueue_and_reschedule
+import asyncio
 
 VALID_REPEATS = {"once", "daily", "weekly", "monthly", "yearly"}
-DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
+DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@host.docker.internal:5432/LeadGenerationPro")
 router = APIRouter()
 
-def get_db_cursor():
+def get_db_cursor_docker():
     connection = psycopg2.connect(DATABASE_URL)
     return connection, connection.cursor()
 
@@ -294,11 +296,11 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update task: {str(e)}")
     
-async def upsert_entity_record(entity_name: str, source_name: str, item: dict):
+async def upsert_entity_record(cur,entity_name: str, source_name: str, item: dict):
     """
     Upsert row on (source, name).
     """
-    conn, cur = get_db_cursor()
+   
     name_val = item.get("name")  # adjust if column is named differently
 
     # Ensure source & modified_at are present
@@ -307,7 +309,7 @@ async def upsert_entity_record(entity_name: str, source_name: str, item: dict):
 
     columns = list(item.keys())
     values = list(item.values())
-
+    print("\nWe reached to upsert stage!")
     insert_stmt = sql.SQL("""
         INSERT INTO {} ({})
         VALUES ({})
@@ -323,15 +325,14 @@ async def upsert_entity_record(entity_name: str, source_name: str, item: dict):
         )
     )
     cur.execute(insert_stmt, values)
-    conn.commit()
-    cur.close()
+    print("\nUpsert executed")
 
 @router.post("/execute-task/{task_id}")
 async def execute_task(task_id: int):
     """Execute a task by scraping data and storing it in the corresponding entity table."""
     conn = None
     try:
-        conn, cur = get_db_cursor()
+        conn, cur = get_db_cursor_docker()
         
         # Get task details with all necessary information
         cur.execute("""
@@ -376,6 +377,10 @@ async def execute_task(task_id: int):
         )
         
         # Execute scraping using the dynamic scraper (now properly async)
+        # scrape_response = await asyncio.wait_for(
+            #     route_scraping_request(scrape_request), 
+            #     timeout=120.0
+            # )
         scrape_response = await route_scraping_request(scrape_request)
         
         if not scrape_response.success or not scrape_response.data:
@@ -406,11 +411,12 @@ async def execute_task(task_id: int):
             )
         
         # Insert / Update scraped data in the entity table
+        print("Starting to upsert scraped data...\n")
         items_stored = 0
         for item in scrape_response.data:
             insert_data = {col: item.get(col) for col in table_columns.keys()}
             try:
-                await upsert_entity_record(entity_name, source_name, insert_data)
+                await upsert_entity_record(cur,entity_name, source_name, insert_data)
                 items_stored += 1
             except Exception as e:
                 print(f"Error upserting row: {e}")
