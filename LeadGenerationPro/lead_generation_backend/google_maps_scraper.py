@@ -151,8 +151,9 @@ async def scrape_google_maps(request: ScrapeRequest) -> ScrapeResponse:
     
     places_data = []
     search_query = extract_search_query_from_url(str(request.url))
-    max_items = request.max_items or 10
     
+    max_items = request.max_items or 40
+    logger.info(f"Search query: {search_query}, Max items: {max_items}")
     try:
         async with async_playwright() as p:
             # Launch browser
@@ -231,7 +232,7 @@ async def scrape_google_maps(request: ScrapeRequest) -> ScrapeResponse:
                         # Wait for details to load
                         await page.wait_for_selector(
                             '//div[@class="TIHn2 "]//h1[@class="DUwDvf lfPIob"]',
-                            timeout=10000
+                            timeout=100000000
                         )
                         await page.wait_for_timeout(1500)
                         
@@ -240,7 +241,7 @@ async def scrape_google_maps(request: ScrapeRequest) -> ScrapeResponse:
                         
                         # Add index
                         place_data['index'] = idx + 1
-                        
+                        logger.info(f'place data : {place_data}')
                         if place_data.get(list(request.field_mappings.keys())[0]) or any(v for v in place_data.values() if v is not None):
                             places_data.append(place_data)
                         else:

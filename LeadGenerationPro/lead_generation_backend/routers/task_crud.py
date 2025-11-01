@@ -12,9 +12,13 @@ import os
 import psycopg2
 from routers.scheduler_config import scheduler, enqueue_and_reschedule
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 VALID_REPEATS = {"once", "daily", "weekly", "monthly", "yearly"}
 DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@host.docker.internal:5432/LeadGenerationPro")
+# DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
 router = APIRouter()
 
 def get_db_cursor_docker():
@@ -309,7 +313,7 @@ async def upsert_entity_record(cur,entity_name: str, source_name: str, item: dic
 
     columns = list(item.keys())
     values = list(item.values())
-    print("\nWe reached to upsert stage!")
+    logger.debug("Reached upsert stage for entity=%s, name=%s", entity_name, item.get('name'))
     insert_stmt = sql.SQL("""
         INSERT INTO {} ({})
         VALUES ({})
@@ -324,8 +328,13 @@ async def upsert_entity_record(cur,entity_name: str, source_name: str, item: dic
             for col in columns if col not in ("source", "name", "modified_at")
         )
     )
-    cur.execute(insert_stmt, values)
-    print("\nUpsert executed")
+    try:
+        cur.execute(insert_stmt, values)
+        logger.debug("Upsert executed for entity=%s name=%s", entity_name, item.get('name'))
+    except Exception as e:
+        logger.exception("Upsert failed for entity=%s name=%s: %s", entity_name, item.get('name'), e)
+        # re-raise so caller can handle/skip this row
+        raise
 
 @router.post("/execute-task/{task_id}")
 async def execute_task(task_id: int):
@@ -373,7 +382,7 @@ async def execute_task(task_id: int):
             container_selector=container_selector,
             field_mappings=field_mappings,
             max_items=max_items,
-            timeout=30
+            timeout=500
         )
         
         # Execute scraping using the dynamic scraper (now properly async)

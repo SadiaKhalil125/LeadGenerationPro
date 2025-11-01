@@ -33,7 +33,7 @@ const TaskScheduler = () => {
     const [response, setResponse] = useState(null);
     const [activeTab, setActiveTab] = useState('create');
     const [repeat, setRepeat] = useState('once');
-    const [maxItems, setMaxItems] = useState(10);
+    const [maxItems, setMaxItems] = useState(30);
 
     // State for the mapping search input
     const [mappingSearch, setMappingSearch] = useState('');
@@ -138,7 +138,7 @@ const TaskScheduler = () => {
                 scheduled_time: new Date(scheduledTime).toISOString(),
                 repeat: repeat,
                 task_name: taskName || undefined,
-                max_items: maxItems ? parseInt(maxItems) : 10
+                max_items: maxItems ? parseInt(maxItems) : 30
             };
             const res = await fetch(`${API_BASE}/task/create-task` , {
                 method: 'POST',

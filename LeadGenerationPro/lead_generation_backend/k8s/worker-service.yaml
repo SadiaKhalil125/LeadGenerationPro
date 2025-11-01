@@ -1,11 +1,10 @@
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: worker-deployment
   namespace: scraping-system
 spec:
-  replicas: 2 # You can run multiple workers for more parallelism
+  replicas: 2
   selector:
     matchLabels:
       app: worker
@@ -17,7 +16,17 @@ spec:
       containers:
       - name: worker
         image: sadia2004/scraping-worker:latest
-        imagePullPolicy: Always  
+        imagePullPolicy: Always
+        # --- THIS IS THE CRITICAL ADDITION ---
+        # We are now giving each worker a budget for CPU and Memory.
+        resources:
+          requests:
+            cpu: "500m"      # Guarantees the pod at least half a CPU core.
+            memory: "1Gi"    # Guarantees the pod at least 1 Gibibyte of RAM.
+          limits:
+            cpu: "1"         # Allows the pod to use up to 1 full CPU core if available.
+            memory: "2Gi"    # If the pod exceeds 2Gi of RAM, it will be killed.
+        # --- END OF ADDITION ---
         env:
         - name: KAFKA_BOOTSTRAP
           value: "host.docker.internal:9092"
