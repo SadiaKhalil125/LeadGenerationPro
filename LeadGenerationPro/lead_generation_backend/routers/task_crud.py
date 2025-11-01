@@ -17,13 +17,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 VALID_REPEATS = {"once", "daily", "weekly", "monthly", "yearly"}
-DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@host.docker.internal:5432/LeadGenerationPro")
+# DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@host.docker.internal:5432/LeadGenerationPro")
 # DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
 router = APIRouter()
 
-def get_db_cursor_docker():
-    connection = psycopg2.connect(DATABASE_URL)
-    return connection, connection.cursor()
+# def get_db_cursor_docker():
+#     connection = psycopg2.connect(DATABASE_URL)
+#     return connection, connection.cursor()
 
 @router.post("/create-task", response_model=dict)
 async def create_task(request: TaskRequest):
@@ -341,7 +341,7 @@ async def execute_task(task_id: int):
     """Execute a task by scraping data and storing it in the corresponding entity table."""
     conn = None
     try:
-        conn, cur = get_db_cursor_docker()
+        conn, cur = get_db_cursor()
         
         # Get task details with all necessary information
         cur.execute("""

@@ -1,4 +1,4 @@
-
+from routers.get_db_connection import get_db_cursor
 from kafka import KafkaConsumer
 import json
 import psycopg2
@@ -9,7 +9,7 @@ KAFKA_STATUS_TOPIC = "task_status_updates"
 
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 
-DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
+# DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
 
 try:
     consumer = KafkaConsumer(
@@ -36,8 +36,7 @@ for message in consumer:
         
         # We only need to act on the 'completed' status for now
         if status == "completed":
-            conn = psycopg2.connect(DB_URL)
-            cur = conn.cursor()
+            conn, cur = get_db_cursor()
             
             # Update last_executed_at timestamp
             cur.execute("UPDATE tasks SET last_executed_at = %s WHERE id = %s", (datetime.utcnow(), task_id))

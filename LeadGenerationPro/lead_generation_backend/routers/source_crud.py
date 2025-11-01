@@ -128,7 +128,7 @@ async def save_source(name: str, url: str, pagination_config: PaginationConfig=N
         return {"success": True, "id": new_id, "message": f"Source '{name}' saved successfully."}
 
     except Exception as e:
-        conn.rollback()
+        # conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to save source: {str(e)}")
     finally:
         cur.close()

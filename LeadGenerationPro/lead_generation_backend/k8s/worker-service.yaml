@@ -17,18 +17,27 @@ spec:
       - name: worker
         image: sadia2004/scraping-worker:latest
         imagePullPolicy: Always
-        # --- THIS IS THE CRITICAL ADDITION ---
-        # We are now giving each worker a budget for CPU and Memory.
         resources:
           requests:
-            cpu: "500m"      # Guarantees the pod at least half a CPU core.
-            memory: "1Gi"    # Guarantees the pod at least 1 Gibibyte of RAM.
+            cpu: "500m"
+            memory: "1Gi"
           limits:
-            cpu: "1"         # Allows the pod to use up to 1 full CPU core if available.
-            memory: "2Gi"    # If the pod exceeds 2Gi of RAM, it will be killed.
-        # --- END OF ADDITION ---
-        env:
+            cpu: "1"
+            memory: "2Gi"    
+        env:       
         - name: KAFKA_BOOTSTRAP
           value: "host.docker.internal:9092"
-        - name: DATABASE_URL
-          value: "postgresql://postgres:9042c98a@host.docker.internal:5432/LeadGenerationPro"
+        - name: DB_HOST
+          value: "database-1.c6teemao2etw.us-east-1.rds.amazonaws.com" 
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: "postgres" 
+        - name: DB_NAME
+          value: "postgres" 
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rds-credentials
+              key: JzkwNDJjOThhJw==
+          
