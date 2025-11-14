@@ -2,7 +2,7 @@ from psycopg2 import sql
 import os
 import psycopg2
 import sys
-DB_HOST = os.getenv("DB_HOST", "database-1.c6teemao2etw.us-east-1.rds.amazonaws.com")
+DB_HOST = os.getenv("DB_HOST", "leadgenerationpro.c6teemao2etw.us-east-1.rds.amazonaws.com")
 DB_NAME = os.getenv("DB_NAME", "postgres")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASS", "9042c98a")
