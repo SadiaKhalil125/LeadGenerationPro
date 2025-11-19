@@ -1,11 +1,14 @@
 import array
 from typing import Union
-from typing_extensions import final
+from typing_extensions import final, Buffer
 
-_InputType = Union[str, bytes, bytearray, memoryview, array.ArrayType[int]]
+# __buffer__ protocol makes this redundant on python 3.12+
+Buffer.register(array.ArrayType)
+_InputType = Union[str, Buffer]
 
 VERSION: str
 XXHASH_VERSION: str
+#: Deprecated, will be removed in the next major release
 VERSION_TUPLE: tuple[int, ...]
 
 algorithms_available: set[str]

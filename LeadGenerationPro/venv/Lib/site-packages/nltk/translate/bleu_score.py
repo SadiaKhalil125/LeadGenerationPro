@@ -1,6 +1,6 @@
 # Natural Language Toolkit: BLEU Score
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Authors: Chin Yee Lee, Hengfeng Li, Ruxin Hou, Calvin Tanujaya Lim
 # Contributors: Björn Mattsson, Dmitrijs Milajevs, Liling Tan
 # URL: <https://www.nltk.org/>

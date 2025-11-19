@@ -1,6 +1,6 @@
 # Natural Language Toolkit: Machine Translation
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Uday Krishna <udaykrishna5@gmail.com>
 # Contributor: Tom Aarsen
 # URL: <https://www.nltk.org/>

@@ -1,7 +1,18 @@
-"""Various base classes."""
+from asyncio import get_running_loop
 from collections.abc import Awaitable
 from contextlib import AbstractAsyncContextManager
-from asyncio import get_running_loop
+from functools import partial, wraps
+
+
+def wrap(func):
+    @wraps(func)
+    async def run(*args, loop=None, executor=None, **kwargs):
+        if loop is None:
+            loop = get_running_loop()
+        pfunc = partial(func, *args, **kwargs)
+        return await loop.run_in_executor(executor, pfunc)
+
+    return run
 
 
 class AsyncBase:
@@ -23,11 +34,10 @@ class AsyncBase:
 
     async def __anext__(self):
         """Simulate normal file iteration."""
-        line = await self.readline()
-        if line:
+
+        if line := await self.readline():
             return line
-        else:
-            raise StopAsyncIteration
+        raise StopAsyncIteration
 
 
 class AsyncIndirectBase(AsyncBase):

@@ -1,6 +1,6 @@
 # Natural Language Toolkit: SentiWordNet
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Christopher Potts <cgpotts@stanford.edu>
 # URL: <https://www.nltk.org/>
 # For license information, see LICENSE.TXT
@@ -23,7 +23,7 @@ http://sentiwordnet.isti.cnr.it/
  SentiSynset('slow.v.03'), SentiSynset('slow.a.01'),\
  SentiSynset('slow.a.02'), SentiSynset('dense.s.04'),\
  SentiSynset('slow.a.04'), SentiSynset('boring.s.01'),\
- SentiSynset('dull.s.08'), SentiSynset('slowly.r.01'),\
+ SentiSynset('dull.s.05'), SentiSynset('slowly.r.01'),\
  SentiSynset('behind.r.03')]
     >>> happy = swn.senti_synsets('happy', 'a')
     >>> happy0 = list(happy)[0]

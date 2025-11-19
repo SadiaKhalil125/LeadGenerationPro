@@ -1,6 +1,6 @@
 # Natural Language Toolkit: Language ID module using TextCat algorithm
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Avital Pekker <avital.pekker@utoronto.ca>
 #
 # URL: <https://www.nltk.org/>

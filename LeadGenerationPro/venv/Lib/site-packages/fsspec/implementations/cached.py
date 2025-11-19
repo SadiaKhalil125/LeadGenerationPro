@@ -9,13 +9,14 @@ import weakref
 from shutil import rmtree
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
-from fsspec import AbstractFileSystem, filesystem
+from fsspec import filesystem
 from fsspec.callbacks import DEFAULT_CALLBACK
 from fsspec.compression import compr
 from fsspec.core import BaseCache, MMapCache
 from fsspec.exceptions import BlocksizeMismatchError
 from fsspec.implementations.cache_mapper import create_cache_mapper
 from fsspec.implementations.cache_metadata import CacheMetadata
+from fsspec.implementations.chained import ChainedFileSystem
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractBufferedFile
 from fsspec.transaction import Transaction
@@ -39,7 +40,7 @@ class WriteCachedTransaction(Transaction):
         self.fs = None  # break cycle
 
 
-class CachingFileSystem(AbstractFileSystem):
+class CachingFileSystem(ChainedFileSystem):
     """Locally caching filesystem, layer over any other FS
 
     This class implements chunk-wise local storage of remote files, for quick
@@ -60,6 +61,7 @@ class CachingFileSystem(AbstractFileSystem):
     """
 
     protocol: ClassVar[str | tuple[str, ...]] = ("blockcache", "cached")
+    _strip_tokenize_options = ("fo",)
 
     def __init__(
         self,
@@ -984,7 +986,9 @@ class LocalTempFile:
         os.remove(self.fn)
 
     def commit(self):
-        self.fs.put(self.fn, self.path, **self.kwargs)
+        # calling put() with list arguments avoids path expansion and additional operations
+        # like isdir()
+        self.fs.put([self.fn], [self.path], **self.kwargs)
         # we do not delete the local copy, it's still in the cache.
 
     @property

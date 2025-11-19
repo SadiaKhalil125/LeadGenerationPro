@@ -2,7 +2,7 @@
 #
 # Author: Dan Garrette <dhgarrette@gmail.com>
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # URL: <https://www.nltk.org/>
 # For license information, see LICENSE.TXT
 
@@ -37,17 +37,7 @@ from nltk.sem.logic import (
     is_indvar,
     unique_variable,
 )
-
-# Import Tkinter-based modules if they are available
-try:
-    from tkinter import Canvas, Tk
-    from tkinter.font import Font
-
-    from nltk.util import in_idle
-
-except ImportError:
-    # No need to print a warning here, nltk.draw has already printed one.
-    pass
+from nltk.util import in_idle
 
 
 class DrtTokens(Tokens):
@@ -1105,6 +1095,12 @@ class DrsDrawer:
         """
         master = None
         if not canvas:
+
+            # Only import tkinter if the user has indicated that they
+            # want to draw a UI. See issue #2949 for more info.
+            from tkinter import Canvas, Tk
+            from tkinter.font import Font
+
             master = Tk()
             master.title("DRT")
 

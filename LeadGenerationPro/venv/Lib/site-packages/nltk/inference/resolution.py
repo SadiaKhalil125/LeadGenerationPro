@@ -2,7 +2,7 @@
 #
 # Author: Dan Garrette <dhgarrette@gmail.com>
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # URL: <https://www.nltk.org/>
 # For license information, see LICENSE.TXT
 
@@ -141,13 +141,13 @@ class ResolutionProverCommand(BaseProverCommand):
         answers = set()
         answer_ex = VariableExpression(Variable(ResolutionProver.ANSWER_KEY))
         for clause in self._clauses:
-            for term in clause:
-                if (
-                    isinstance(term, ApplicationExpression)
-                    and term.function == answer_ex
-                    and not isinstance(term.argument, IndividualVariableExpression)
-                ):
-                    answers.add(term.argument)
+            if (
+                len(clause) == 1
+                and isinstance(clause[0], ApplicationExpression)
+                and clause[0].function == answer_ex
+                and not isinstance(clause[0].argument, IndividualVariableExpression)
+            ):
+                answers.add(clause[0].argument)
         return answers
 
     @staticmethod

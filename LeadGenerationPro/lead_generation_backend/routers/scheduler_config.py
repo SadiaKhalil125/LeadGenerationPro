@@ -2,7 +2,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from psycopg2.extras import RealDictCursor
 from contextlib import asynccontextmanager
 import asyncio, httpx
-# from routers.get_db_connection import get_db_cursor
+from routers.get_db_connection import get_db_cursor
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from kafka import KafkaProducer
@@ -16,9 +16,9 @@ scheduler = BackgroundScheduler()
 producer: KafkaProducer = None  # will initialize in startup
 
 
-def get_db_connection():
-    connection = psycopg2.connect(DATABASE_URL)
-    return connection, connection.cursor()
+# def get_db_connection():
+#     connection = psycopg2.connect(DATABASE_URL)
+#     return connection, connection.cursor()
 
 async def send_to_kafka(message: dict):
     """Send message to Kafka without blocking."""
@@ -82,7 +82,7 @@ def enqueue_and_reschedule(task_id: int):
     """Send task to Kafka and reschedule if repeating."""
     enqueue_task(task_id)
     
-    conn, _ = get_db_connection()
+    conn, _ = get_db_cursor()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT repeat, scheduled_time FROM tasks WHERE id=%s", (task_id,))
@@ -117,7 +117,7 @@ async def task_lifespan(app):
         api_version=(2, 6, 0)
     )
     scheduler.start()
-    conn, _ = get_db_connection()
+    conn, _ = get_db_cursor()
     schedule_from_db(conn)
     conn.close()
     print("Scheduler started and tasks loaded.")

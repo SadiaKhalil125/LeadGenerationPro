@@ -1,11 +1,17 @@
+import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional
+from typing import Optional
 
-import requests
+import httpx
 
 from .. import constants
 from . import get_session, hf_raise_for_status, validate_hf_hub_args
+
+
+XET_CONNECTION_INFO_SAFETY_PERIOD = 60  # seconds
+XET_CONNECTION_INFO_CACHE_SIZE = 1_000
+XET_CONNECTION_INFO_CACHE: dict[str, "XetConnectionInfo"] = {}
 
 
 class XetTokenType(str, Enum):
@@ -27,7 +33,7 @@ class XetConnectionInfo:
 
 
 def parse_xet_file_data_from_response(
-    response: requests.Response, endpoint: Optional[str] = None
+    response: httpx.Response, endpoint: Optional[str] = None
 ) -> Optional[XetFileData]:
     """
     Parse XET file metadata from an HTTP response.
@@ -36,7 +42,7 @@ def parse_xet_file_data_from_response(
     of a given response object. If the required metadata is not found, it returns `None`.
 
     Args:
-        response (`requests.Response`):
+        response (`httpx.Response`):
             The HTTP response object containing headers dict and links dict to extract the XET metadata from.
     Returns:
         `Optional[XetFileData]`:
@@ -63,11 +69,11 @@ def parse_xet_file_data_from_response(
     )
 
 
-def parse_xet_connection_info_from_headers(headers: Dict[str, str]) -> Optional[XetConnectionInfo]:
+def parse_xet_connection_info_from_headers(headers: dict[str, str]) -> Optional[XetConnectionInfo]:
     """
     Parse XET connection info from the HTTP headers or return None if not found.
     Args:
-        headers (`Dict`):
+        headers (`dict`):
            HTTP headers to extract the XET metadata from.
     Returns:
         `XetConnectionInfo` or `None`:
@@ -92,7 +98,7 @@ def parse_xet_connection_info_from_headers(headers: Dict[str, str]) -> Optional[
 def refresh_xet_connection_info(
     *,
     file_data: XetFileData,
-    headers: Dict[str, str],
+    headers: dict[str, str],
 ) -> XetConnectionInfo:
     """
     Utilizes the information in the parsed metadata to request the Hub xet connection information.
@@ -100,7 +106,7 @@ def refresh_xet_connection_info(
     Args:
         file_data: (`XetFileData`):
             The file data needed to refresh the xet connection information.
-        headers (`Dict[str, str]`):
+        headers (`dict[str, str]`):
             Headers to use for the request, including authorization headers and user agent.
     Returns:
         `XetConnectionInfo`:
@@ -123,9 +129,9 @@ def fetch_xet_connection_info_from_repo_info(
     repo_id: str,
     repo_type: str,
     revision: Optional[str] = None,
-    headers: Dict[str, str],
+    headers: dict[str, str],
     endpoint: Optional[str] = None,
-    params: Optional[Dict[str, str]] = None,
+    params: Optional[dict[str, str]] = None,
 ) -> XetConnectionInfo:
     """
     Uses the repo info to request a xet access token from Hub.
@@ -138,11 +144,11 @@ def fetch_xet_connection_info_from_repo_info(
             Type of the repo to upload to: `"model"`, `"dataset"` or `"space"`.
         revision (`str`, `optional`):
             The revision of the repo to get the token for.
-        headers (`Dict[str, str]`):
+        headers (`dict[str, str]`):
             Headers to use for the request, including authorization headers and user agent.
         endpoint (`str`, `optional`):
             The endpoint to use for the request. Defaults to the Hub endpoint.
-        params (`Dict[str, str]`, `optional`):
+        params (`dict[str, str]`, `optional`):
             Additional parameters to pass with the request.
     Returns:
         `XetConnectionInfo`:
@@ -161,18 +167,21 @@ def fetch_xet_connection_info_from_repo_info(
 @validate_hf_hub_args
 def _fetch_xet_connection_info_with_url(
     url: str,
-    headers: Dict[str, str],
-    params: Optional[Dict[str, str]] = None,
+    headers: dict[str, str],
+    params: Optional[dict[str, str]] = None,
 ) -> XetConnectionInfo:
     """
     Requests the xet connection info from the supplied URL. This includes the
     access token, expiration time, and endpoint to use for the xet storage service.
+
+    Result is cached to avoid redundant requests.
+
     Args:
         url: (`str`):
             The access token endpoint URL.
-        headers (`Dict[str, str]`):
+        headers (`dict[str, str]`):
             Headers to use for the request, including authorization headers and user agent.
-        params (`Dict[str, str]`, `optional`):
+        params (`dict[str, str]`, `optional`):
             Additional parameters to pass with the request.
     Returns:
         `XetConnectionInfo`:
@@ -183,10 +192,44 @@ def _fetch_xet_connection_info_with_url(
         [`ValueError`](https://docs.python.org/3/library/exceptions.html#ValueError)
             If the Hub API response is improperly formatted.
     """
+    # Check cache first
+    cache_key = _cache_key(url, headers, params)
+    cached_info = XET_CONNECTION_INFO_CACHE.get(cache_key)
+    if cached_info is not None:
+        if not _is_expired(cached_info):
+            return cached_info
+
+    # Fetch from server
     resp = get_session().get(headers=headers, url=url, params=params)
     hf_raise_for_status(resp)
 
     metadata = parse_xet_connection_info_from_headers(resp.headers)  # type: ignore
     if metadata is None:
         raise ValueError("Xet headers have not been correctly set by the server.")
+
+    # Delete expired cache entries
+    for k, v in list(XET_CONNECTION_INFO_CACHE.items()):
+        if _is_expired(v):
+            XET_CONNECTION_INFO_CACHE.pop(k, None)
+
+    # Enforce cache size limit
+    if len(XET_CONNECTION_INFO_CACHE) >= XET_CONNECTION_INFO_CACHE_SIZE:
+        XET_CONNECTION_INFO_CACHE.pop(next(iter(XET_CONNECTION_INFO_CACHE)))
+
+    # Update cache
+    XET_CONNECTION_INFO_CACHE[cache_key] = metadata
+
     return metadata
+
+
+def _cache_key(url: str, headers: dict[str, str], params: Optional[dict[str, str]]) -> str:
+    """Return a unique cache key for the given request parameters."""
+    lower_headers = {k.lower(): v for k, v in headers.items()}  # casing is not guaranteed here
+    auth_header = lower_headers.get("authorization", "")
+    params_str = "&".join(f"{k}={v}" for k, v in sorted((params or {}).items(), key=lambda x: x[0]))
+    return f"{url}|{auth_header}|{params_str}"
+
+
+def _is_expired(connection_info: XetConnectionInfo) -> bool:
+    """Check if the given XET connection info is expired."""
+    return connection_info.expiration_unix_epoch <= int(time.time()) + XET_CONNECTION_INFO_SAFETY_PERIOD

@@ -1,6 +1,6 @@
 # Natural Language Toolkit: TextTiling
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: George Boutsioukis
 #
 # URL: <https://www.nltk.org/>

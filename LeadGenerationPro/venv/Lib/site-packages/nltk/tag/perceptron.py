@@ -12,6 +12,8 @@ import json
 import logging
 import random
 from collections import defaultdict
+from os.path import join as path_join
+from tempfile import gettempdir
 
 from nltk import jsontags
 from nltk.data import find, load
@@ -21,26 +23,6 @@ try:
     import numpy as np
 except ImportError:
     pass
-
-TRAINED_TAGGER_PATH = "averaged_perceptron_tagger/"
-
-TAGGER_JSONS = {
-    "eng": {
-        "weights": "averaged_perceptron_tagger_eng.weights.json",
-        "tagdict": "averaged_perceptron_tagger_eng.tagdict.json",
-        "classes": "averaged_perceptron_tagger_eng.classes.json",
-    },
-    "rus": {
-        "weights": "averaged_perceptron_tagger_rus.weights.json",
-        "tagdict": "averaged_perceptron_tagger_rus.tagdict.json",
-        "classes": "averaged_perceptron_tagger_rus.classes.json",
-    },
-    "xxx": {
-        "weights": "averaged_perceptron_tagger.xxx.weights.json",
-        "tagdict": "averaged_perceptron_tagger.xxx.tagdict.json",
-        "classes": "averaged_perceptron_tagger.xxx.classes.json",
-    },
-}
 
 
 @jsontags.register_tag
@@ -145,15 +127,23 @@ class PerceptronTagger(TaggerI):
     https://explosion.ai/blog/part-of-speech-pos-tagger-in-python
 
     >>> from nltk.tag.perceptron import PerceptronTagger
-
-    Train the model
-
     >>> tagger = PerceptronTagger(load=False)
 
-    >>> tagger.train([[('today','NN'),('is','VBZ'),('good','JJ'),('day','NN')],
-    ... [('yes','NNS'),('it','PRP'),('beautiful','JJ')]])
+    Train and save the model:
 
-    >>> tagger.tag(['today','is','a','beautiful','day'])
+    >>> tagger.train([[('today','NN'),('is','VBZ'),('good','JJ'),('day','NN')],
+    ... [('yes','NNS'),('it','PRP'),('beautiful','JJ')]], save_loc=tagger.save_dir)
+
+    Load the saved model:
+
+    >>> tagger2 = PerceptronTagger(loc=tagger.save_dir)
+    >>> print(sorted(list(tagger2.classes)))
+    ['JJ', 'NN', 'NNS', 'PRP', 'VBZ']
+
+    >>> print(tagger2.classes == tagger.classes)
+    True
+
+    >>> tagger2.tag(['today','is','a','beautiful','day'])
     [('today', 'NN'), ('is', 'PRP'), ('a', 'PRP'), ('beautiful', 'JJ'), ('day', 'NN')]
 
     Use the pretrain model (the default constructor)
@@ -167,20 +157,33 @@ class PerceptronTagger(TaggerI):
     [('The', 'DT'), ('red', 'JJ'), ('cat', 'NN')]
     """
 
-    json_tag = "nltk.tag.sequential.PerceptronTagger"
+    json_tag = "nltk.tag.perceptron.PerceptronTagger"
 
     START = ["-START-", "-START2-"]
     END = ["-END-", "-END2-"]
 
-    def __init__(self, load=True, lang="eng"):
+    def __init__(self, load=True, lang="eng", loc=None):
         """
         :param load: Load the json model upon instantiation.
         """
         self.model = AveragedPerceptron()
         self.tagdict = {}
         self.classes = set()
+        self.lang = lang
+        # Save trained models in tmp directory by default:
+        self.TRAINED_TAGGER_PATH = gettempdir()
+        self.TAGGER_NAME = "averaged_perceptron_tagger"
+        self.save_dir = path_join(
+            self.TRAINED_TAGGER_PATH, f"{self.TAGGER_NAME}_{self.lang}"
+        )
         if load:
-            self.load_from_json(lang)
+            self.load_from_json(lang, loc)
+
+    def param_files(self, lang="eng"):
+        return (
+            f"{self.TAGGER_NAME}_{lang}.{attr}.json"
+            for attr in ["weights", "tagdict", "classes"]
+        )
 
     def tag(self, tokens, return_conf=False, use_tagdict=True):
         """
@@ -253,32 +256,39 @@ class PerceptronTagger(TaggerI):
         self.model.average_weights()
         # Save to json files.
         if save_loc is not None:
-            self.save_to_json(loc)
+            self.save_to_json(lang=self.lang, loc=save_loc)
 
-    def save_to_json(self, loc, lang="xxx"):
-        # TODO:
-        assert os.isdir(
-            TRAINED_TAGGER_PATH
-        ), f"Path set for saving needs to be a directory"
+    def save_to_json(self, lang="xxx", loc=None):
+        from os import mkdir
+        from os.path import isdir
 
-        with open(loc + TAGGER_JSONS[lang]["weights"], "w") as fout:
-            json.dump(self.model.weights, fout)
-        with open(loc + TAGGER_JSONS[lang]["tagdict"], "w") as fout:
-            json.dump(self.tagdict, fout)
-        with open(loc + TAGGER_JSONS[lang]["classes"], "w") as fout:
-            json.dump(self.classes, fout)
+        if not loc:
+            loc = self.save_dir
+        if not isdir(loc):
+            mkdir(loc)
 
-    def load_from_json(self, lang="eng"):
+        for param, json_file in zip(self.encode_json_obj(), self.param_files(lang)):
+            with open(path_join(loc, json_file), "w") as fout:
+                json.dump(param, fout)
+
+    def load_from_json(self, lang="eng", loc=None):
         # Automatically find path to the tagger if location is not specified.
-        loc = find(f"taggers/averaged_perceptron_tagger_{lang}/")
-        with open(loc + TAGGER_JSONS[lang]["weights"]) as fin:
-            self.model.weights = json.load(fin)
-        with open(loc + TAGGER_JSONS[lang]["tagdict"]) as fin:
-            self.tagdict = json.load(fin)
-        with open(loc + TAGGER_JSONS[lang]["classes"]) as fin:
-            self.classes = set(json.load(fin))
+        if not loc:
+            loc = find(f"taggers/averaged_perceptron_tagger_{lang}")
 
-        self.model.classes = self.classes
+        def load_param(json_file):
+            with open(path_join(loc, json_file)) as fin:
+                return json.load(fin)
+
+        self.decode_json_params(
+            load_param(js_file) for js_file in self.param_files(lang)
+        )
+
+    def decode_json_params(self, params):
+        weights, tagdict, class_list = params
+        self.model.weights = weights
+        self.tagdict = tagdict
+        self.classes = self.model.classes = set(class_list)
 
     def encode_json_obj(self):
         return self.model.weights, self.tagdict, list(self.classes)
@@ -286,9 +296,7 @@ class PerceptronTagger(TaggerI):
     @classmethod
     def decode_json_obj(cls, obj):
         tagger = cls(load=False)
-        tagger.model.weights, tagger.tagdict, tagger.classes = obj
-        tagger.classes = set(tagger.classes)
-        tagger.model.classes = tagger.classes
+        tagger.decode_json_params(obj)
         return tagger
 
     def normalize(self, word):
@@ -362,38 +370,24 @@ def _pc(n, d):
     return (n / d) * 100
 
 
-def _load_data_conll_format(filename):
-    print("Read from file: ", filename)
-    with open(filename, "rb") as fin:
-        sentences = []
-        sentence = []
-        for line in fin.readlines():
-            line = line.strip()
-            # print line
-            if len(line) == 0:
-                sentences.append(sentence)
-                sentence = []
-                continue
-            tokens = line.split("\t")
-            word = tokens[1]
-            tag = tokens[4]
-            sentence.append((word, tag))
-        return sentences
+def _train_and_test(lang="sv"):
+    """
+    Train and test on 'lang' part of universal_treebanks corpus, which includes
+    train and test sets in conll format for 'de', 'es', 'fi', 'fr' and 'sv'.
+    Finds 0.94 accuracy on 'sv' (Swedish) test set.
+    """
+    from nltk.corpus import universal_treebanks as utb
 
-
-def _get_pretrain_model():
-    # Train and test on English part of ConLL data (WSJ part of Penn Treebank)
-    # Train: section 2-11
-    # Test : section 23
-    tagger = PerceptronTagger()
-    training = _load_data_conll_format("english_ptb_train.conll")
-    testing = _load_data_conll_format("english_ptb_test.conll")
-    print("Size of training and testing (sentence)", len(training), len(testing))
+    tagger = PerceptronTagger(load=False, lang=lang)
+    training = utb.tagged_sents(f"ch/{lang}/{lang}-universal-ch-train.conll")
+    testing = utb.tagged_sents(f"ch/{lang}/{lang}-universal-ch-test.conll")
+    print(
+        f"(Lang = {lang}) training on {len(training)} and testing on {len(testing)} sentences"
+    )
     # Train and save the model
-    tagger.train(training, TRAINED_TAGGER_PATH)
+    tagger.train(training, save_loc=tagger.save_dir)
     print("Accuracy : ", tagger.accuracy(testing))
 
 
 if __name__ == "__main__":
-    # _get_pretrain_model()
-    pass
+    _train_and_test()

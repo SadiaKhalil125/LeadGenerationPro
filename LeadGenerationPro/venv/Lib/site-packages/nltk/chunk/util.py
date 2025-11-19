@@ -1,6 +1,6 @@
 # Natural Language Toolkit: Chunk format conversions
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Edward Loper <edloper@gmail.com>
 #         Steven Bird <stevenbird1@gmail.com> (minor additions)
 # URL: <https://www.nltk.org/>
@@ -294,10 +294,10 @@ class ChunkScore:
         """
         return (
             "ChunkParse score:\n"
-            + (f"    IOB Accuracy: {self.accuracy() * 100:5.1f}%%\n")
-            + (f"    Precision:    {self.precision() * 100:5.1f}%%\n")
-            + (f"    Recall:       {self.recall() * 100:5.1f}%%\n")
-            + (f"    F-Measure:    {self.f_measure() * 100:5.1f}%%")
+            + f"    IOB Accuracy: {self.accuracy() * 100:5.1f}%\n"
+            + f"    Precision:    {self.precision() * 100:5.1f}%\n"
+            + f"    Recall:       {self.recall() * 100:5.1f}%\n"
+            + f"    F-Measure:    {self.f_measure() * 100:5.1f}%"
         )
 
 

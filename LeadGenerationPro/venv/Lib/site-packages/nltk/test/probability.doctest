@@ -1,4 +1,4 @@
-.. Copyright (C) 2001-2024 NLTK Project
+.. Copyright (C) 2001-2025 NLTK Project
 .. For license information, see LICENSE.TXT
 
 ===========
@@ -274,7 +274,7 @@ they don't get smoothed
     >>> p.prob('a')
     0.017649766667026317...
     >>> p.prob('o')
-    0.08433050215340411...
+    0.0843305021534041...
     >>> p.prob('z')
     0.022727272727272728...
     >>> p.prob('foobar')

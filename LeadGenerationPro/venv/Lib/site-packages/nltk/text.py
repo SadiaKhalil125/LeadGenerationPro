@@ -1,6 +1,6 @@
 # Natural Language Toolkit: Texts
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Steven Bird <stevenbird1@gmail.com>
 #         Edward Loper <edloper@gmail.com>
 # URL: <https://www.nltk.org/>
@@ -452,7 +452,7 @@ class Text:
             >>> from nltk.book import text4
             >>> text4.collocations() # doctest: +NORMALIZE_WHITESPACE
             United States; fellow citizens; years ago; four years; Federal
-            Government; General Government; American people; Vice President; God
+            Government; General Government; Vice President; American people; God
             bless; Chief Justice; one another; fellow Americans; Old World;
             Almighty God; Fellow citizens; Chief Magistrate; every citizen; Indian
             tribes; public debt; foreign nations

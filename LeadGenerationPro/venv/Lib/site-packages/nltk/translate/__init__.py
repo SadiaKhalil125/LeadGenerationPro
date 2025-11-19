@@ -1,6 +1,6 @@
 # Natural Language Toolkit: Machine Translation
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Steven Bird <stevenbird1@gmail.com>, Tah Wei Hoon <hoon.tw@gmail.com>
 # URL: <https://www.nltk.org/>
 # For license information, see LICENSE.TXT
@@ -30,3 +30,4 @@ from nltk.translate.gale_church import trace
 from nltk.translate.gdfa import grow_diag_final_and
 from nltk.translate.gleu_score import sentence_gleu as gleu
 from nltk.translate.phrase_based import extract
+from nltk.translate.lepor import sentence_lepor as lepor, corpus_lepor

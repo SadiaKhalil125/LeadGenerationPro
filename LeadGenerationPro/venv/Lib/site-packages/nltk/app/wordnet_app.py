@@ -1,6 +1,6 @@
 # Natural Language Toolkit: WordNet Browser Application
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Jussi Salmela <jtsalmela@users.sourceforge.net>
 #         Paul Bone <pbone@students.csse.unimelb.edu.au>
 # URL: <https://www.nltk.org/>
@@ -414,7 +414,7 @@ def get_relations_data(word, synset):
                 ),
             ),
         )
-    elif synset.pos() == wn.ADJ or synset.pos == wn.ADJ_SAT:
+    elif synset.pos() == wn.ADJ or synset.pos() == wn.ADJ_SAT:
         return (
             (ANTONYM, "Antonym", lemma_property(word, synset, lambda l: l.antonyms())),
             (SIMILAR, "Similar to", synset.similar_tos()),
@@ -435,7 +435,7 @@ def get_relations_data(word, synset):
         )
         # Derived from adjective - not supported by corpus
     else:
-        raise TypeError("Unhandles synset POS type: " + str(synset.pos()))
+        raise TypeError("Unhandled synset POS type: " + str(synset.pos()))
 
 
 html_header = """
@@ -837,7 +837,7 @@ def get_static_web_help_page():
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
      <!-- Natural Language Toolkit: Wordnet Interface: Graphical Wordnet Browser
-            Copyright (C) 2001-2024 NLTK Project
+            Copyright (C) 2001-2025 NLTK Project
             Author: Jussi Salmela <jtsalmela@users.sourceforge.net>
             URL: <https://www.nltk.org/>
             For license information, see LICENSE.TXT -->
@@ -907,7 +907,7 @@ def get_static_index_page(with_shutdown):
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN"  "http://www.w3.org/TR/html4/frameset.dtd">
 <HTML>
      <!-- Natural Language Toolkit: Wordnet Interface: Graphical Wordnet Browser
-            Copyright (C) 2001-2024 NLTK Project
+            Copyright (C) 2001-2025 NLTK Project
             Author: Jussi Salmela <jtsalmela@users.sourceforge.net>
             URL: <https://www.nltk.org/>
             For license information, see LICENSE.TXT -->
@@ -940,7 +940,7 @@ def get_static_upper_page(with_shutdown):
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
     <!-- Natural Language Toolkit: Wordnet Interface: Graphical Wordnet Browser
-        Copyright (C) 2001-2024 NLTK Project
+        Copyright (C) 2001-2025 NLTK Project
         Author: Jussi Salmela <jtsalmela@users.sourceforge.net>
         URL: <https://www.nltk.org/>
         For license information, see LICENSE.TXT -->

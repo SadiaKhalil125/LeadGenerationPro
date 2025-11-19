@@ -1,4 +1,5 @@
 """Handle files using a thread pool executor."""
+
 import asyncio
 import sys
 from functools import partial, singledispatch
@@ -96,7 +97,8 @@ async def _open(
 
 @singledispatch
 def wrap(file, *, loop=None, executor=None):
-    raise TypeError("Unsupported io type: {}.".format(file))
+    msg = f"Unsupported io type: {file}."
+    raise TypeError(msg)
 
 
 @wrap.register(TextIOBase)

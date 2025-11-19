@@ -1,6 +1,6 @@
 # Natural Language Toolkit: Combinatory Categorial Grammar
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Tanin Na Nakorn (@tanin)
 # URL: <https://www.nltk.org/>
 # For license information, see LICENSE.TXT
@@ -8,11 +8,14 @@
 Helper functions for CCG semantics computation
 """
 
+import copy
+
 from nltk.sem.logic import *
 
 
 def compute_type_raised_semantics(semantics):
-    core = semantics
+    semantics_copy = copy.deepcopy(semantics)
+    core = semantics_copy
     parent = None
     while isinstance(core, LambdaExpression):
         parent = core
@@ -26,9 +29,9 @@ def compute_type_raised_semantics(semantics):
     if parent is not None:
         parent.term = core
     else:
-        semantics = core
+        semantics_copy = core
 
-    return LambdaExpression(var, semantics)
+    return LambdaExpression(var, semantics_copy)
 
 
 def compute_function_semantics(function, argument):

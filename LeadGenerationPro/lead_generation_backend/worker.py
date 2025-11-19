@@ -22,8 +22,8 @@ except ImportError as e:
 # --- Configuration ---
 KAFKA_TOPIC = "scraping_tasks"
 KAFKA_STATUS_TOPIC = "task_status_updates"
+# BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
-
 
 # --- Kafka Clients ---
 print(f" Worker connecting to Kafka at {BOOTSTRAP}...")

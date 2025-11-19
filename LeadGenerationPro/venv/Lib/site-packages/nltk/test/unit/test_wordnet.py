@@ -244,3 +244,49 @@ class WordnNetDemo(unittest.TestCase):
         self.assertTrue(hasattr(cat_lemmas, "__iter__"))
         self.assertTrue(hasattr(cat_lemmas, "__next__") or hasattr(eng_lemmas, "next"))
         self.assertTrue(cat_lemmas.__iter__() is cat_lemmas)
+
+    def test_en_ptb_tags(self):
+        # Common PTB tags (mapped in both PTB and Brown)
+        self.assertEqual(wn.tag2pos("NN"), "n")  # noun
+        self.assertEqual(wn.tag2pos("VB"), "v")  # verb
+        self.assertEqual(wn.tag2pos("JJ"), "a")  # adjective
+        self.assertEqual(wn.tag2pos("RB"), "r")  # adverb
+
+        # PTB-specific tags (mapped in PTB, not in Brown)
+        self.assertEqual(wn.tag2pos("NNS"), "n")  # plural noun (PTB only)
+        self.assertEqual(wn.tag2pos("VBD"), "v")  # verb, past tense (PTB only)
+        self.assertEqual(
+            wn.tag2pos("VBG"), "v"
+        )  # verb, gerund/present participle (PTB only)
+        self.assertEqual(wn.tag2pos("JJR"), "a")  # adjective, comparative (PTB only)
+        self.assertEqual(wn.tag2pos("RBR"), "r")  # adverb, comparative (PTB only)
+
+        # Tags that should yield None (not mapped in WordNet)
+        self.assertIsNone(wn.tag2pos("PRP"))
+        self.assertIsNone(wn.tag2pos("WP"))
+        self.assertIsNone(wn.tag2pos("TO"))
+        self.assertIsNone(wn.tag2pos("PRT"))
+        self.assertIsNone(wn.tag2pos("POS"))
+        self.assertIsNone(wn.tag2pos("."))
+
+    def test_en_brown_tags(self):
+        # Common Brown tags (mapped in both PTB and Brown)
+        self.assertEqual(wn.tag2pos("NN", tagset="en-brown"), "n")  # noun
+        self.assertEqual(wn.tag2pos("VB", tagset="en-brown"), "v")  # verb
+        self.assertEqual(wn.tag2pos("JJ", tagset="en-brown"), "a")  # adjective
+        self.assertEqual(wn.tag2pos("RB", tagset="en-brown"), "r")  # adverb
+
+        # Brown-specific tags (mapped in Brown, not in PTB)
+        self.assertEqual(
+            wn.tag2pos("HV", tagset="en-brown"), "v"
+        )  # 'have' auxiliary (Brown only)
+        self.assertEqual(
+            wn.tag2pos("BEZ", tagset="en-brown"), "v"
+        )  # 'be' auxiliary, 3rd person singular present (Brown only)
+        self.assertEqual(
+            wn.tag2pos("DOZ", tagset="en-brown"), "v"
+        )  # 'do' auxiliary, 3rd person singular present (Brown only)
+
+        # Tags that should yield None (not mapped in WordNet)
+        self.assertIsNone(wn.tag2pos("PPL", tagset="en-brown"))
+        self.assertIsNone(wn.tag2pos("(", tagset="en-brown"))

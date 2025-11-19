@@ -1,4 +1,4 @@
-.. Copyright (C) 2001-2024 NLTK Project
+.. Copyright (C) 2001-2025 NLTK Project
 .. For license information, see LICENSE.TXT
 
 ===============================
@@ -274,7 +274,7 @@ that are expressed as nested lists, such as those produced by
 the tree() function from the wordnet module.
 
     >>> from nltk.corpus import wordnet as wn
-    >>> t=Tree.fromlist(wn.synset('dog.n.01').tree(lambda s:s.hypernyms()))
+    >>> t=Tree.fromlist(wn.synset('dog.n.01').tree(lambda s:sorted(s.hypernyms())))
     >>> print(t.height())
     14
     >>> print(t.leaves())

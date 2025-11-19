@@ -581,6 +581,8 @@ class TestTaggerAPI(TestCase):
             properties={
                 "ssplit.isOneSentence": "true",
                 "annotators": "tokenize,ssplit,pos",
+                "tokenize.whitespace": "true",
+                "ner.useSUTime": "false",
             },
         )
         self.assertEqual(expected_output, tagged_output)
@@ -740,6 +742,8 @@ class TestTaggerAPI(TestCase):
             properties={
                 "ssplit.isOneSentence": "true",
                 "annotators": "tokenize,ssplit,ner",
+                "tokenize.whitespace": "true",
+                "ner.useSUTime": "false",
             },
         )
         self.assertEqual(expected_output, tagged_output)

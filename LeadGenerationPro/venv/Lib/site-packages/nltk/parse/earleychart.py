@@ -1,6 +1,6 @@
 # Natural Language Toolkit: An Incremental Earley Chart Parser
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Peter Ljunglöf <peter.ljunglof@heatherleaf.se>
 #         Rob Speer <rspeer@mit.edu>
 #         Edward Loper <edloper@gmail.com>

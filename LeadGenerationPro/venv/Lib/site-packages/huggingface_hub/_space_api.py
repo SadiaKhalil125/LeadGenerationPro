@@ -15,7 +15,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Optional
+from typing import Optional
 
 from huggingface_hub.utils import parse_datetime
 
@@ -111,7 +111,7 @@ class SpaceRuntime:
             Current hardware of the space. Example: "cpu-basic". Can be `None` if Space
             is `BUILDING` for the first time.
         requested_hardware (`str` or `None`):
-            Requested hardware. Can be different than `hardware` especially if the request
+            Requested hardware. Can be different from `hardware` especially if the request
             has just been made. Example: "t4-medium". Can be `None` if no hardware has
             been requested yet.
         sleep_time (`int` or `None`):
@@ -128,9 +128,9 @@ class SpaceRuntime:
     requested_hardware: Optional[SpaceHardware]
     sleep_time: Optional[int]
     storage: Optional[SpaceStorage]
-    raw: Dict
+    raw: dict
 
-    def __init__(self, data: Dict) -> None:
+    def __init__(self, data: dict) -> None:
         self.stage = data["stage"]
         self.hardware = data.get("hardware", {}).get("current")
         self.requested_hardware = data.get("hardware", {}).get("requested")
@@ -160,7 +160,7 @@ class SpaceVariable:
     description: Optional[str]
     updated_at: Optional[datetime]
 
-    def __init__(self, key: str, values: Dict) -> None:
+    def __init__(self, key: str, values: dict) -> None:
         self.key = key
         self.value = values["value"]
         self.description = values.get("description")

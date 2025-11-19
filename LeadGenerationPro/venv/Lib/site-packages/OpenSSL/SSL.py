@@ -276,6 +276,7 @@ SSL_CB_CONNECT_EXIT: int = _lib.SSL_CB_CONNECT_EXIT
 SSL_CB_HANDSHAKE_START: int = _lib.SSL_CB_HANDSHAKE_START
 SSL_CB_HANDSHAKE_DONE: int = _lib.SSL_CB_HANDSHAKE_DONE
 
+_Buffer = typing.Union[bytes, bytearray, memoryview]
 _T = TypeVar("_T")
 
 
@@ -914,7 +915,10 @@ class Context:
         )
         self._cookie_verify_helper: _CookieVerifyCallbackHelper | None = None
 
-        self.set_mode(_lib.SSL_MODE_ENABLE_PARTIAL_WRITE)
+        self.set_mode(
+            _lib.SSL_MODE_ENABLE_PARTIAL_WRITE
+            | _lib.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
+        )
         if version is not None:
             self.set_min_proto_version(version)
             self.set_max_proto_version(version)
@@ -1468,6 +1472,9 @@ class Context:
         See the OpenSSL manual for more information (e.g.
         :manpage:`ciphers(1)`).
 
+        Note this API does not change the cipher suites used in TLS 1.3
+        Use `set_tls13_ciphersuites` for that.
+
         :param bytes cipher_list: An OpenSSL cipher string.
         :return: None
         """
@@ -1479,26 +1486,29 @@ class Context:
         _openssl_assert(
             _lib.SSL_CTX_set_cipher_list(self._context, cipher_list) == 1
         )
-        # In OpenSSL 1.1.1 setting the cipher list will always return TLS 1.3
-        # ciphers even if you pass an invalid cipher. Applications (like
-        # Twisted) have tests that depend on an error being raised if an
-        # invalid cipher string is passed, but without the following check
-        # for the TLS 1.3 specific cipher suites it would never error.
-        tmpconn = Connection(self, None)
-        if tmpconn.get_cipher_list() == [
-            "TLS_AES_256_GCM_SHA384",
-            "TLS_CHACHA20_POLY1305_SHA256",
-            "TLS_AES_128_GCM_SHA256",
-        ]:
-            raise Error(
-                [
-                    (
-                        "SSL routines",
-                        "SSL_CTX_set_cipher_list",
-                        "no cipher match",
-                    ),
-                ],
-            )
+
+    @_require_not_used
+    def set_tls13_ciphersuites(self, ciphersuites: bytes) -> None:
+        """
+        Set the list of TLS 1.3 ciphers to be used in this context.
+        OpenSSL maintains a separate list of TLS 1.3+ ciphers to
+        ciphers for TLS 1.2 and lowers.
+
+        See the OpenSSL manual for more information (e.g.
+        :manpage:`ciphers(1)`).
+
+        :param bytes ciphersuites: An OpenSSL cipher string containing
+            TLS 1.3+ ciphersuites.
+        :return: None
+
+        .. versionadded:: 25.2.0
+        """
+        if not isinstance(ciphersuites, bytes):
+            raise TypeError("ciphersuites must be a byte string.")
+
+        _openssl_assert(
+            _lib.SSL_CTX_set_ciphersuites(self._context, ciphersuites) == 1
+        )
 
     @_require_not_used
     def set_client_ca_list(
@@ -1712,6 +1722,14 @@ class Context:
             raise TypeError("mode must be an integer")
 
         return _lib.SSL_CTX_set_mode(self._context, mode)
+
+    @_require_not_used
+    def clear_mode(self, mode_to_clear: int) -> int:
+        """
+        Modes previously set cannot be overwritten without being
+        cleared first. This method should be used to clear existing modes.
+        """
+        return _lib.SSL_CTX_clear_mode(self._context, mode_to_clear)
 
     @_require_not_used
     def set_tlsext_servername_callback(
@@ -2210,7 +2228,7 @@ class Connection:
         """
         return _lib.SSL_pending(self._ssl)
 
-    def send(self, buf: bytes, flags: int = 0) -> int:
+    def send(self, buf: _Buffer, flags: int = 0) -> int:
         """
         Send data on the connection. NOTE: If you get one of the WantRead,
         WantWrite or WantX509Lookup exceptions on this, you have to call the
@@ -2238,7 +2256,7 @@ class Connection:
 
     write = send
 
-    def sendall(self, buf: bytes, flags: int = 0) -> int:
+    def sendall(self, buf: _Buffer, flags: int = 0) -> int:
         """
         Send "all" data on the connection. This calls send() repeatedly until
         all data is sent. If an error occurs, it's impossible to tell how much
@@ -2370,7 +2388,7 @@ class Connection:
 
         return _ffi.buffer(buf, result)[:]
 
-    def bio_write(self, buf: bytes) -> int:
+    def bio_write(self, buf: _Buffer) -> int:
         """
         If the Connection was created with a memory BIO, this method can be
         used to add bytes to the read end of that memory BIO.  The Connection
@@ -3195,3 +3213,27 @@ class Connection:
             self._ssl, _lib.TLSEXT_STATUSTYPE_ocsp
         )
         _openssl_assert(rc == 1)
+
+    def set_info_callback(
+        self, callback: Callable[[Connection, int, int], None]
+    ) -> None:
+        """
+        Set the information callback to *callback*. This function will be
+        called from time to time during SSL handshakes.
+
+        :param callback: The Python callback to use.  This should take three
+            arguments: a Connection object and two integers.  The first integer
+            specifies where in the SSL handshake the function was called, and
+            the other the return code from a (possibly failed) internal
+            function call.
+        :return: None
+        """
+
+        @wraps(callback)
+        def wrapper(ssl, where, return_code):  # type: ignore[no-untyped-def]
+            callback(Connection._reverse_mapping[ssl], where, return_code)
+
+        self._info_callback = _ffi.callback(
+            "void (*)(const SSL *, int, int)", wrapper
+        )
+        _lib.SSL_set_info_callback(self._ssl, self._info_callback)

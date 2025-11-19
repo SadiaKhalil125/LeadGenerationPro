@@ -1,6 +1,6 @@
 # Natural Language Toolkit: Twitter API
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Author: Ewan Klein <ewan@inf.ed.ac.uk>
 #         Lorenzo Rubio <lrnzcig@gmail.com>
 # URL: <https://www.nltk.org/>

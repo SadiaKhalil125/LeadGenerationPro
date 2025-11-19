@@ -1,6 +1,6 @@
 # Natural Language Toolkit: Punkt sentence tokenizer
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Algorithm: Kiss & Strunk (2006)
 # Author: Willy <willy@csse.unimelb.edu.au> (original Python port)
 #         Steven Bird <stevenbird1@gmail.com> (additions)
@@ -1761,7 +1761,7 @@ def load_punkt_params(lang_dir):
     # Make a new Parameters object:
     params = PunktParameters()
     with open(f"{lang_dir}/collocations.tab", encoding="utf-8") as f:
-        params.collocations = pdec.tab2tups(f)
+        params.collocations = set(pdec.tab2tups(f))
     with open(f"{lang_dir}/sent_starters.txt", encoding="utf-8") as f:
         params.sent_starters = pdec.txt2set(f)
     with open(f"{lang_dir}/abbrev_types.txt", encoding="utf-8") as f:

@@ -1,6 +1,6 @@
 # Natural Language Toolkit: NIST Score
 #
-# Copyright (C) 2001-2024 NLTK Project
+# Copyright (C) 2001-2025 NLTK Project
 # Authors:
 # Contributors:
 # URL: <https://www.nltk.org/>
