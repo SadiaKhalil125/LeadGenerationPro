@@ -33,7 +33,7 @@ class PaginationConfig(BaseModel):
     # for path
     path_pattern: Optional[str] = None
 
-    # for button click or ajax
+    # for button click or ajax or scroll (with wait)
     button_selector: Optional[str] = None
     wait_selector: Optional[str] = None
 
@@ -60,6 +60,7 @@ class ScrapeResponse(BaseModel):
 class Attribute(BaseModel):
     name: str
     datatype: str   # e.g. "text", "int", "bool"
+    check_for_unique: Optional[bool] = False     # for de-duplication check
 
 class EntityRequest(BaseModel):
     name: str   # table name
@@ -92,7 +93,7 @@ class MappingsListResponse(BaseModel):
     mappings: List[MappingInfo]
 
 class PaginationConfig(BaseModel):
-    type: str  # "query_param" | "offset" | "path" | "button_click" | "scroll" | "ajax_click"
+    type: str  # "query_param" | "offset" | "path" | "button_click" | "scroll" 
     param_name: Optional[str] = "page"  # for query or offset
     start_page: Optional[int] = 1
     page_size: Optional[int] = None   # for offset
