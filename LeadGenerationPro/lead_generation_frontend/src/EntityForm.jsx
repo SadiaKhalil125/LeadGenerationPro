@@ -9,7 +9,7 @@ const EntityForm = () => {
   const navigate = useNavigate();
   
   const addAttribute = () => {
-    setAttributes([...attributes, { name: "", datatype: "text" }]);
+    setAttributes([...attributes, { name: "", datatype: "text", check_for_unique: false }]);
   };
 
   const updateAttribute = (index, field, value) => {
@@ -70,8 +70,8 @@ const EntityForm = () => {
           {/* Header */}
           <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-100">
             <div className="flex items-center">
-              <div className="bg-teal-50 p-3 rounded-xl mr-4">
-                <Database className="text-teal-600" size={28} />
+              <div className="bg-teal-50 p-3 rounded-lg mr-4">
+                <Database className="text-teal-600" size={30} />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Create Entity</h1>
@@ -89,14 +89,16 @@ const EntityForm = () => {
 
           {/* Entity Name Input */}
           <div className="mb-8">
-            <label htmlFor="entityName" className="block text-sm font-medium text-gray-700 mb-3 flex items-center">
-              <Sparkles size={16} className="mr-2 text-teal-500" />
+            <label htmlFor="entityName" className="block text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <div className="bg-teal-50 p-1 rounded-lg mr-3">
+                <Sparkles className="text-teal-600" size={18} />
+              </div>
               Entity Name
             </label>
             <input
               type="text"
               id="entityName"
-              placeholder="e.g., users, products, orders"
+              placeholder="e.g. user, product, company"
               value={entityName}
               onChange={(e) => setEntityName(e.target.value)}
               className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-gray-50 focus:bg-white"
@@ -106,7 +108,7 @@ const EntityForm = () => {
           {/* Attributes Section Header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-              <div className="bg-teal-50 p-2 rounded-lg mr-3">
+              <div className="bg-teal-50 p-1 rounded-lg mr-3">
                 <Columns className="text-teal-600" size={18} />
               </div>
               Attributes
@@ -125,43 +127,67 @@ const EntityForm = () => {
                 <p className="text-sm text-gray-400 mt-1">Click "Add Attribute" to get started</p>
               </div>
             ) : (
-              attributes.map((attr, index) => (
-                <div key={index} className="flex items-start gap-4 p-5 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
-                  <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                      <input
-                        type="text"
-                        placeholder="e.g., email, price, created_at"
-                        value={attr.name}
-                        onChange={(e) => updateAttribute(index, "name", e.target.value)}
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Data Type</label>
-                      <select
-                        value={attr.datatype}
-                        onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-white"
-                      >
-                        <option value="text">String</option>
-                        <option value="int">Integer</option>
-                        <option value="bool">Boolean</option>
-                        <option value="Float">Float</option>
-                        <option value="Date">Date</option>
-                      </select>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="mt-8 p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
-                    onClick={() => deleteAttribute(index)}
-                    title="Delete attribute"
+                attributes.map((attr, index) => (
+                  <div
+                    key={index}
+                    className="flex items-start gap-4 p-5 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
                   >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
+
+                    {/* Left side grid (Name + Datatype + Checkbox) */}
+                    <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                      {/* Name */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. name, email"
+                          value={attr.name}
+                          onChange={(e) => updateAttribute(index, "name", e.target.value)}
+                          className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200"
+                        />
+                      </div>
+
+                      {/* Datatype */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">Data Type</label>
+                        <select
+                          value={attr.datatype}
+                          onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
+                          className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200 bg-white"
+                        >
+                          <option value="text">String</option>
+                          <option value="int">Integer</option>
+                          <option value="bool">Boolean</option>
+                          <option value="Float">Float</option>
+                          <option value="Date">Date</option>
+                        </select>
+                      </div>
+
+                      {/* NEW — Checkbox */}
+                      <div className="flex items-center mt-6">
+                        <input
+                          type="checkbox"
+                          checked={attr.check_for_unique}
+                          onChange={(e) => updateAttribute(index, "check_for_unique", e.target.checked)}
+                          className="h-5 w-5 text-teal-600 border-gray-300 rounded"
+                        />
+                        <label className="text-sm text-gray-900">Check Duplicate Against</label>
+                      </div>
+
+                    </div>
+
+                    {/* Delete Button */}
+                    <button
+                      type="button"
+                      className="mt-8 p-2.5 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
+                      onClick={() => deleteAttribute(index)}
+                      title="Delete attribute"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+
+                  </div>
               ))
             )}
           </div>

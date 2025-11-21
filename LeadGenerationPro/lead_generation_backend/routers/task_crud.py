@@ -302,30 +302,31 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
     
 async def upsert_entity_record(cur,entity_name: str, source_name: str, item: dict):
     """
-    Upsert row on (source, name).
+    Upsert row based on the entity's unique index. To avoid de-duplication.
+    Assumes a unique index exists named '{table_name}_unique_composite_idx'.
     """
-   
-    name_val = item.get("name")  # adjust if column is named differently
-
     # Ensure source & modified_at are present
     item["source"] = source_name
     item["modified_at"] = datetime.now()
-
     columns = list(item.keys())
     values = list(item.values())
+
+    constraint_name = f"{entity_name}_unique_composite_idx"
     logger.debug("Reached upsert stage for entity=%s, name=%s", entity_name, item.get('name'))
+
     insert_stmt = sql.SQL("""
-        INSERT INTO {} ({})
-        VALUES ({})
-        ON CONFLICT (source, name) DO UPDATE 
-        SET {}, modified_at = NOW()
+        INSERT INTO {table} ({cols})
+        VALUES ({vals})
+        ON CONFLICT ON CONSTRAINT {constraint}
+        DO UPDATE SET {updates}, modified_at = NOW()
     """).format(
-        sql.Identifier(entity_name),
-        sql.SQL(', ').join(map(sql.Identifier, columns)),
-        sql.SQL(', ').join(sql.Placeholder() * len(columns)),
-        sql.SQL(', ').join(
+        table=sql.Identifier(entity_name),
+        cols=sql.SQL(", ").join(map(sql.Identifier, columns)),
+        vals=sql.SQL(", ").join(sql.Placeholder() * len(columns)),
+        constraint=sql.Identifier(constraint_name),
+        updates=sql.SQL(", ").join(
             sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
-            for col in columns if col not in ("source", "name", "modified_at")
+            for col in columns if col != "modified_at"
         )
     )
     try:

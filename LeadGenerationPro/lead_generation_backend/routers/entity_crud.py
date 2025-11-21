@@ -28,20 +28,20 @@ TYPE_MAP = {
 
 @router.post("/save-entity", response_model=dict)
 async def save_entity(request: EntityRequest):
-    """Save a new entity configuration."""
     try:
         conn, cur = get_db_cursor()
         table_name = request.name.strip()
         if not table_name or not request.attributes:
             raise HTTPException(status_code=400, detail="Table name and attributes required.")
 
-        # Build base columns
-        cols = [sql.SQL("id SERIAL PRIMARY KEY")]
-        cols.append(sql.SQL("modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
-        cols.append(sql.SQL("source TEXT NULL"))
+        cols = [
+            sql.SQL("id SERIAL PRIMARY KEY"),
+            sql.SQL("modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+            sql.SQL("source TEXT NULL")
+        ]
 
-        # Track whether we’ve already added a "name" column
         name_column_added = False
+        unique_fields = []
 
         for attr in request.attributes:
             fname = attr.name.strip()
@@ -50,13 +50,14 @@ async def save_entity(request: EntityRequest):
             if not fname or dt not in TYPE_MAP:
                 raise HTTPException(status_code=400, detail=f"Invalid field or datatype: {dt}")
 
-            # Normalize any "name-like" column to just 'name'
             if "name" in fname.lower():
                 if name_column_added:
-                    # Skip adding duplicate name-like column
                     continue
                 fname = "name"
                 name_column_added = True
+
+            if getattr(attr, "check_for_unique", False):
+                unique_fields.append(fname)
 
             cols.append(
                 sql.SQL("{} {}").format(
@@ -65,27 +66,38 @@ async def save_entity(request: EntityRequest):
                 )
             )
 
-        # Add UNIQUE constraint at the end
-        cols.append(sql.SQL("UNIQUE (source, name)"))
+        # Determine fields for unique constraint: Use all attributes if none selected
+        if not unique_fields:              
+            unique_fields = [
+                attr.name.strip() if "name" not in attr.name.lower() else "name"
+                for attr in request.attributes
+            ]
 
-        # Create table
+        unique_fields.insert(0, "source")  #So same records from different sources can coexist (to test for now)
+        constraint_name = f"{table_name}_unique_composite_idx"
+
+        # --- CREATE TABLE WITH UNIQUE CONSTRAINT ---
         create_stmt = sql.SQL("""
             CREATE TABLE IF NOT EXISTS {table} (
-                {fields}
+                {fields},
+                CONSTRAINT {constraint} UNIQUE ({unique_fields})
             );
         """).format(
             table=sql.Identifier(table_name),
-            fields=sql.SQL(", ").join(cols)
+            fields=sql.SQL(", ").join(cols),
+            constraint=sql.Identifier(constraint_name),
+            unique_fields=sql.SQL(", ").join([sql.Identifier(f) for f in unique_fields])
         )
+
         cur.execute(create_stmt)
+
         conn.commit()
         cur.close()
 
         return {
             "success": True,
             "message": f"Entity '{table_name}' created successfully.",
-            "table_name": table_name,
-            "columns_created": len(cols)
+            "unique_index_fields": unique_fields
         }
 
     except Exception as e:
