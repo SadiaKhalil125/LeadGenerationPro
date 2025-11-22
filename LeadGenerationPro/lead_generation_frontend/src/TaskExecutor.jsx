@@ -31,6 +31,7 @@ const TaskExecution = () => {
   const [selectedTaskLogs, setSelectedTaskLogs] = useState(null); // Selected task for detailed logs
   const [taskLogs, setTaskLogs] = useState({}); // Stores logs for tasks
   const [taskExecutions, setTaskExecutions] = useState({}); // Stores execution summaries
+  const [currentExecutions, setCurrentExecutions] = useState({}); // taskId -> bool
   const [selectedExecutionId, setSelectedExecutionId] = useState(null); // Selected execution for filtering
 
   useEffect(() => {
@@ -47,7 +48,14 @@ const TaskExecution = () => {
         }
       });
       const data = await res.json();
-      setTasks(data.tasks || []);
+      const tasksList = data.tasks || [];
+      setTasks(tasksList);
+      // Fetch execution summary for each task to determine if any are currently running
+      try {
+        await Promise.all(tasksList.map(t => fetchTaskExecutions(t.id)));
+      } catch (e) {
+        // ignore per-task failures
+      }
     } catch (error) {
       console.error('Error fetching tasks:', error);
       setResponse({ type: 'error', message: 'Failed to fetch tasks' });
@@ -212,6 +220,9 @@ const TaskExecution = () => {
       
       if (res.ok) {
         setTaskExecutions(prev => ({ ...prev, [taskId]: data }));
+        // mark whether any execution is current
+        const isCurrent = (data.executions || []).some(e => e.is_current);
+        setCurrentExecutions(prev => ({ ...prev, [taskId]: !!isCurrent }));
         return data;
       }
     } catch (error) {
@@ -374,6 +385,11 @@ const TaskExecution = () => {
                         </div>
                         <div className="flex sm:flex-col items-end gap-3 self-end sm:self-auto shrink-0">
                           {getStatusBadge(task.scheduled_time)}
+                          {currentExecutions[task.id] && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 mr-2">
+                              CURRENT
+                            </span>
+                          )}
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => fetchExecutionHistory(task.id)}
@@ -470,7 +486,19 @@ const TaskExecution = () => {
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold mb-3">Execution History</h3>
                   <div className="space-y-2">
-                    {taskExecutions[selectedTaskLogs].executions.map((exec) => (
+                    {(() => {
+                      // Show currently running executions first
+                      const execs = taskExecutions[selectedTaskLogs].executions.slice();
+                      execs.sort((a, b) => {
+                        // put current ones first
+                        if (a.is_current && !b.is_current) return -1;
+                        if (!a.is_current && b.is_current) return 1;
+                        // then by start_time desc
+                        const aTime = a.start_time ? new Date(a.start_time) : 0;
+                        const bTime = b.start_time ? new Date(b.start_time) : 0;
+                        return bTime - aTime;
+                      });
+                      return execs.map((exec) => (
                       <button
                         key={exec.execution_id}
                         onClick={() => filterByExecution(selectedTaskLogs, exec.execution_id)}
@@ -481,12 +509,19 @@ const TaskExecution = () => {
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3">
                             <Clock size={16} className="text-gray-500" />
-                            <div>
-                              <p className="font-medium text-sm">
-                                {exec.start_time ? formatDateTime(exec.start_time) : 'Unknown time'}
-                              </p>
+                            <div className="flex items-center gap-3">
+                              <div>
+                                <p className="font-medium text-sm">
+                                  {exec.start_time ? formatDateTime(exec.start_time) : 'Unknown time'}
+                                </p>
+                              </div>
+                              {exec.is_current && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                                  CURRENT
+                                </span>
+                              )}
                               <p className="text-xs text-gray-500">
                                 {exec.log_count} logs • {exec.error_count} errors
                                 {exec.duration_ms && ` • ${(exec.duration_ms / 1000).toFixed(2)}s`}
@@ -505,7 +540,8 @@ const TaskExecution = () => {
                           </div>
                         </div>
                       </button>
-                    ))}
+                    ));
+                  })()}
                   </div>
                 </div>
               )}

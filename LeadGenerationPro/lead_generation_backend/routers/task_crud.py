@@ -963,25 +963,37 @@ async def get_task_execution_summary(task_id: int):
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
         
-        # Get execution summaries
+        # Get execution summaries and mark currently running executions.
+        # We consider an execution 'current' if its latest log status is
+        # 'processing' or 'started'. Use a CTE to get the latest status per
+        # execution_id and then aggregate.
         cur.execute("""
+            WITH latest_status AS (
+                SELECT DISTINCT ON (execution_id) execution_id, status, created_at
+                FROM task_execution_logs
+                WHERE task_id = %s
+                ORDER BY execution_id, created_at DESC
+            )
             SELECT 
-                execution_id,
-                MIN(created_at) as start_time,
-                MAX(created_at) as end_time,
-                MAX(CASE WHEN status = 'completed' THEN created_at END) as completed_at,
-                MAX(CASE WHEN status = 'failed' THEN created_at END) as failed_at,
-                MAX(execution_duration_ms) as duration_ms,
+                tel.execution_id,
+                MIN(tel.created_at) as start_time,
+                MAX(tel.created_at) as end_time,
+                MAX(CASE WHEN tel.status = 'completed' THEN tel.created_at END) as completed_at,
+                MAX(CASE WHEN tel.status = 'failed' THEN tel.created_at END) as failed_at,
+                MAX(tel.execution_duration_ms) as duration_ms,
                 COUNT(*) as log_count,
-                COUNT(CASE WHEN log_level = 'error' THEN 1 END) as error_count,
-                MAX(CASE WHEN status IN ('completed', 'failed') THEN status END) as final_status
-            FROM task_execution_logs
-            WHERE task_id = %s
-            GROUP BY execution_id
+                COUNT(CASE WHEN tel.log_level = 'error' THEN 1 END) as error_count,
+                MAX(CASE WHEN tel.status IN ('completed', 'failed') THEN tel.status END) as final_status,
+                ls.status as latest_status,
+                (CASE WHEN ls.status IN ('processing','started') THEN TRUE ELSE FALSE END) as is_current
+            FROM task_execution_logs tel
+            LEFT JOIN latest_status ls ON tel.execution_id = ls.execution_id
+            WHERE tel.task_id = %s
+            GROUP BY tel.execution_id, ls.status
             ORDER BY start_time DESC
             LIMIT 100
-        """, (task_id,))
-        
+        """, (task_id, task_id))
+
         executions = []
         for row in cur.fetchall():
             executions.append({
@@ -993,7 +1005,9 @@ async def get_task_execution_summary(task_id: int):
                 "duration_ms": row[5],
                 "log_count": row[6],
                 "error_count": row[7],
-                "final_status": row[8]
+                "final_status": row[8],
+                "latest_status": row[9],
+                "is_current": bool(row[10])
             })
         
         cur.close()
