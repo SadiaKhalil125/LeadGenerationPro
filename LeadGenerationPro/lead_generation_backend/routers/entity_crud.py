@@ -74,7 +74,8 @@ async def save_entity(request: EntityRequest):
             ]
 
         unique_fields.insert(0, "source")  #So same records from different sources can coexist (to test for now)
-        constraint_name = f"{table_name}_unique_composite_idx"
+        # Use lowercased constraint name to avoid case-sensitivity mismatches
+        constraint_name = f"{table_name.lower()}_unique_composite_idx"
 
         # --- CREATE TABLE WITH UNIQUE CONSTRAINT ---
         create_stmt = sql.SQL("""
