@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from models import TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig
+from models import TaskInfo,TaskRequest,TasksListResponse, SourceInfo, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig
 from fastapi import APIRouter
 from datetime import datetime
 from routers.get_db_connection import get_db_cursor
@@ -569,8 +569,11 @@ async def _execute_task_internal(task_id: int):
         scrape_start = datetime.now()
         scrape_response = await route_scraping_request(scrape_request)
         scrape_duration = int((datetime.now() - scrape_start).total_seconds() * 1000)
+
+        # clip to max_items (before was handled in crawler)
+        scrape_data = scrape_response.data[:max_items] if scrape_response.data else [] 
         
-        if not scrape_response.success or not scrape_response.data:
+        if not scrape_response.success or not scrape_data:
             error_details = {
                 'scraping_message': scrape_response.message,
                 'scraping_duration_ms': scrape_duration
@@ -590,7 +593,7 @@ async def _execute_task_internal(task_id: int):
         
         log_execution(conn, task_id, execution_id, 'processing', 'info', 
                      'Scraping completed successfully', {
-                         'items_scraped': len(scrape_response.data),
+                         'items_scraped': len(scrape_data),
                          'total_items_found': scrape_response.total_items,
                          'scraping_duration_ms': scrape_duration
                      })
@@ -629,14 +632,14 @@ async def _execute_task_internal(task_id: int):
         items_failed = 0
         upsert_errors = []
         
-        for idx, item in enumerate(scrape_response.data):
+        for idx, item in enumerate(scrape_data):
             insert_data = {col: item.get(col) for col in table_columns.keys()}
             try:
                 await upsert_entity_record(cur, entity_name, source_name, insert_data)
                 items_stored += 1
                 if (idx + 1) % 10 == 0:  # Log every 10 items
                     log_execution(conn, task_id, execution_id, 'processing', 'debug', 
-                                 f'Upserted {idx + 1}/{len(scrape_response.data)} items')
+                                 f'Upserted {idx + 1}/{len(scrape_data)} items')
             except Exception as e:
                 items_failed += 1
                 error_msg = str(e)
@@ -657,7 +660,7 @@ async def _execute_task_internal(task_id: int):
                      'Data upsert completed', {
                          'items_stored': items_stored,
                          'items_failed': items_failed,
-                         'total_items': len(scrape_response.data)
+                         'total_items': len(scrape_data)
                      })
 
         # update last_executed_at timestamp
@@ -673,7 +676,7 @@ async def _execute_task_internal(task_id: int):
         
         log_execution(conn, task_id, execution_id, 'completed', 'info', 
                      f'Task execution completed successfully', {
-                         'items_scraped': len(scrape_response.data),
+                         'items_scraped': len(scrape_data),
                          'items_stored': items_stored,
                          'items_failed': items_failed,
                          'total_execution_duration_ms': execution_duration,
@@ -686,7 +689,7 @@ async def _execute_task_internal(task_id: int):
             "task_name": task_name,
             "entity_name": entity_name,
             "message": f"Task '{task_name}' executed successfully",
-            "items_scraped": len(scrape_response.data),
+            "items_scraped": len(scrape_data),
             "items_stored": items_stored,
             "execution_id": execution_id,
             "scraping_details": {
@@ -1067,6 +1070,117 @@ async def preview_mapping(request: PreviewMappingRequest):
         return {
             "success": False,
             "message": f"Preview error: {str(e)}",
+            "data": [],
+            "total_items": 0
+        }
+
+def get_source_by_url(url: str):
+    """
+    Get a specific source by its URL.
+    """
+    try:
+        conn, cur = get_db_cursor()
+        cur.execute("""
+            SELECT id, name, url, pagination_config
+            FROM sources
+            WHERE url = %s;
+        """, (url,))
+        
+        row = cur.fetchone()
+        cur.close()
+
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Source with URL {url} not found")
+
+        return SourceInfo(
+            id=row[0],
+            name=row[1],
+            url=row[2],
+            pagination_config=PaginationConfig(**row[3]) if row[3] else None
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching source by URL: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch source: {str(e)}")
+    
+@router.post("/preview-next-mapping")
+async def preview_next_mapping(request: PreviewMappingRequest):
+    """Preview next page/scroll scraping results for a mapping configuration without saving."""
+    try:
+        source=get_source_by_url(request.url)
+        if source is None: #abhi k liye (not actually needed)
+            return {
+            "success": False,
+            "message": f"Next Preview failed: Source not found for URL {request.url}",
+            "data": [],
+            "total_items": 0
+        }
+
+        # Take a dict copy
+        pagination_dict = source.pagination_config.model_dump()  # All fields included
+
+
+        print ("Pagination:", pagination_dict["type"], ", Source:", source.name)
+       
+        if pagination_dict is None:
+            return {
+            "success": False,
+            "message": f"Next Preview failed: No pagination config found for source {source.get('name')}",
+            "data": [],
+            "total_items": 0
+        }
+        
+        # Prepare modified pagination config for preview
+        if pagination_dict["type"] not in ["button_click","scroll","ajax_click"]:
+            pagination_dict["max_pages"] = 2
+        elif pagination_dict["type"] in ["button_click","ajax_click"]:
+            pagination_dict["click_steps"] = 2
+        else:
+            pagination_dict["scroll_steps"] = 2
+
+
+        # Build ScrapeRequest from the preview request
+        scrape_request = ScrapeRequest(
+            entity_name=request.entity_name,
+            url=request.url,
+            container_selector=request.container_selector,
+            field_mappings=request.field_mappings,
+            max_items=500,  # setting 500 items to allow next page preview
+            timeout=15,
+            pagination_config=pagination_dict
+        )
+        print ("Going to execute")
+        # Execute scraping using the dynamic scraper
+        scrape_response = await route_scraping_request(scrape_request)
+        
+        if not scrape_response.success:
+            return {
+                "success": False,
+                "message": f"Next Preview failed: {scrape_response.message}",
+                "data": [],
+                "total_items": 0
+            }
+        
+        # Limit to last 5 items for preview if next page items are coming
+        preview_data = scrape_response.data[-5:] if scrape_response.data else []
+
+        print(f"Next Preview Success - showing {len(preview_data)} items from next page")
+        return {
+            "success": True,
+            "message": f"Next Preview Success - showing {len(preview_data)} items from next page",
+            "data": preview_data,
+            "total_items": scrape_response.total_items,
+            "entity_name": request.entity_name,
+            "url": request.url,
+            "scraped_at": scrape_response.scraped_at.isoformat()
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Next Preview error: {str(e)}",
             "data": [],
             "total_items": 0
         }

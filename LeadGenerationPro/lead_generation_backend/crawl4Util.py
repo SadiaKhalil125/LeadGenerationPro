@@ -97,7 +97,7 @@ def apply_button_click_pagination(config, pagination):
     
     print("Handling button/ajax click pagination")
 
-    click_steps = 15     # total number of clicks to perform (hard-coded to avoid infinite loops)
+    click_steps = pagination.click_steps if pagination.click_steps else 15     # total number of clicks to perform (hard-coded to avoid infinite loops)
     click_delay = 3      # seconds between clicks
     selector = pagination.button_selector
 
@@ -165,8 +165,11 @@ def get_target_url(request, pagination, page):
     if not pagination or (pagination.type in ["button_click", "ajax_click", "scroll"]):
         print(f"Fetching: {request.url}")
         return str(request.url)
+    if (page>1):
+        target = build_paginated_url(str(request.url), page, pagination)
+    else:
+        target=str(request.url) #use base url for first page
 
-    target = build_paginated_url(str(request.url), page, pagination)
     print(f"Fetching page {page} from url: {target}")
     return target
 
@@ -213,17 +216,19 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 all_data.extend(page_data)
                 print(f"✅ Page {page}: {len(page_data)} items (total={len(all_data)})")
 
-                # ---- Stop by max items ----
-                if request.max_items and len(all_data) >= request.max_items:
-                    all_data = all_data[:request.max_items]
-                    break
-
-                # ---- Stop by pagination max pages ----
+                # moved these 2 stopping conditions before max_items to support next preview (that needs all items returned to show last 5 items from the next page/scroll)
+                
+                # ---- 1. Stop by pagination max pages ----
                 if pagination and pagination.max_pages and page >= pagination.max_pages:
                     break
+                
+                 # ---- 2. Scroll AND Click pagination runs only once ----
+                if pagination and (pagination.type in ["button_click", "ajax_click", "scroll"]):
+                    break
 
-                # ---- Scroll pagination runs only once ----
-                if pagination and (pagination.type == "scroll"):
+                # ---- 3. Stop by max items ----
+                if request.max_items and len(all_data) >= request.max_items:
+                    all_data = all_data[:request.max_items]
                     break
 
                 # ---- No pagination? Only one iteration ----
