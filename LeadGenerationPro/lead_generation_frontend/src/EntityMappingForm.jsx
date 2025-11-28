@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, Code } from "lucide-react";
+import { Eye, ArrowRightCircle, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, Code } from "lucide-react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -426,6 +426,69 @@ export default function EntityMappingScreen() {
     }
   };
 
+  const handleNextPreview = async (entity) => {
+    if (!source.trim() || !url.trim()) {
+      alert("Source and URL are required!");
+      return;
+    }
+
+    const entityInfo = entityData[entity];
+    const field_mappings = {};
+    let hasValidMappings = false;
+
+    entityInfo.fields
+      .filter((f) => f.attribute.toLowerCase() !== "id")
+      .forEach((f) => {
+        if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
+          field_mappings[f.attribute] = {
+            selector: f.selector || "",
+            extract: f.metadata || "text",
+          };
+          hasValidMappings = true;
+        } else if (f.selector.trim()) {
+          field_mappings[f.attribute] = {
+            selector: f.selector,
+            extract: f.metadata || "text",
+          };
+          hasValidMappings = true;
+        }
+      });
+
+    if (!hasValidMappings) {
+      alert("Add at least one field mapping!");
+      return;
+    }
+
+    setPreviewLoading(true);
+    setPreviewEntity(entity);
+
+    try {
+      const res = await fetch(`${API_BASE}/task/preview-next-mapping`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json",
+                   "ngrok-skip-browser-warning": "true"
+         },
+        body: JSON.stringify({
+          url,
+          entity_name: entity,
+          container_selector: entityInfo.containerSelector || null,
+          field_mappings,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setPreviewData(data);
+      } else {
+        alert(`Preview failed: ${data.message}`);
+      }
+    } catch (err) {
+      alert(`Preview error: ${err.message}`);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };  
+  
   const handleSave = async () => {
     if (!source.trim() || !url.trim()) {
       alert("Source and URL required!");
@@ -600,22 +663,23 @@ export default function EntityMappingScreen() {
                   </h2>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => toggleEntityStatus(entity)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white shadow-md"
-                      style={{ backgroundColor: entityData[entity]?.enabled ? "#10b981" : "#6b7280" }}
-                    >
-                      {entityData[entity]?.enabled ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                      {entityData[entity]?.enabled ? "Enabled" : "Disabled"}
-                    </button>
-
-                    <button
                       onClick={() => handlePreview(entity)}
-                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-teal-500 to-teal-600 text-white rounded-lg shadow-md hover:bg-teal-700"
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-emerald-400 to-emerald-500 text-white rounded-lg shadow-sm hover:bg-emerald-800"
                       disabled={previewLoading}
                     >
                       <Eye size={16} />
                       {previewLoading && previewEntity === entity ? 'Loading...' : 'Preview'}
                     </button>
+                    <button
+                      onClick={() => handleNextPreview(entity)}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-cyan-500 to-cyan-600 text-white rounded-lg shadow-sm hover:bg-cyan-800"
+                      disabled={previewLoading}
+                    >
+                      <ArrowRightCircle size={16} /> {/* You can use any icon you like */}
+                      {previewLoading && previewEntity === entity ? 'Loading...' : 'Next Preview'}
+                    </button>
+
+
                   </div>
                 </div>
 
@@ -630,7 +694,7 @@ export default function EntityMappingScreen() {
                 {!isGoogleMaps && (
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-600 mb-2">
-                      CONTAINER SELECTOR (optional)
+                      CONTAINER SELECTOR
                     </label>
                     <input
                       placeholder=".class or #main"
@@ -693,7 +757,7 @@ export default function EntityMappingScreen() {
               </button>
               <button
                 onClick={() => window.location.href = "/mappingmanager"}
-                className="px-8 py-5 bg-gradient-to-b from-blue-500 to-blue-600 text-white rounded-2xl shadow-xl font-bold text-xl hover:scale-105 transition-all"
+                className="px-16 py-5 bg-gradient-to-b from-gray-200 to-gray-300 text-teal-900 font-bold rounded-2xl shadow-xl font-bold text-xl hover:scale-105 transition-all"
               >
                 Go to Mappings
               </button>

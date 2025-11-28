@@ -39,6 +39,7 @@ class PaginationConfig(BaseModel):
 
     # for scroll
     scroll_steps: Optional[int] = None
+    click_steps: Optional[int] = None
 class ScrapeRequest(BaseModel):
     entity_name: str
     url: HttpUrl
@@ -60,7 +61,7 @@ class ScrapeResponse(BaseModel):
 class Attribute(BaseModel):
     name: str
     datatype: str   # e.g. "text", "int", "bool"
-    check_for_unique: Optional[bool] = False     # for de-duplication check
+    check_for_unique: Optional[bool] = False
 
 class EntityRequest(BaseModel):
     name: str   # table name
@@ -108,6 +109,8 @@ class PaginationConfig(BaseModel):
 
     # for scroll
     scroll_steps: Optional[int] = None
+    click_steps: Optional[int] = None
+    
 class SourceInfo(BaseModel):
     id: int
     name: str
@@ -162,3 +165,4 @@ class PreviewMappingRequest(BaseModel):
     entity_name: str
     container_selector: Optional[str] = None
     field_mappings: Dict[str, FieldMapping]
+    
