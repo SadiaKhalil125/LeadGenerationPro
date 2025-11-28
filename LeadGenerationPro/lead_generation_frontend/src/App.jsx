@@ -12,6 +12,7 @@ import TaskScheduler from './TaskScheduler'
 import NavigationPage from './NavigationPage'
 import TasksManagement from './TasksManagement'
 import TaskExecutor from './TaskExecutor'
+import TaskLogs from './TaskLogs'
 import SourceManagement from './SourceManager';
 import EntityDataPage from './EntityDataPage';
 import SourceCreator from './SourceCreator';
@@ -34,6 +35,7 @@ function App() {
         <Route path="/taskscheduler" element={<TaskScheduler />} />
         <Route path="/tasksmanagement" element={<TasksManagement />} />
         <Route path="/taskexecutor" element={<TaskExecutor />} />
+        <Route path="/task-logs/:taskId" element={<TaskLogs />} />
         <Route path="/webscraperform" element={<WebScraperForm />} />
         <Route path="/sourcemanagement" element={<SourceManagement />} />
         <Route path="/entity-data" element={<EntityDataPage />} />

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
 import API_BASE from "./api_base";
 const EntityDataScreen = () => {
+  const [searchParams] = useSearchParams();
   const [entities, setEntities] = useState([]);
   const [selectedEntity, setSelectedEntity] = useState(null);
   const [data, setData] = useState(null);
@@ -10,10 +12,22 @@ const EntityDataScreen = () => {
   const [error, setError] = useState(null);
   const [pageSize] = useState(10);  // or make it adjustable
 
+  // Get entity from query parameter if provided
+  const entityFromParam = searchParams.get('entity');
 
   useEffect(() => {
     fetchEntities();
   }, []);
+
+  // Auto-select entity from URL parameter when entities load
+  useEffect(() => {
+    if (entityFromParam && entities.length > 0 && !selectedEntity) {
+      const matchingEntity = entities.find(e => e.name === entityFromParam);
+      if (matchingEntity) {
+        setSelectedEntity(entityFromParam);
+      }
+    }
+  }, [entityFromParam, entities, selectedEntity]);
 
   useEffect(() => {
     if (selectedEntity) {
