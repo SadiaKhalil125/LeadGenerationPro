@@ -15,6 +15,9 @@ import TaskExecutor from './TaskExecutor'
 import SourceManagement from './SourceManager';
 import EntityDataPage from './EntityDataPage';
 import SourceCreator from './SourceCreator';
+import Homepage from './Homepage'
+import Login from './Login'
+import Chatbot from './Chatbot'
 
 function App() {
 
@@ -35,6 +38,9 @@ function App() {
         <Route path="/sourcemanagement" element={<SourceManagement />} />
         <Route path="/entity-data" element={<EntityDataPage />} />
         <Route path="/addsource" element={<SourceCreator />} />
+        <Route path="/login" element={<Login/>} />
+        <Route path="/homepage" element={<Homepage/>}/>
+        <Route path="/chatbot" element={<Chatbot />} />
       </Routes>
     </BrowserRouter>
   );
