@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from models import TaskInfo,TaskRequest,TasksListResponse, SourceInfo, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig
+from models import TaskInfo,TaskRequest,TasksListResponse, SourceInfo, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig, CaptchaParams
 from fastapi import APIRouter
 from datetime import datetime
 from routers.get_db_connection import get_db_cursor
@@ -514,6 +514,8 @@ async def _execute_task_internal(task_id: int):
                 s.name as source_name,
                 s.url as source_url,
                 s.pagination_config,
+                s.is_captcha_protected,
+                s.captcha_params,
                 t.mapping_id,
                 t.repeat,
                 t.max_items,
@@ -535,7 +537,7 @@ async def _execute_task_internal(task_id: int):
         
         
         # Extract task information
-        (task_id_db, task_name, source_id, source_name, source_url, pagination_config,
+        (task_id_db, task_name, source_id, source_name, source_url, pagination_config, is_captcha_protected, captcha_params,
          mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings) = task_data
 
         log_execution(conn, task_id, execution_id, 'processing', 'info', 
@@ -552,6 +554,7 @@ async def _execute_task_internal(task_id: int):
         log_execution(conn, task_id, execution_id, 'processing', 'info', 
                      'Building scrape request')
         
+        # Build ScrapeRequest from task data
         scrape_request = ScrapeRequest(
             entity_name=entity_name,
             url=source_url,
@@ -559,7 +562,13 @@ async def _execute_task_internal(task_id: int):
             container_selector=container_selector,
             field_mappings=field_mappings,
             max_items=max_items,
-            timeout=500
+            timeout=30,
+            captcha_params=captcha_params if is_captcha_protected else None
+        )
+        # if user left params to us to auto-detect
+        if is_captcha_protected and scrape_request.captcha_params is None:
+            scrape_request.captcha_params = CaptchaParams(
+                site_url=source_url  # minimal required field from your model
         )
         
         # Execute scraping using the dynamic scraper (now properly async)

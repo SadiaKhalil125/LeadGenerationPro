@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, ArrowRightCircle, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, Code } from "lucide-react";
+import { Eye, ArrowRight, ArrowRightCircle, ArrowRightCircleIcon, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, Code } from "lucide-react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -256,6 +256,7 @@ export default function EntityMappingScreen() {
   
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const[previewNextLoading, setPreviewNextLoading] = useState(false);
   const [previewEntity, setPreviewEntity] = useState(null);
 
 
@@ -459,7 +460,7 @@ export default function EntityMappingScreen() {
       return;
     }
 
-    setPreviewLoading(true);
+    setPreviewNextLoading(true);
     setPreviewEntity(entity);
 
     try {
@@ -480,15 +481,15 @@ export default function EntityMappingScreen() {
       if (data.success) {
         setPreviewData(data);
       } else {
-        alert(`Preview failed: ${data.message}`);
+        alert(`Preview Next failed: ${data.message}`);
       }
     } catch (err) {
-      alert(`Preview error: ${err.message}`);
+      alert(`Preview Next error: ${err.message}`);
     } finally {
-      setPreviewLoading(false);
+      setPreviewNextLoading(false);
     }
   };  
-  
+
   const handleSave = async () => {
     if (!source.trim() || !url.trim()) {
       alert("Source and URL required!");
@@ -547,7 +548,7 @@ export default function EntityMappingScreen() {
     <div className="flex h-screen bg-gray-50">
       <div className="w-1/2 h-full overflow-y-auto p-8">
         <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl border-t-8 border-teal-400 p-10">
-          <h1 className="text-3xl font-bold text-center text-teal-600 mb-8">
+          <h1 className="text-3xl font-bold text-center text-gray-700 mb-8">
             Entity Mapping Configuration
           </h1>
 
@@ -673,13 +674,12 @@ export default function EntityMappingScreen() {
                     <button
                       onClick={() => handleNextPreview(entity)}
                       className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-cyan-500 to-cyan-600 text-white rounded-lg shadow-sm hover:bg-cyan-800"
-                      disabled={previewLoading}
+                      disabled={previewNextLoading}
                     >
                       <ArrowRightCircle size={16} /> {/* You can use any icon you like */}
-                      {previewLoading && previewEntity === entity ? 'Loading...' : 'Next Preview'}
+                      {previewNextLoading && previewEntity === entity ? 'Loading...' : 'Next Preview'}
                     </button>
-
-
+                    
                   </div>
                 </div>
 
@@ -757,7 +757,7 @@ export default function EntityMappingScreen() {
               </button>
               <button
                 onClick={() => window.location.href = "/mappingmanager"}
-                className="px-16 py-5 bg-gradient-to-b from-gray-200 to-gray-300 text-teal-900 font-bold rounded-2xl shadow-xl font-bold text-xl hover:scale-105 transition-all"
+                className="px-16 py-5 bg-gradient-to-b from-gray-200 to-gray-300 text-teal-900 rounded-2xl shadow-xl font-extrabold text-xl hover:scale-105 transition-all"
               >
                 Go to Mappings
               </button>

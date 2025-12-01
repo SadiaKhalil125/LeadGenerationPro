@@ -4,6 +4,9 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, JsonCssExtractionStrategy
 from models import ScrapeRequest, ScrapeResponse, FieldMapping, PaginationConfig
 from datetime import datetime
+from CapSolverUtil import solve_captcha_auto
+
+CAPSOLVER_API_KEY = "CAP-BA92F348AE81B7F394B902A4C1F9559828C02FE0B9E32A73BF8C08A5C3941E17" # no credits lol
 
 def build_paginated_url(base_url: str, page: int, pagination: PaginationConfig) -> str:
     """Build next page URL based on pagination type."""
@@ -131,34 +134,7 @@ def apply_button_click_pagination(config, pagination):
 
     # total wait = number of clicks × delay per click
     config.delay_before_return_html = click_steps * click_delay
-
     return config
-
-
-# def apply_button_click_pagination(config, pagination, page):
-#     print(f"Handling button/ajax click pagination for page {page}")
-#     if page == pagination.start_page:
-#         # First page: standard load
-#         config.session_id = "btn_pg_session"
-#         config.js_only = False
-#         config.js_code = None
-#         config.wait_for = None
-#         config.delay_before_return_html = 5
-#     else:
-#         click_selector = pagination.button_selector
-#         js_click = f"""
-#             const btn = document.querySelector("{click_selector}");
-#             if (btn) btn.click();
-#         """
-#         config.session_id = "btn_pg_session"
-#         config.js_only = True
-#         config.js_code = js_click
-
-#         # ⬇️ WAIT 5 SECONDS AFTER CLICK
-#         config.wait_for = None
-#         config.delay_before_return_html = 5
-
-#     return config
 
 
 def get_target_url(request, pagination, page):
@@ -185,6 +161,55 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
     page = pagination.start_page if pagination and pagination.start_page else 1
 
     all_data = []
+
+    # ---- CAPTCHA HANDLING (if passed in request) ----
+    captcha=request.captcha_params
+    if captcha is not None:
+        print("🧩 Handling captcha…")
+        try:
+            captcha_result = await solve_captcha_auto(
+               api_key=captcha.api_key if captcha.api_key else CAPSOLVER_API_KEY,
+               site_url=captcha.site_url if captcha.site_url else str(request.url),
+               site_key=captcha.site_key if captcha.site_key else None,
+               captcha_type=captcha.captcha_type if captcha.captcha_type else None
+            )
+            print("Captcha result:", captcha_result)
+                 
+        except Exception as e:
+            print("Captcha solving error:", str(e))
+            return ScrapeResponse(
+                entity_name=request.entity_name,
+                url=str(request.url),
+                scraped_at=datetime.now(),
+                total_items=0,
+                data=[],
+                success=False,
+                message=f"Captcha failed: {str(e)}"
+            )
+
+        if not captcha_result.get("success"):
+            return ScrapeResponse(
+                entity_name=request.entity_name,
+                url=str(request.url),
+                scraped_at=datetime.now(),
+                total_items=0,
+                data=[],
+                success=False,
+                message=f"Captcha failed: {captcha_result.get('error')}"
+            )
+        
+        if captcha_result.get("type") != "none":
+            # Apply captcha session to crawler config
+            config.session_id = captcha_result.get("session_id")
+            if "cookies" in captcha_result:
+                browser_cookies = [{"name": k, "value": v, "url": str(request.url)} for k, v in captcha_result["cookies"].items()]
+            else:
+                browser_cookies = []
+            # Merge into crawler config
+            config.extra_cookies = (config.extra_cookies or []) + browser_cookies   # Crawl4AI uses 'extra_cookies' to pass cookies
+            print("✅ Captcha solved, continuing scrape…")
+        else:
+            print("No captcha detected, continuing scrape…")
 
     try:
         async with AsyncWebCrawler(verbose=True) as crawler:
@@ -238,7 +263,6 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 page += 1
 
             return ScrapeResponse(
-
                 entity_name=request.entity_name,
                 url=str(request.url),
                 scraped_at=datetime.now(),

@@ -40,6 +40,13 @@ class PaginationConfig(BaseModel):
     # for scroll
     scroll_steps: Optional[int] = None
     click_steps: Optional[int] = None
+
+class CaptchaParams(BaseModel):
+    api_key: Optional[str] = None
+    site_url: str
+    captcha_type: Optional[str] = None  # e.g., "recaptcha_v2", "recaptcha_v3", "turnstile", etc.
+    site_key: Optional[str] = None
+    
 class ScrapeRequest(BaseModel):
     entity_name: str
     url: HttpUrl
@@ -48,6 +55,7 @@ class ScrapeRequest(BaseModel):
     max_items: Optional[int] = 10
     timeout: Optional[int] = 15
     pagination_config: Optional[PaginationConfig] = None
+    captcha_params: Optional[CaptchaParams] = None
 
 class ScrapeResponse(BaseModel):
     entity_name: str
@@ -110,12 +118,15 @@ class PaginationConfig(BaseModel):
     # for scroll
     scroll_steps: Optional[int] = None
     click_steps: Optional[int] = None
-    
+
+
 class SourceInfo(BaseModel):
     id: int
     name: str
     url: str
     pagination_config: Optional[PaginationConfig] = None
+    is_captcha_protected: bool = False
+    captcha_params: Optional[CaptchaParams] = None
 
 class SourcesListResponse(BaseModel):
     total_sources: int

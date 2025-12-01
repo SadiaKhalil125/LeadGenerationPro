@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Database, ExternalLink, Layers, Save, X, Plus, AlertTriangle } from "lucide-react";
+import { Database, ExternalLink, Layers, Save, X, Plus, AlertTriangle, Lock } from "lucide-react";
 import API_BASE from "./api_base";
 
 export default function SourceCreator() {
@@ -9,6 +9,13 @@ export default function SourceCreator() {
   const [paginationConfig, setPaginationConfig] = useState({});
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
+  const [isCaptchaProtected, setIsCaptchaProtected] = useState(false);
+  const [captchaParams, setCaptchaParams] = useState({
+    api_key: "",
+    site_url: "",
+    captcha_type: "",
+    site_key: ""
+  });
 
   const paginationTypes = [
     "query_param",
@@ -22,30 +29,51 @@ export default function SourceCreator() {
   const handlePaginationChange = (field, value) => {
     setPaginationConfig((prev) => ({ ...prev, [field]: value }));
   };
+  const handleCaptchaChange = (field, value) => {
+    setCaptchaParams((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setResponse(null);
 
-    const paginationPayload = paginationType ? { type: paginationType, ...paginationConfig } : null;
-    const targetUrl = `${API_BASE}/source/save-source?name=${encodeURIComponent(name)}&url=${encodeURIComponent(url)}`;
-    
+    // pagination (sent in body)
+    const paginationPayload = paginationType
+      ? { type: paginationType, ...paginationConfig }
+      : null;
+
+    // captcha params (sent in body)
+    const captchaPayload = isCaptchaProtected ? captchaParams : null;
+
+    // query params
+    const targetUrl =
+      `${API_BASE}/source/save-source?` +
+      `name=${encodeURIComponent(name)}` +
+      `&url=${encodeURIComponent(url)}` +
+      `&is_captcha_protected=${isCaptchaProtected}`;
+
+    // build final request body (must match endpoint signature)
+    const body = {
+      pagination_config: paginationPayload,
+      captcha_params: captchaPayload
+    };
+
     try {
       const res = await fetch(targetUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-        body: JSON.stringify(paginationPayload)
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
-      setResponse({ type: 'success', message: data.message });
-      setName("");
-      setUrl("");
-      setPaginationType("");
-      setPaginationConfig({});
+      setResponse({ type: "success", message: data.message });
+      resetForm();
     } catch (err) {
-      setResponse({ type: 'error', message: "Failed to save source." });
+      setResponse({ type: "error", message: "Failed to save source." });
     } finally {
       setLoading(false);
     }
@@ -56,6 +84,8 @@ export default function SourceCreator() {
     setUrl("");
     setPaginationType("");
     setPaginationConfig({});
+    setIsCaptchaProtected(false);
+    setCaptchaParams({ api_key: "", site_url: "", captcha_type: "", site_key: "" });
     setResponse(null);
   };
 
@@ -223,8 +253,8 @@ export default function SourceCreator() {
 
                     {paginationType === "path" && (
                       <DynamicField
-                        label="Path Pattern"
-                        placeholder="e.g. /page/{page_num}"
+                        label="Path Pattern (to be appended to base URL)"
+                        placeholder="e.g. /page/{page}"
                         onChange={(v) => handlePaginationChange("path_pattern", v)}
                       />
                     )}
@@ -256,6 +286,60 @@ export default function SourceCreator() {
                       />
                     )}
                   </div>
+                </div>
+              )}
+              {/* CAPTCHA Checkbox */}
+              <div className="bg-gray-50/70 border border-gray-200 rounded-xl px-7 py-5 flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={isCaptchaProtected}
+                  onChange={(e) => setIsCaptchaProtected(e.target.checked)}
+                  className="h-5 w-5 text-teal-600 border-gray-300 rounded"
+                />
+                <label className="text-gray-700 font-medium">Is Captcha Protected?</label>
+              </div>
+
+              {/* CAPTCHA Params */}
+              {isCaptchaProtected && (
+                <div className="bg-blue-50/50 border border-blue-200 rounded-xl p-5">
+                  <div className="space-y-1">
+                  <label className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                    <Lock size={18} className="text-blue-500" />
+                    Captcha Parameters
+                  </label>
+
+                  <DynamicField
+                    label="API Key"
+                    placeholder="Your CapSolver API key"
+                    onChange={(v) => handleCaptchaChange("api_key", v)}
+                  />
+                  <DynamicField
+                    label="Site URL"
+                    placeholder="URL where captcha appears"
+                    onChange={(v) => handleCaptchaChange("site_url", v)}
+                  />
+                 
+                  <DynamicField
+                    label="Site Key"
+                    placeholder="Captcha site key"
+                    onChange={(v) => handleCaptchaChange("site_key", v)}
+                  />
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700">Captcha Type</label>
+                    <select
+                      value={captchaParams.captcha_type}
+                      onChange={(e) => handleCaptchaChange("captcha_type", e.target.value)}
+                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                    >
+                      <option value="">Select Captcha Type</option>
+                      <option value="recaptcha_v2">reCAPTCHA v2</option>
+                      <option value="recaptcha_v3">reCAPTCHA v3</option>
+                      <option value="turnstile">Turnstile</option>
+                      <option value="cloudflare_challenge">Cloudflare Challenge</option>
+                      <option value="aws_waf">AWS WAF</option>
+                    </select>
+                  </div>
+                </div>
                 </div>
               )}
 

@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from datetime import datetime
 import asyncio
-from models import SourceInfo, SourcesListResponse, PaginationConfig, SourceUpdateRequest
+from models import SourceInfo, SourcesListResponse, PaginationConfig, SourceUpdateRequest, CaptchaParams
 from utils import extract_value, fetch_page
 import asyncio
 from fastapi import APIRouter
@@ -10,8 +10,6 @@ from pydantic import BaseModel
 from psycopg2.extras import Json
 
 router = APIRouter()
-
-
 
 @router.get("/sources", response_model=SourcesListResponse)
 async def get_all_sources():
@@ -22,7 +20,7 @@ async def get_all_sources():
         conn, cur = get_db_cursor()
         #fetch all sources sorted by creation order (id descending for newest first)
         cur.execute("""
-            SELECT id, name, url, pagination_config
+            SELECT id, name, url, pagination_config, is_captcha_protected, captcha_params
             FROM sources
             ORDER BY id DESC;
         """)
@@ -36,7 +34,9 @@ async def get_all_sources():
                 id=row[0],
                 name=row[1],
                 url=row[2],
-                pagination_config=PaginationConfig(**row[3]) if row[3] else None
+                pagination_config=PaginationConfig(**row[3]) if row[3] else None,
+                is_captcha_protected=row[4],
+                captcha_params=CaptchaParams(**row[5]) if row[5] else None
             ))
 
         return SourcesListResponse(
@@ -56,7 +56,7 @@ async def get_source_by_id(source_id: int):
     try:
         conn, cur = get_db_cursor()
         cur.execute("""
-            SELECT id, name, url, pagination_config
+            SELECT id, name, url, pagination_config, is_captcha_protected, captcha_params
             FROM sources
             WHERE id = %s;
         """, (source_id,))
@@ -71,7 +71,9 @@ async def get_source_by_id(source_id: int):
             id=row[0],
             name=row[1],
             url=row[2],
-            pagination_config=PaginationConfig(**row[3]) if row[3] else None
+            pagination_config=PaginationConfig(**row[3]) if row[3] else None,
+            is_captcha_protected=row[4],
+            captcha_params=CaptchaParams(**row[5]) if row[5] else None
         )
 
     except HTTPException:
@@ -82,12 +84,19 @@ async def get_source_by_id(source_id: int):
 
 
 @router.post("/save-source", response_model=dict)
-async def save_source(name: str, url: str, pagination_config: PaginationConfig=None):
+async def save_source(
+    name: str,
+    url: str,
+    pagination_config: PaginationConfig = None,
+    is_captcha_protected: bool = False,
+    captcha_params: CaptchaParams = None
+):
     """Save a website source in 'sources' table or reuse if it already exists."""
     conn, cur = get_db_cursor()
     try:
         name = name.strip()
         url = url.strip()
+
         if not name or not url:
             raise HTTPException(status_code=400, detail="Source name and URL required.")
 
@@ -97,35 +106,56 @@ async def save_source(name: str, url: str, pagination_config: PaginationConfig=N
                 id SERIAL PRIMARY KEY,
                 name TEXT UNIQUE NOT NULL,
                 url TEXT NOT NULL,
-                pagination_config JSONB DEFAULT NULL
+                pagination_config JSONB DEFAULT NULL,
+                is_captcha_protected BOOLEAN DEFAULT FALSE,
+                captcha_params JSONB DEFAULT NULL
             );
         """)
 
+        # Ensure new columns exist (safe for existing DB)
         cur.execute("""
-            ALTER TABLE sources
-            ADD COLUMN IF NOT EXISTS pagination_config JSONB DEFAULT NULL;
+            ALTER TABLE sources 
+            ADD COLUMN IF NOT EXISTS is_captcha_protected BOOLEAN DEFAULT FALSE;
+        """)
+        cur.execute("""
+            ALTER TABLE sources 
+            ADD COLUMN IF NOT EXISTS captcha_params JSONB DEFAULT NULL;
         """)
 
         # 2 Check if source already exists
         cur.execute("SELECT id FROM sources WHERE name = %s;", (name,))
         existing = cur.fetchone()
         if existing:
-            existing_id = existing[0]
             return {
                 "success": True,
-                "id": existing_id,
+                "id": existing[0],
                 "message": f"Source '{name}' already exists—reusing it."
             }
 
-        # 3 Insert a new source
+        # 3 Insert new source
         cur.execute(
-            "INSERT INTO sources (name, url, pagination_config) VALUES (%s, %s, %s) RETURNING id;",
-            (name, url, Json(pagination_config.model_dump() if pagination_config else None))
+            """
+            INSERT INTO sources (name, url, pagination_config, is_captcha_protected, captcha_params)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id;
+            """,
+            (
+                name,
+                url,
+                Json(pagination_config.model_dump() if pagination_config else None),
+                is_captcha_protected,
+                Json(captcha_params.model_dump() if captcha_params else None),
+            )
         )
+
         new_id = cur.fetchone()[0]
         conn.commit()
 
-        return {"success": True, "id": new_id, "message": f"Source '{name}' saved successfully."}
+        return {
+            "success": True,
+            "id": new_id,
+            "message": f"Source '{name}' saved successfully."
+        }
 
     except Exception as e:
         # conn.rollback()

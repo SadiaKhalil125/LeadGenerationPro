@@ -18,5 +18,6 @@ datetime
 typing
 python-dateutil
 kafka-python
+capsolver
 
 
