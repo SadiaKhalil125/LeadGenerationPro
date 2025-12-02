@@ -13,7 +13,7 @@ from utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from crawl4Util import extract_website
-from routers import entity_crud, source_crud, entity_mappings_crud, task_crud
+from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud
 from routers.scheduler_config import scheduler, task_lifespan
 
 # Setup logging
@@ -32,6 +32,7 @@ app.include_router(entity_crud.router, prefix="/entity", tags=["Entity Managemen
 app.include_router(source_crud.router, prefix="/source", tags=["Source Management"])
 app.include_router(entity_mappings_crud.router, prefix="/mapping", tags=["Entity Mappings Management"])
 app.include_router(task_crud.router, prefix="/task", tags=["Task Management"])
+app.include_router(chat_crud.router, prefix="/chat", tags=["Chat Management"])
 
 # CORS middleware
 app.add_middleware(

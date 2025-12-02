@@ -19,6 +19,7 @@ import SourceCreator from './SourceCreator';
 import Homepage from './Homepage'
 import Login from './Login'
 import Chatbot from './Chatbot'
+import QuickExtract from './QuickExtract'
 
 function App() {
 
@@ -43,6 +44,7 @@ function App() {
         <Route path="/login" element={<Login/>} />
         <Route path="/homepage" element={<Homepage/>}/>
         <Route path="/chatbot" element={<Chatbot />} />
+        <Route path="/quick-extract" element={<QuickExtract />} />
       </Routes>
     </BrowserRouter>
   );
