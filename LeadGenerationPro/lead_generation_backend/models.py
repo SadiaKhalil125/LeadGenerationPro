@@ -177,3 +177,11 @@ class PreviewMappingRequest(BaseModel):
     container_selector: Optional[str] = None
     field_mappings: Dict[str, FieldMapping]
     
+class MessageRequest(BaseModel):
+    text: str
+
+class MessageResponse(BaseModel):
+    id: int
+    sender: str
+    text: str
+    timestamp: str
