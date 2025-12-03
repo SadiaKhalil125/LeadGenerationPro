@@ -13,6 +13,7 @@ import {
   AlertCircle,
   CheckCircle,
   ArrowRight,
+  ArrowRightCircle,
   Code,
   Layers,
   Settings
@@ -276,13 +277,13 @@ export default function QuickExtract() {
   const [entityData, setEntityData] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewNextLoading, setPreviewNextLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
   const [entitiesDropdownOpen, setEntitiesDropdownOpen] = useState(false);
   const entitiesDropdownRef = useRef(null);
   const [currentStep, setCurrentStep] = useState(1);
-  const [maxItems, setMaxItems] = useState("");
 
   // --- EFFECTS (Unchanged) ---
   useEffect(() => {
@@ -411,6 +412,52 @@ export default function QuickExtract() {
     }
   };
 
+  const handleNextPreview = async () => {
+    if (!url.trim() || !selectedEntity) {
+      alert("URL and Entity are required!");
+      return;
+    }
+    const field_mappings = {};
+    let hasValidMappings = false;
+    entityData.fields
+      .filter((f) => f.attribute.toLowerCase() !== "id")
+      .forEach((f) => {
+        if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
+          field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
+          hasValidMappings = true;
+        } else if (f.selector.trim()) {
+          field_mappings[f.attribute] = { selector: f.selector, extract: f.metadata || "text" };
+          hasValidMappings = true;
+        }
+      });
+    if (!hasValidMappings) {
+      alert("Add at least one field mapping!");
+      return;
+    }
+    setPreviewNextLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/task/preview-next-mapping`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        body: JSON.stringify({
+          url,
+          entity_name: selectedEntity,
+          container_selector: entityData.containerSelector || null,
+          field_mappings,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPreviewData(data);
+      } else {
+        alert(`Preview Next failed: ${data.message}`);
+      }
+    } catch (err) {
+      alert(`Preview Next error: ${err.message}`);
+    } finally {
+      setPreviewNextLoading(false);
+    }
+  };
 
   const handleExtract = async () => {
     if (!url.trim() || !selectedEntity) {
@@ -432,8 +479,7 @@ export default function QuickExtract() {
     setExtracting(true);
     setExtractedData(null);
     try {
-      const maxItemsValue = maxItems.trim() ? parseInt(maxItems, 10) : null;
-      const scrapeRequest = { entity_name: selectedEntity, url: url, container_selector: entityData.containerSelector || null, field_mappings: field_mappings, max_items: maxItemsValue, timeout: 15 };
+      const scrapeRequest = { entity_name: selectedEntity, url: url, container_selector: entityData.containerSelector || null, field_mappings: field_mappings, max_items: null, timeout: 15 };
       const res = await fetch(`${API_BASE}/scrapedynamic`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -677,6 +723,14 @@ export default function QuickExtract() {
                     Preview
                   </button>
                   <button
+                    onClick={handleNextPreview}
+                    disabled={previewNextLoading}
+                    className="flex items-center gap-2 px-5 py-2.5 text-[#00364A] bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-blue-50 hover:border-blue-200 hover:text-[#49A3C4] transition-all disabled:opacity-50 font-medium"
+                  >
+                    {previewNextLoading ? <Loader2 size={18} className="animate-spin" /> : <ArrowRightCircle size={18} />}
+                    Next Item
+                  </button>
+                  <button
                     onClick={handleExtract}
                     disabled={extracting}
                     className="flex items-center gap-2 px-6 py-2.5 bg-[#00364A] text-black rounded-lg shadow-md hover:bg-[#49A3C4] hover:shadow-lg transition-all disabled:opacity-50 font-bold ml-2"
@@ -706,36 +760,17 @@ export default function QuickExtract() {
                     </div>
                   )}
 
-                  <div className="mb-8 space-y-6">
-                    <div>
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-                        Container Selector (Optional)
-                      </label>
-                      <input
-                        placeholder="e.g. div.business-card"
-                        value={entityData.containerSelector || ""}
-                        onChange={(e) => setEntityData((prev) => ({ ...prev, containerSelector: e.target.value }))}
-                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all font-mono text-sm text-[#00364A]"
-                      />
-                      <p className="text-xs text-gray-400 mt-2">The CSS selector that wraps each individual item.</p>
-                    </div>
-                    
-                    <div>
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-                        Max Items (Optional)
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="Leave empty for no limit (default: 40 for Google Maps)"
-                        value={maxItems}
-                        onChange={(e) => setMaxItems(e.target.value)}
-                        min="1"
-                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all text-sm text-[#00364A]"
-                      />
-                      <p className="text-xs text-gray-400 mt-2">
-                        Maximum number of items to extract. {isGoogleMaps ? "Default: 40 for Google Maps" : "Leave empty for no limit"}
-                      </p>
-                    </div>
+                  <div className="mb-8">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+                      Container Selector (Optional)
+                    </label>
+                    <input
+                      placeholder="e.g. div.business-card"
+                      value={entityData.containerSelector || ""}
+                      onChange={(e) => setEntityData((prev) => ({ ...prev, containerSelector: e.target.value }))}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all font-mono text-sm text-[#00364A]"
+                    />
+                    <p className="text-xs text-gray-400 mt-2">The CSS selector that wraps each individual item.</p>
                   </div>
 
                   <div className="space-y-4">

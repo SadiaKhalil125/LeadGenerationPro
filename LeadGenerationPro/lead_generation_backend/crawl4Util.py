@@ -41,6 +41,8 @@ def build_paginated_url(base_url: str, page: int, pagination: PaginationConfig) 
 
 
 def build_extraction_schema(request: ScrapeRequest):
+    # Filter out fields with empty selectors to avoid CSS parser errors
+    # Empty selectors are used for Google Maps auto-extraction and should be handled by Google Maps scraper
     fields = [
         {
             "name": name,
@@ -48,7 +50,11 @@ def build_extraction_schema(request: ScrapeRequest):
             "type": fm.extract
         }
         for name, fm in request.field_mappings.items()
+        if fm.selector and fm.selector.strip()  # Only include fields with non-empty selectors
     ]
+
+    if not fields:
+        raise ValueError("No valid field mappings with selectors provided for CSS scraping. Empty selectors are for Google Maps auto-extraction.")
 
     return {
         "name": request.entity_name,

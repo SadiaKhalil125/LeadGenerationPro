@@ -13,6 +13,7 @@ from utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from crawl4Util import extract_website
+from scraping_router import route_scraping_request
 from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud
 from routers.scheduler_config import scheduler, task_lifespan
 
@@ -54,10 +55,11 @@ async def fetch_content(request: FetchContentRequest):
 @app.post("/scrapedynamic", response_model=ScrapeResponse)
 async def scrape_dynamic(request: ScrapeRequest):
     """
-    Async version of dynamic scraping to avoid blocking
+    Async version of dynamic scraping to avoid blocking.
+    Routes requests intelligently (Google Maps vs CSS scraper).
     """
     try:
-        response = await extract_website(request)
+        response = await route_scraping_request(request)
         return response
     except Exception as e:
         logger.error("Error during dynamic scraping", exc_info=True)
