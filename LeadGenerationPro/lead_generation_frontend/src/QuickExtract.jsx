@@ -15,7 +15,9 @@ import {
   ArrowRight,
   Code,
   Layers,
-  Settings
+  Settings,
+  Plus,
+  Trash2
 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -54,10 +56,7 @@ const PreviewModal = ({ data, onClose }) => {
           <div>
             <h2 className="text-2xl font-bold text-[#00364A]">Data Preview</h2>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm text-gray-500">Entity:</span>
-              <span className="text-sm font-mono bg-blue-50 text-[#00364A] px-2 py-0.5 rounded border border-blue-100">
-                {data.entity_name}
-              </span>
+              <span className="text-sm text-gray-500">Quick Extract</span>
             </div>
           </div>
           <button
@@ -269,92 +268,42 @@ const ServerHtmlPreview = ({ url }) => {
 /* --- Main Component --- */
 
 export default function QuickExtract() {
-  // --- STATE (Unchanged) ---
+  // --- STATE ---
   const [url, setUrl] = useState("");
-  const [entities, setEntities] = useState([]);
-  const [selectedEntity, setSelectedEntity] = useState("");
-  const [entityData, setEntityData] = useState(null);
+  const [fields, setFields] = useState([]); // Dynamic field list
+  const [containerSelector, setContainerSelector] = useState("");
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
-  const [entitiesDropdownOpen, setEntitiesDropdownOpen] = useState(false);
-  const entitiesDropdownRef = useRef(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [maxItems, setMaxItems] = useState("");
 
-  // --- EFFECTS (Unchanged) ---
+  // --- EFFECTS ---
   useEffect(() => {
     const urlLower = url.toLowerCase();
     setIsGoogleMaps(urlLower.includes('google.com/maps') || urlLower.includes('maps.google.com'));
   }, [url]);
 
+  // Initialize with one empty field
   useEffect(() => {
-    const fetchEntities = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/entity/entities`, {
-          method: "GET",
-          headers: { "ngrok-skip-browser-warning": "true" }
-        });
-        const data = await res.json();
-        setEntities(data.entities || []);
-      } catch (err) {
-        console.error("Error fetching entities:", err);
-      }
-    };
-    fetchEntities();
+    if (fields.length === 0) {
+      setFields([{ id: Date.now(), attribute: "", selector: "", metadata: "text" }]);
+    }
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (entitiesDropdownRef.current && !entitiesDropdownRef.current.contains(e.target)) {
-        setEntitiesDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    if (selectedEntity) {
-      fetchEntityInfo(selectedEntity);
-      setCurrentStep(3);
-    }
-  }, [selectedEntity]);
-
-  // --- LOGIC (Unchanged) ---
-  const fetchEntityInfo = async (entityName) => {
-    try {
-      const res = await fetch(`${API_BASE}/entity/entity-info/${entityName}`, {
-        headers: { "ngrok-skip-browser-warning": "true" }
-      });
-      const data = await res.json();
-      if (data.success) {
-        const fields = data.columns
-          .filter((col) => col.name !== "id" && col.name !== "modified_at" && col.name !== "source")
-          .map((col) => ({
-            attribute: col.name,
-            selector: "",
-            metadata: "text",
-          }));
-        setEntityData({
-          containerSelector: "",
-          fields: fields,
-        });
-      }
-    } catch (err) {
-      console.error("Error fetching entity info:", err);
-    }
+  // --- LOGIC ---
+  const addField = () => {
+    setFields([...fields, { id: Date.now(), attribute: "", selector: "", metadata: "text" }]);
   };
 
-  const handleFieldChange = (attribute, key, value) => {
-    setEntityData((prev) => {
-      const updatedFields = prev.fields.map((f) =>
-        f.attribute === attribute ? { ...f, [key]: value } : f
-      );
-      return { ...prev, fields: updatedFields };
-    });
+  const removeField = (id) => {
+    setFields(fields.filter(f => f.id !== id));
+  };
+
+  const handleFieldChange = (id, key, value) => {
+    setFields(fields.map(f => f.id === id ? { ...f, [key]: value } : f));
   };
 
   const isGoogleMapsSupported = (fieldName) => {
@@ -365,42 +314,43 @@ export default function QuickExtract() {
   };
 
   const handlePreview = async () => {
-    if (!url.trim() || !selectedEntity) {
-      alert("URL and Entity are required!");
+    if (!url.trim()) {
+      alert("URL is required!");
       return;
     }
     const field_mappings = {};
     let hasValidMappings = false;
-    entityData.fields
-      .filter((f) => f.attribute.toLowerCase() !== "id")
-      .forEach((f) => {
-        if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
-          field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
-          hasValidMappings = true;
-        } else if (f.selector.trim()) {
-          field_mappings[f.attribute] = { selector: f.selector, extract: f.metadata || "text" };
-          hasValidMappings = true;
-        }
-      });
+    
+    fields.forEach((f) => {
+      if (!f.attribute.trim()) return; // Skip fields without attribute name
+      if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
+        field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
+        hasValidMappings = true;
+      } else if (f.selector.trim()) {
+        field_mappings[f.attribute] = { selector: f.selector, extract: f.metadata || "text" };
+        hasValidMappings = true;
+      }
+    });
+    
     if (!hasValidMappings) {
-      alert("Add at least one field mapping!");
+      alert("Add at least one field mapping with attribute name and selector!");
       return;
     }
+    
     setPreviewLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/task/preview-mapping`, {
+      const res = await fetch(`${API_BASE}/quick-extract/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
         body: JSON.stringify({
           url,
-          entity_name: selectedEntity,
-          container_selector: entityData.containerSelector || null,
+          container_selector: containerSelector || null,
           field_mappings,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setPreviewData(data);
+        setPreviewData({ ...data, entity_name: "Quick Extract" }); // For display purposes
       } else {
         alert(`Preview failed: ${data.message}`);
       }
@@ -413,13 +363,15 @@ export default function QuickExtract() {
 
 
   const handleExtract = async () => {
-    if (!url.trim() || !selectedEntity) {
-      alert("URL and Entity are required!");
+    if (!url.trim()) {
+      alert("URL is required!");
       return;
     }
     const field_mappings = {};
     let hasValidMappings = false;
-    entityData.fields.forEach((f) => {
+    
+    fields.forEach((f) => {
+      if (!f.attribute.trim()) return; // Skip fields without attribute name
       if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
         field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
         hasValidMappings = true;
@@ -428,20 +380,40 @@ export default function QuickExtract() {
         hasValidMappings = true;
       }
     });
-    if (!hasValidMappings) { alert("Add at least one field mapping!"); return; }
+    
+    if (!hasValidMappings) {
+      alert("Add at least one field mapping with attribute name and selector!");
+      return;
+    }
+    
     setExtracting(true);
     setExtractedData(null);
     try {
       const maxItemsValue = maxItems.trim() ? parseInt(maxItems, 10) : null;
-      const scrapeRequest = { entity_name: selectedEntity, url: url, container_selector: entityData.containerSelector || null, field_mappings: field_mappings, max_items: maxItemsValue, timeout: 15 };
-      const res = await fetch(`${API_BASE}/scrapedynamic`, {
+      const scrapeRequest = {
+        url: url,
+        container_selector: containerSelector || null,
+        field_mappings: field_mappings,
+        max_items: maxItemsValue,
+        timeout: 15
+      };
+      const res = await fetch(`${API_BASE}/quick-extract`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
         body: JSON.stringify(scrapeRequest),
       });
       const data = await res.json();
-      if (data.success) { setExtractedData(data); setCurrentStep(4); } else { alert(`Extraction failed: ${data.message || 'Unknown error'}`); }
-    } catch (err) { alert(`Extraction error: ${err.message}`); } finally { setExtracting(false); }
+      if (data.success) {
+        setExtractedData({ ...data, entity_name: "Quick Extract" }); // For display purposes
+        setCurrentStep(3);
+      } else {
+        alert(`Extraction failed: ${data.message || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert(`Extraction error: ${err.message}`);
+    } finally {
+      setExtracting(false);
+    }
   };
 
   const exportToCSV = () => {
@@ -455,7 +427,7 @@ export default function QuickExtract() {
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${selectedEntity}_${new Date().getTime()}.csv`;
+    link.download = `quick_extract_${new Date().getTime()}.csv`;
     link.click();
   };
 
@@ -474,7 +446,7 @@ export default function QuickExtract() {
       const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `${selectedEntity}_${new Date().getTime()}.xls`;
+      link.download = `quick_extract_${new Date().getTime()}.xls`;
       link.click();
     } catch (err) { console.error(err); alert("Excel export failed."); }
   };
@@ -516,9 +488,8 @@ export default function QuickExtract() {
 
             {[
               { num: 1, label: "Target URL", icon: Globe },
-              { num: 2, label: "Entity Type", icon: Database },
-              { num: 3, label: "Data Mapping", icon: Layers },
-              { num: 4, label: "Results", icon: FileSpreadsheet }
+              { num: 2, label: "Field Mapping", icon: Layers },
+              { num: 3, label: "Results", icon: FileSpreadsheet }
             ].map((step) => {
               const isActive = currentStep >= step.num;
               const isCurrent = currentStep === step.num;
@@ -579,7 +550,7 @@ export default function QuickExtract() {
                     className="group relative px-10 py-4 bg-gradient-to-b from-[#005f7f] to-[#00364A] text-white text-lg font-bold rounded-full shadow-lg hover:bg-[#004e6b] disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-[#49A3C4]/30 hover:shadow-xl hover:-translate-y-1 active:translate-y-0"
                   >
                     <span className="flex items-center gap-3">
-                      Continue to Entity Selection
+                      Continue to Field Mapping
                       <ArrowRight className="group-hover:translate-x-1 transition-transform" />
                     </span>
                   </button>
@@ -588,81 +559,17 @@ export default function QuickExtract() {
             </div>
           )}
 
-          {/* Step 2: Entity Selection */}
+          {/* Step 2: Field Mapping Configuration */}
           {currentStep === 2 && (
-            <div className="flex-grow flex flex-col items-center justify-center p-12 text-center animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
-              
-              <button 
-                onClick={() => setCurrentStep(1)}
-                className="absolute top-8 left-8 text-gray-400 hover:text-[#00364A] flex items-center gap-2 font-medium transition-colors"
-              >
-                <ArrowRight className="rotate-180" size={18} /> Back to URL
-              </button>
-
-              <div className="w-full max-w-xl space-y-8">
-                <div className="space-y-2">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-50 text-[#00364A] mb-4">
-                    <Database size={32} />
-                  </div>
-                  <h2 className="text-3xl font-bold text-[#00364A]">Select Data Entity</h2>
-                  <p className="text-gray-500 text-lg">Choose the data model structure you want to populate.</p>
-                </div>
-
-                <div className="relative text-left" ref={entitiesDropdownRef}>
-                  <div
-                    onClick={() => setEntitiesDropdownOpen(!entitiesDropdownOpen)}
-                    className={`flex justify-between items-center w-full p-5 rounded-2xl bg-white border-2 cursor-pointer shadow-sm transition-all ${entitiesDropdownOpen ? 'border-[#49A3C4] ring-4 ring-[#49A3C4]/10' : 'border-gray-100 hover:border-[#49A3C4]/50'}`}
-                  >
-                    <span className={selectedEntity ? "text-xl font-medium text-[#00364A]" : "text-xl text-gray-400"}>
-                      {selectedEntity || "Select an entity..."}
-                    </span>
-                    <ChevronDown className={`w-6 h-6 text-gray-400 transition-transform ${entitiesDropdownOpen ? 'rotate-180 text-[#49A3C4]' : ''}`} />
-                  </div>
-
-                  {entitiesDropdownOpen && (
-                    <div className="absolute mt-3 w-full bg-white border border-gray-100 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto animate-in fade-in zoom-in-95">
-                      <div className="p-2 space-y-1">
-                        {entities.map((entity) => (
-                          <div
-                            key={entity.name}
-                            onClick={() => {
-                              setSelectedEntity(entity.name);
-                              setEntitiesDropdownOpen(false);
-                            }}
-                            className="px-6 py-4 rounded-xl hover:bg-blue-50 cursor-pointer transition-colors group"
-                          >
-                            <p className="text-lg font-medium text-gray-700 group-hover:text-[#00364A]">{entity.name}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-center pt-6">
-                  <button
-                    onClick={() => selectedEntity && setCurrentStep(3)}
-                    disabled={!selectedEntity}
-                    className="w-full py-4 bg-gradient-to-b from-[#005f7f] to-[#00364A] text-white text-lg font-bold rounded-xl shadow-lg hover:bg-[#004e6b] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    Configure Mapping
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Mapping Configuration */}
-          {currentStep === 3 && entityData && (
             <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
               <div className="border-b border-gray-100 p-6 flex justify-between items-center bg-gray-50/50">
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setCurrentStep(2)} className="p-2 hover:bg-white hover:shadow-md rounded-lg text-gray-500 transition-all">
+                  <button onClick={() => setCurrentStep(1)} className="p-2 hover:bg-white hover:shadow-md rounded-lg text-gray-500 transition-all">
                     <ArrowRight className="rotate-180" size={20} />
                   </button>
                   <div>
                     <h2 className="text-xl font-bold text-[#00364A]">Map Fields</h2>
-                    <p className="text-sm text-gray-500">Define CSS selectors for <strong>{selectedEntity}</strong></p>
+                    <p className="text-sm text-gray-500">Define field attributes and CSS selectors</p>
                   </div>
                 </div>
                 
@@ -713,8 +620,8 @@ export default function QuickExtract() {
                       </label>
                       <input
                         placeholder="e.g. div.business-card"
-                        value={entityData.containerSelector || ""}
-                        onChange={(e) => setEntityData((prev) => ({ ...prev, containerSelector: e.target.value }))}
+                        value={containerSelector || ""}
+                        onChange={(e) => setContainerSelector(e.target.value)}
                         className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all font-mono text-sm text-[#00364A]"
                       />
                       <p className="text-xs text-gray-400 mt-2">The CSS selector that wraps each individual item.</p>
@@ -741,35 +648,60 @@ export default function QuickExtract() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-bold text-[#00364A]">Field Mappings</h3>
-                      <span className="text-xs font-medium bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{entityData.fields.length} Fields</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{fields.length} Fields</span>
+                        <button
+                          onClick={addField}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-b from-[#005f7f] to-[#00364A] text-white rounded-lg hover:bg-[#49A3C4] transition-colors text-xs font-bold"
+                        >
+                          <Plus size={14} /> Add Field
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="space-y-3">
-                      {entityData.fields.map((field) => {
+                      {fields.map((field) => {
                         const isSupported = isGoogleMaps && isGoogleMapsSupported(field.attribute);
                         return (
-                          <div key={field.attribute} className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-[#49A3C4]/30 transition-all group">
+                          <div key={field.id} className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-[#49A3C4]/30 transition-all group">
                             <div className="flex justify-between items-center mb-3">
-                              <span className="font-mono text-sm font-semibold text-[#00364A]">{field.attribute}</span>
-                              {isSupported && (
-                                <span className="flex items-center gap-1 text-[10px] font-bold text-[#49A3C4] bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wide">
-                                  <CheckCircle size={10} /> Auto-Map
-                                </span>
-                              )}
+                              <input
+                                type="text"
+                                placeholder="Field Name (e.g. title, price)"
+                                value={field.attribute}
+                                onChange={(e) => handleFieldChange(field.id, "attribute", e.target.value)}
+                                className="font-mono text-sm font-semibold text-[#00364A] bg-transparent border-b-2 border-transparent focus:border-[#49A3C4] outline-none px-1"
+                              />
+                              <div className="flex items-center gap-2">
+                                {isSupported && (
+                                  <span className="flex items-center gap-1 text-[10px] font-bold text-[#49A3C4] bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                    <CheckCircle size={10} /> Auto-Map
+                                  </span>
+                                )}
+                                {fields.length > 1 && (
+                                  <button
+                                    onClick={() => removeField(field.id)}
+                                    className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                                    title="Remove field"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <div className="grid grid-cols-5 gap-3">
                               <div className="col-span-3">
                                 <input
                                   placeholder={isSupported ? "Auto-extract active" : "CSS Selector"}
                                   value={field.selector}
-                                  onChange={(e) => handleFieldChange(field.attribute, "selector", e.target.value)}
+                                  onChange={(e) => handleFieldChange(field.id, "selector", e.target.value)}
                                   className={`w-full p-2.5 text-sm rounded-lg border outline-none transition-all ${isSupported && !field.selector ? 'bg-blue-50/50 border-blue-100 text-[#49A3C4] placeholder:text-[#49A3C4]/70' : 'bg-gray-50 border-gray-200 focus:bg-white focus:border-[#49A3C4]'}`}
                                 />
                               </div>
                               <div className="col-span-2">
                                 <MetadataInput
                                   value={field.metadata}
-                                  onChange={(val) => handleFieldChange(field.attribute, "metadata", val)}
+                                  onChange={(val) => handleFieldChange(field.id, "metadata", val)}
                                   options={METADATA_OPTIONS}
                                 />
                               </div>
@@ -791,8 +723,8 @@ export default function QuickExtract() {
             </div>
           )}
 
-          {/* Step 4: Results */}
-          {currentStep === 4 && extractedData && (
+          {/* Step 3: Results */}
+          {currentStep === 3 && extractedData && (
             <div className="flex-grow flex flex-col h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
                <div className="p-8 border-b border-gray-100 bg-white flex justify-between items-end">
                   <div>
@@ -865,8 +797,9 @@ export default function QuickExtract() {
                       setCurrentStep(1);
                       setExtractedData(null);
                       setUrl("");
-                      setSelectedEntity("");
-                      setEntityData(null);
+                      setFields([{ id: Date.now(), attribute: "", selector: "", metadata: "text" }]);
+                      setContainerSelector("");
+                      setMaxItems("");
                     }}
                     className="text-gray-500 font-semibold hover:text-[#00364A] px-6 py-2 transition-colors"
                   >

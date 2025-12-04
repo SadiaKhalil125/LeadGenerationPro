@@ -185,3 +185,22 @@ class MessageResponse(BaseModel):
     sender: str
     text: str
     timestamp: str
+
+class QuickExtractRequest(BaseModel):
+    """Request model for quick extraction without entity requirement."""
+    url: HttpUrl
+    container_selector: Optional[str] = None
+    field_mappings: Dict[str, FieldMapping]
+    max_items: Optional[int] = None
+    timeout: Optional[int] = 15
+    pagination_config: Optional[PaginationConfig] = None
+    captcha_params: Optional[CaptchaParams] = None
+
+class QuickExtractResponse(BaseModel):
+    """Response model for quick extraction."""
+    url: str
+    scraped_at: datetime
+    total_items: int
+    data: List[Dict[str, Any]]
+    success: bool
+    message: str

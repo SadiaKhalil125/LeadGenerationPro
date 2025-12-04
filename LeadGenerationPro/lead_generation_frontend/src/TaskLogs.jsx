@@ -27,6 +27,25 @@ const TaskLogs = () => {
     fetchTaskDetails();
   }, [taskId]);
 
+  // Polling effect: Poll logs and executions when there's a current execution
+  useEffect(() => {
+    if (!taskExecutions) return;
+
+    // Check if there's any current/running execution
+    const hasCurrentExecution = taskExecutions.executions?.some(exec => exec.is_current);
+
+    if (hasCurrentExecution) {
+      // Poll every 2 seconds when task is running
+      const interval = setInterval(() => {
+        // Only refresh logs and executions, not task info (which doesn't change)
+        fetchTaskLogs(selectedExecutionId);
+        fetchTaskExecutions();
+      }, 2000); // Poll every 2 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [taskExecutions, selectedExecutionId, taskId]);
+
   const fetchTaskDetails = async () => {
     try {
       setLoading(true);
@@ -99,6 +118,10 @@ const TaskLogs = () => {
 
   // Check if there's any completed execution
   const hasCompletedExecution = taskExecutions?.executions?.some(exec => exec.final_status === 'completed');
+  
+  // Check if there's a current/running execution (for polling indicator)
+  const hasCurrentExecution = taskExecutions?.executions?.some(exec => exec.is_current);
+  
   const getEntityDataPageUrl = () => {
     if (taskInfo?.entity_name) {
       return `/entity-data?entity=${encodeURIComponent(taskInfo.entity_name)}`;
@@ -260,12 +283,23 @@ const TaskLogs = () => {
             {taskLogs && (
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    Execution Logs
-                    {selectedExecutionId && taskLogs?.logs && (
-                      <span className="text-lg font-normal text-gray-600 ml-2">({taskLogs.logs.length} entries)</span>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      Execution Logs
+                      {selectedExecutionId && taskLogs?.logs && (
+                        <span className="text-lg font-normal text-gray-600 ml-2">({taskLogs.logs.length} entries)</span>
+                      )}
+                    </h2>
+                    {hasCurrentExecution && (
+                      <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                        </span>
+                        <span className="text-xs font-semibold text-blue-700">Live</span>
+                      </div>
                     )}
-                  </h2>
+                  </div>
                   {selectedExecutionId && (
                     <button
                       onClick={() => filterByExecution(null)}
