@@ -1,9 +1,61 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { AuthContext } from "./AuthContext";
 
 export default function AuthenticationPage() {
+  const { login } = useContext(AuthContext);
   const [showLogin, setShowLogin] = useState(true);
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [fullName, setFullName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+
+  const handleLogin = async () => {
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8000/login?email=${email}&password=${password}`,
+        { method: "POST" }
+      );
+
+      const data = await res.json();
+
+      if (data.status === "success") {
+        login(data.user, data.token);   // store in AuthContext
+        alert("Login successful!");
+      } else {
+        alert(data.detail || "Invalid email or password");
+      }
+    } catch (error) {
+      alert("Server error. Check backend.");
+    }
+  };
+  const handleSignup = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName,
+          email: signupEmail,
+          password: signupPassword,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.status === "success") {
+        alert("Signup successful! You can now login.");
+        setShowLogin(true); // switch to login form
+      } else {
+        alert(data.detail || "Signup failed. Try again.");
+      }
+    } catch (error) {
+      alert("Server error. Check backend.");
+    }
+  };
   return (
     <div className="w-full h-screen flex items-center justify-center p-4 relative overflow-hidden" style={{ backgroundColor: '#00364A' }}>
       {/* Glass card container */}
@@ -83,6 +135,8 @@ export default function AuthenticationPage() {
               <input
                 type="email"
                 placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full p-3 mb-4 rounded-xl outline-none backdrop-blur-md border border-white/60 placeholder-gray-600 focus:border-white/80 transition"
                 style={{ 
                   color: '#00364A',
@@ -92,6 +146,8 @@ export default function AuthenticationPage() {
               <input
                 type="password"
                 placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full p-3 mb-4 rounded-xl outline-none backdrop-blur-md border border-white/60 placeholder-gray-600 focus:border-white/80 transition"
                 style={{ 
                   color: '#00364A',
@@ -100,6 +156,9 @@ export default function AuthenticationPage() {
               />
               
               <button 
+                // className="w-full py-3 text-white font-semibold rounded-xl backdrop-blur-md border border-white/30 transition shadow-lg hover:opacity-90"
+                // style={{ backgroundColor: 'rgba(0, 54, 74, 0.8)' }}
+                onClick={handleLogin}
                 className="w-full py-3 text-white font-semibold rounded-xl backdrop-blur-md border border-white/30 transition shadow-lg hover:opacity-90"
                 style={{ backgroundColor: 'rgba(0, 54, 74, 0.8)' }}
               >

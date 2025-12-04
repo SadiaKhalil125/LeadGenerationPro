@@ -1,12 +1,12 @@
-from google import genai
-from google.genai import types
+import google.generativeai as genai
+from google.generativeai import GenerativeModel,types
 import os
 
 GOOGLE_API_KEY = "AIzaSyDu5DCYOOOFgsE7lR1Q6aJxCIN2LTeW2Is"
 
-client = genai.Client(api_key=GOOGLE_API_KEY)
-
-
+# client = genai.Client(api_key=GOOGLE_API_KEY)
+genai.configure(api_key=GOOGLE_API_KEY)
+model = GenerativeModel("gemini-1.0-pro")
 SYSTEM_INSTRUCTIONS = """
 You are a helpful, professional AI Assistant for a Tech Company.
 1. Be polite and concise.
@@ -35,7 +35,7 @@ def generate_response(current_input, db_history):
     
     # Create chat with history
     try:
-        chat = client.chats.create(
+        chat = model.chats.create(
             model="gemini-2.0-flash",
             history=history
         )
