@@ -1,6 +1,10 @@
 import sys
 import asyncio
 import uvicorn
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def setup_event_loop():
     """Setup proper event loop policy for Windows"""

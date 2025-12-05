@@ -1,6 +1,11 @@
 import sys
 import asyncio
 import httpx
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 # Set event loop policy FIRST, before any other imports
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -8,7 +13,8 @@ from fastapi.responses import HTMLResponse
 from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import asyncio
-from models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, FetchContentRequest, QuickExtractRequest, QuickExtractResponse
+import uuid
+from models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, FetchContentRequest, QuickExtractRequest, QuickExtractResponse, PaginationConfig
 from utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -234,6 +240,191 @@ async def quick_extract_preview(request: QuickExtractRequest):
     except Exception as e:
         logger.error("Error during quick extract preview", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Quick extract preview error: {e}")
+
+@app.post("/quick-extract/preview-next", response_model=QuickExtractResponse)
+async def quick_extract_preview_next(request: QuickExtractRequest):
+    """
+    Preview next page/scroll scraping results for quick extraction.
+    Similar to preview-next-mapping but for quick extract without requiring a saved source.
+    """
+    try:
+        if not request.pagination_config:
+            return QuickExtractResponse(
+                url=str(request.url),
+                scraped_at=datetime.now(),
+                total_items=0,
+                data=[],
+                success=False,
+                message="Pagination configuration is required for Preview Next"
+            )
+        
+        # Take a copy of pagination config
+        pagination_dict = request.pagination_config.model_dump() if hasattr(request.pagination_config, 'model_dump') else request.pagination_config.dict() if hasattr(request.pagination_config, 'dict') else dict(request.pagination_config)
+        
+        if not pagination_dict or not pagination_dict.get("type"):
+            return QuickExtractResponse(
+                url=str(request.url),
+                scraped_at=datetime.now(),
+                total_items=0,
+                data=[],
+                success=False,
+                message="Pagination type is required for Preview Next"
+            )
+        
+        # Prepare modified pagination config for preview next
+        # Similar to preview-next-mapping: limit to 2 pages/steps for preview
+        if pagination_dict["type"] not in ["button_click", "scroll", "ajax_click"]:
+            pagination_dict["max_pages"] = 2
+        elif pagination_dict["type"] in ["button_click", "ajax_click"]:
+            pagination_dict["click_steps"] = 2
+        else:  # scroll
+            pagination_dict["scroll_steps"] = 2
+        
+        # Build ScrapeRequest from the preview request
+        scrape_request = ScrapeRequest(
+            entity_name="quick_extract_preview_next",
+            url=request.url,
+            container_selector=request.container_selector,
+            field_mappings=request.field_mappings,
+            max_items=500,  # Setting 500 items to allow next page preview
+            timeout=request.timeout or 15,
+            pagination_config=PaginationConfig(**pagination_dict),
+            captcha_params=request.captcha_params
+        )
+        
+        # Execute scraping using the dynamic scraper
+        scrape_response = await route_scraping_request(scrape_request)
+        
+        if not scrape_response.success:
+            return QuickExtractResponse(
+                url=str(request.url),
+                scraped_at=scrape_response.scraped_at,
+                total_items=0,
+                data=[],
+                success=False,
+                message=scrape_response.message
+            )
+        
+        # Limit to first 5 items for preview
+        preview_data = scrape_response.data[:5] if scrape_response.data else []
+        
+        return QuickExtractResponse(
+            url=scrape_response.url,
+            scraped_at=scrape_response.scraped_at,
+            total_items=scrape_response.total_items,
+            data=preview_data,
+            success=True,
+            message=f"Preview Next successful - showing first {len(preview_data)} items from next page"
+        )
+    except Exception as e:
+        logger.error("Error during quick extract preview next", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Quick extract preview next error: {e}")
+
+@app.post("/quick-extract/execute-as-task")
+async def quick_extract_execute_as_task(request: QuickExtractRequest):
+    """
+    Execute quick extract as a task through Kafka/worker pipeline.
+    Does not store data in database, only returns results.
+    Works like manual execute task but for quick extract.
+    """
+    try:
+        # Generate unique execution ID for this quick extract task
+        execution_id = str(uuid.uuid4())
+        
+        # Prepare payload with quick extract request data
+        # Convert FieldMapping objects to dictionaries for JSON serialization
+        field_mappings_dict = {}
+        for key, value in request.field_mappings.items():
+            if hasattr(value, 'model_dump'):
+                field_mappings_dict[key] = value.model_dump()
+            elif hasattr(value, 'dict'):
+                field_mappings_dict[key] = value.dict()
+            else:
+                field_mappings_dict[key] = value
+        
+        payload = {
+            "quick_extract": True,
+            "execution_id": execution_id,
+            "request": {
+                "url": str(request.url),
+                "container_selector": request.container_selector,
+                "field_mappings": field_mappings_dict,
+                "max_items": request.max_items,
+                "timeout": request.timeout,
+                "pagination_config": request.pagination_config.model_dump() if request.pagination_config else None,
+                "captcha_params": request.captcha_params.model_dump() if request.captcha_params else None
+            }
+        }
+        
+        # Use negative task_id to indicate it's a quick extract (not in DB)
+        # We'll use a hash of execution_id to create a consistent negative number
+        task_id = -abs(hash(execution_id)) % (10**9)  # Negative number within int range
+        
+        # Enqueue to Kafka with the payload
+        from routers.scheduler_config import enqueue_task
+        enqueue_task(task_id, payload)
+        
+        return {
+            "success": True,
+            "execution_id": execution_id,
+            "task_id": task_id,
+            "message": "Quick extract task queued for execution",
+            "status_url": f"/quick-extract/task-status/{execution_id}"
+        }
+    except Exception as e:
+        logger.error("Error queuing quick extract as task", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to queue quick extract task: {e}")
+
+@app.get("/quick-extract/task-status/{execution_id}")
+async def get_quick_extract_task_status(execution_id: str):
+    """
+    Poll endpoint to get the status and results of a quick extract task.
+    """
+    from routers.task_crud import get_quick_extract_result
+    
+    logger.debug(f"Polling status for execution_id: {execution_id}")
+    result = get_quick_extract_result(execution_id)
+    
+    if result is None:
+        logger.debug(f"Result is None for execution_id: {execution_id}")
+        return {
+            "success": False,
+            "status": "pending",
+            "message": "Task not found or still processing",
+            "execution_id": execution_id
+        }
+    
+    logger.debug(f"Returning result for execution_id: {execution_id}, status: {result.get('status')}, success: {result.get('success')}")
+    
+    # Ensure the response has the correct format
+    return {
+        "success": result.get("success", False),
+        "status": result.get("status", "pending"),
+        "message": result.get("message", ""),
+        "execution_id": result.get("execution_id", execution_id),
+        "data": result.get("data", []),
+        "total_items": result.get("total_items", 0),
+        "items_scraped": result.get("items_scraped", 0),
+        "url": result.get("url", ""),
+        "scraped_at": result.get("scraped_at", ""),
+        "execution_duration_ms": result.get("execution_duration_ms", 0),
+        "error": result.get("error")
+    }
+
+@app.get("/quick-extract/task-logs/{execution_id}")
+async def get_quick_extract_task_logs(execution_id: str):
+    """
+    Get execution logs for a quick extract task.
+    """
+    from routers.task_crud import get_quick_extract_logs
+    
+    logs = get_quick_extract_logs(execution_id)
+    
+    return {
+        "execution_id": execution_id,
+        "logs": logs,
+        "total_logs": len(logs)
+    }
 
     
 @app.get("/")

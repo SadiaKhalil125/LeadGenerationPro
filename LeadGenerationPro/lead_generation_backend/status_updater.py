@@ -5,10 +5,16 @@ import psycopg2
 from datetime import datetime
 import os
 import sys
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 KAFKA_STATUS_TOPIC = "task_status_updates"
 
+# Use environment variable for Kafka bootstrap, default to localhost:9092 (for local execution)
+# When running locally, connect to localhost:9092 (the PLAINTEXT_LOCAL listener)
+# When running in K8s, use host.docker.internal:9093 (the PLAINTEXT_DOCKER listener)
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
-
 # DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
 
 try:

@@ -101,25 +101,6 @@ class MappingsListResponse(BaseModel):
     total_mappings: int
     mappings: List[MappingInfo]
 
-class PaginationConfig(BaseModel):
-    type: str  # "query_param" | "offset" | "path" | "button_click" | "scroll" 
-    param_name: Optional[str] = "page"  # for query or offset
-    start_page: Optional[int] = 1
-    page_size: Optional[int] = None   # for offset
-    max_pages: Optional[int] = None
-
-    # for path
-    path_pattern: Optional[str] = None
-
-    # for button click or ajax
-    button_selector: Optional[str] = None
-    wait_selector: Optional[str] = None
-
-    # for scroll
-    scroll_steps: Optional[int] = None
-    click_steps: Optional[int] = None
-
-
 class SourceInfo(BaseModel):
     id: int
     name: str
