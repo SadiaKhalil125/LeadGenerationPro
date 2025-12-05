@@ -9,7 +9,8 @@ from kafka import KafkaProducer
 import json
 import os
 import psycopg2
-# BOOTSTRAP = "localhost:9092"
+# Use environment variable for Kafka bootstrap, default to localhost:9092 (for local execution)
+# When running locally, connect to localhost:9092 (the PLAINTEXT_LOCAL listener)
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@localhost:5432/LeadGenerationPro")
 scheduler = BackgroundScheduler()
@@ -38,7 +39,7 @@ def enqueue_task(task_id: int, payload: dict = None):
     }
     try:
         future = producer.send('scraping_tasks', message)
-        record_metadata = future.get(timeout=10)
+        record_metadata = future.get(timeout=80)
         print(f"Published task {task_id} to Kafka "
               f"(topic={record_metadata.topic}, partition={record_metadata.partition}, offset={record_metadata.offset})")
     except Exception as e:

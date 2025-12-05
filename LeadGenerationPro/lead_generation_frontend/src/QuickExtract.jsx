@@ -17,7 +17,9 @@ import {
   Layers,
   Settings,
   Plus,
-  Trash2
+  Trash2,
+  ArrowRightCircle,
+  FileText
 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -274,11 +276,19 @@ export default function QuickExtract() {
   const [containerSelector, setContainerSelector] = useState("");
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [extracting, setExtracting] = useState(false);
+  const [previewNextLoading, setPreviewNextLoading] = useState(false);
+  const [extractingAsTask, setExtractingAsTask] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
+  const [taskExecutionId, setTaskExecutionId] = useState(null);
+  const [taskStatus, setTaskStatus] = useState(null);
+  const [taskLogs, setTaskLogs] = useState([]);
+  const [showLogs, setShowLogs] = useState(false);
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [maxItems, setMaxItems] = useState("");
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [paginationType, setPaginationType] = useState("");
+  const [paginationConfig, setPaginationConfig] = useState({});
 
   // --- EFFECTS ---
   useEffect(() => {
@@ -313,6 +323,24 @@ export default function QuickExtract() {
     );
   };
 
+  const paginationTypes = [
+    "query_param",
+    "offset",
+    "path",
+    "button_click",
+    "scroll",
+    "ajax_click",
+  ];
+
+  const handlePaginationChange = (field, value) => {
+    setPaginationConfig((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const buildPaginationPayload = () => {
+    if (!paginationType) return null;
+    return { type: paginationType, ...paginationConfig };
+  };
+
   const handlePreview = async () => {
     if (!url.trim()) {
       alert("URL is required!");
@@ -339,6 +367,7 @@ export default function QuickExtract() {
     
     setPreviewLoading(true);
     try {
+      const paginationPayload = buildPaginationPayload();
       const res = await fetch(`${API_BASE}/quick-extract/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -346,6 +375,7 @@ export default function QuickExtract() {
           url,
           container_selector: containerSelector || null,
           field_mappings,
+          pagination_config: paginationPayload,
         }),
       });
       const data = await res.json();
@@ -361,8 +391,65 @@ export default function QuickExtract() {
     }
   };
 
+  const handleNextPreview = async () => {
+    if (!url.trim()) {
+      alert("URL is required!");
+      return;
+    }
+    
+    if (!paginationType) {
+      alert("Pagination configuration is required for Preview Next. Please configure pagination in Advanced Options.");
+      return;
+    }
+    
+    const field_mappings = {};
+    let hasValidMappings = false;
+    
+    fields.forEach((f) => {
+      if (!f.attribute.trim()) return; // Skip fields without attribute name
+      if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
+        field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
+        hasValidMappings = true;
+      } else if (f.selector.trim()) {
+        field_mappings[f.attribute] = { selector: f.selector, extract: f.metadata || "text" };
+        hasValidMappings = true;
+      }
+    });
+    
+    if (!hasValidMappings) {
+      alert("Add at least one field mapping with attribute name and selector!");
+      return;
+    }
+    
+    setPreviewNextLoading(true);
+    try {
+      const paginationPayload = buildPaginationPayload();
+      const res = await fetch(`${API_BASE}/quick-extract/preview-next`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        body: JSON.stringify({
+          url,
+          container_selector: containerSelector || null,
+          field_mappings,
+          pagination_config: paginationPayload,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPreviewData({ ...data, entity_name: "Quick Extract" }); // For display purposes
+      } else {
+        alert(`Preview Next failed: ${data.message}`);
+      }
+    } catch (err) {
+      alert(`Preview Next error: ${err.message}`);
+    } finally {
+      setPreviewNextLoading(false);
+    }
+  };
 
-  const handleExtract = async () => {
+
+
+  const handleExtractAsTask = async () => {
     if (!url.trim()) {
       alert("URL is required!");
       return;
@@ -386,34 +473,124 @@ export default function QuickExtract() {
       return;
     }
     
-    setExtracting(true);
+    setExtractingAsTask(true);
+    setTaskExecutionId(null);
+    setTaskStatus(null);
     setExtractedData(null);
+    
     try {
       const maxItemsValue = maxItems.trim() ? parseInt(maxItems, 10) : null;
+      const paginationPayload = buildPaginationPayload();
       const scrapeRequest = {
         url: url,
         container_selector: containerSelector || null,
         field_mappings: field_mappings,
         max_items: maxItemsValue,
-        timeout: 15
+        timeout: 15,
+        pagination_config: paginationPayload
       };
-      const res = await fetch(`${API_BASE}/quick-extract`, {
+      
+      const res = await fetch(`${API_BASE}/quick-extract/execute-as-task`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
         body: JSON.stringify(scrapeRequest),
       });
+      
       const data = await res.json();
-      if (data.success) {
-        setExtractedData({ ...data, entity_name: "Quick Extract" }); // For display purposes
-        setCurrentStep(3);
+      if (data.success && data.execution_id) {
+        setTaskExecutionId(data.execution_id);
+        setTaskStatus({ status: "queued", message: data.message });
+        
+        // Start polling for results
+        pollTaskStatus(data.execution_id);
       } else {
-        alert(`Extraction failed: ${data.message || 'Unknown error'}`);
+        alert(`Failed to queue task: ${data.detail || data.message || 'Unknown error'}`);
+        setExtractingAsTask(false);
       }
     } catch (err) {
-      alert(`Extraction error: ${err.message}`);
-    } finally {
-      setExtracting(false);
+      alert(`Error queuing task: ${err.message}`);
+      setExtractingAsTask(false);
     }
+  };
+
+  const fetchTaskLogs = async (executionId) => {
+    try {
+      const res = await fetch(`${API_BASE}/quick-extract/task-logs/${executionId}`, {
+        headers: { "ngrok-skip-browser-warning": "true" }
+      });
+      const data = await res.json();
+      if (data.logs) {
+        setTaskLogs(data.logs);
+      }
+    } catch (err) {
+      console.error("Error fetching logs:", err);
+    }
+  };
+
+  const pollTaskStatus = async (executionId) => {
+    const maxAttempts = 300; // Poll for up to 5 minutes (300 * 1 second)
+    let attempts = 0;
+    
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/quick-extract/task-status/${executionId}`, {
+          headers: { "ngrok-skip-browser-warning": "true" }
+        });
+        const data = await res.json();
+        
+        setTaskStatus(data);
+        
+        // Fetch logs on each poll
+        await fetchTaskLogs(executionId);
+        
+        // Check if task is completed (status is "completed" and success is true)
+        if (data.status === "completed" && data.success === true) {
+          // Task completed successfully - show logs and update status
+          setExtractedData({ 
+            ...data, 
+            entity_name: "Quick Extract",
+            data: data.data || []
+          });
+          setExtractingAsTask(false);
+          setShowLogs(true); // Automatically show logs when task completes
+          return; // Stop polling
+        } else if (data.status === "failed") {
+          // Task failed
+          setExtractingAsTask(false);
+          return; // Stop polling
+        } else if (data.status === "processing" || data.status === "pending" || data.status === "queued") {
+          // Still processing, continue polling
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 1000); // Poll every 1 second
+          } else {
+            alert("Task execution timed out");
+            setExtractingAsTask(false);
+          }
+        } else {
+          // Unknown status, continue polling
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 1000);
+          } else {
+            alert("Task execution timed out");
+            setExtractingAsTask(false);
+          }
+        }
+      } catch (err) {
+        console.error("Error polling task status:", err);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 1000);
+        } else {
+          alert("Error checking task status");
+          setExtractingAsTask(false);
+        }
+      }
+    };
+    
+    // Start polling after 1 second
+    setTimeout(poll, 1000);
   };
 
   const exportToCSV = () => {
@@ -584,11 +761,21 @@ export default function QuickExtract() {
                     Preview
                   </button>
                   <button
-                    onClick={handleExtract}
-                    disabled={extracting}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-[#00364A] text-black rounded-lg shadow-md hover:bg-[#49A3C4] hover:shadow-lg transition-all disabled:opacity-50 font-bold ml-2"
+                    onClick={handleNextPreview}
+                    disabled={previewNextLoading || !paginationType}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-b from-cyan-500 to-cyan-600 text-white rounded-lg shadow-sm hover:bg-cyan-700 transition-all disabled:opacity-50 font-medium"
+                    title={!paginationType ? "Configure pagination in Advanced Options to enable Preview Next" : ""}
                   >
-                    {extracting ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
+                    {previewNextLoading ? <Loader2 size={18} className="animate-spin" /> : <ArrowRightCircle size={18} />}
+                    Preview Next
+                  </button>
+                  <button
+                    onClick={handleExtractAsTask}
+                    disabled={extractingAsTask}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-b from-[#005f7f] to-[#00364A] text-white rounded-lg shadow-md hover:bg-[#49A3C4] hover:shadow-lg transition-all disabled:opacity-50 font-bold"
+                    title="Execute extraction as task through scheduler (does not store in database)"
+                  >
+                    {extractingAsTask ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
                     Extract Data
                   </button>
                 </div>
@@ -610,6 +797,316 @@ export default function QuickExtract() {
                           Leave selectors empty to use auto-extraction.
                         </p>
                       </div>
+                    </div>
+                  )}
+
+                  {(extractingAsTask || (taskStatus && taskStatus.status === "completed")) && taskStatus && (
+                    <div className="mb-8 space-y-4">
+                      <div className="p-4 bg-gradient-to-r from-purple-50 to-white border border-purple-200 rounded-xl flex gap-4 shadow-sm">
+                        <div className="p-2 bg-white rounded-lg shadow-sm h-fit text-purple-600">
+                          {taskStatus.status === "processing" || taskStatus.status === "pending" || taskStatus.status === "queued" ? (
+                            <Loader2 size={20} className="animate-spin" />
+                          ) : taskStatus.status === "completed" ? (
+                            <CheckCircle size={20} />
+                          ) : (
+                            <AlertCircle size={20} />
+                          )}
+                        </div>
+                        <div className="flex-grow">
+                          <h4 className="font-bold text-[#00364A]">
+                            {taskStatus.status === "processing" ? "Task Executing..." : 
+                             taskStatus.status === "pending" || taskStatus.status === "queued" ? "Task Queued..." :
+                             taskStatus.status === "completed" ? "Task Completed Successfully!" : "Task Failed"}
+                          </h4>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {taskStatus.message || "Processing..."}
+                          </p>
+                          {taskStatus.execution_duration_ms && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Duration: {(taskStatus.execution_duration_ms / 1000).toFixed(2)}s
+                            </p>
+                          )}
+                          {taskStatus.status === "completed" && taskStatus.items_scraped !== undefined && (
+                            <p className="text-xs text-green-600 mt-1 font-semibold">
+                              {taskStatus.items_scraped} items scraped successfully
+                            </p>
+                          )}
+                          {taskStatus.status === "completed" && extractedData && (
+                            <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
+                              <p className="text-sm font-semibold text-[#00364A] mb-2">
+                                ✓ Extraction completed! View your data and export options below.
+                              </p>
+                              <p className="text-xs text-gray-600">
+                                Go to <strong>Show Data and Export</strong> to view results and download in CSV or Excel format.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {taskStatus.status === "completed" && extractedData && (
+                            <button
+                              onClick={() => setCurrentStep(3)}
+                              className="px-5 py-2.5 text-sm bg-gradient-to-b from-green-500 to-green-600 text-white rounded-lg hover:bg-green-700 font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                            >
+                              <ArrowRight size={16} />
+                              Show Data & Export
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setShowLogs(!showLogs)}
+                            className="px-4 py-2 text-sm bg-white border border-purple-200 rounded-lg hover:bg-purple-50 text-purple-600 font-medium"
+                          >
+                            {showLogs ? "Hide" : "Show"} Logs
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {showLogs && taskLogs.length > 0 && (
+                        <div className="p-4 bg-white rounded-xl border border-gray-200 max-h-96 overflow-y-auto">
+                          <div className="space-y-4">
+                            {taskLogs.map((log, index) => {
+                              const formatDateTime = (dateString) => {
+                                if (!dateString) return 'No timestamp';
+                                try {
+                                  return new Date(dateString).toLocaleString([], {
+                                    year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                  });
+                                } catch {
+                                  return dateString;
+                                }
+                              };
+                              
+                              return (
+                                <div
+                                  key={log.id || index}
+                                  className={`p-5 rounded-lg border-l-4 transition-all ${
+                                    log.log_level === 'error' ? 'bg-red-50 border-red-500 shadow-sm' :
+                                    log.log_level === 'warning' ? 'bg-yellow-50 border-yellow-500 shadow-sm' :
+                                    log.status === 'completed' ? 'bg-green-50 border-green-500 shadow-sm' :
+                                    'bg-gray-50 border-gray-300 shadow-sm'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                        <span className={`px-2.5 py-1 rounded text-xs font-medium ${
+                                          log.log_level === 'error' ? 'bg-red-200 text-red-800' :
+                                          log.log_level === 'warning' ? 'bg-yellow-200 text-yellow-800' :
+                                          log.log_level === 'debug' ? 'bg-blue-200 text-blue-800' :
+                                          'bg-gray-200 text-gray-800'
+                                        }`}>
+                                          {log.log_level?.toUpperCase() || 'INFO'}
+                                        </span>
+                                        <span className={`px-2.5 py-1 rounded text-xs font-medium ${
+                                          log.status === 'completed' ? 'bg-green-200 text-green-800' :
+                                          log.status === 'failed' ? 'bg-red-200 text-red-800' :
+                                          log.status === 'processing' ? 'bg-blue-200 text-blue-800' :
+                                          'bg-gray-200 text-gray-800'
+                                        }`}>
+                                          {log.status || 'unknown'}
+                                        </span>
+                                        {log.execution_duration_ms && (
+                                          <span className="text-xs text-gray-600 font-mono">
+                                            {log.execution_duration_ms}ms
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-sm font-medium text-gray-900 mb-2">{log.message}</p>
+                                      {log.created_at && (
+                                        <p className="text-xs text-gray-500 mb-3">
+                                          {formatDateTime(log.created_at)}
+                                        </p>
+                                      )}
+
+                                      {/* Extract info from message text */}
+                                      {(() => {
+                                        const messageInfo = [];
+                                        const msg = log.message || '';
+                                        
+                                        // Extract page numbers from message (various patterns)
+                                        const pageMatch = msg.match(/(?:page|Page|PAGE)\s*[#:]?\s*(\d+)|(\d+)\s*(?:page|Page)/i);
+                                        if (pageMatch) {
+                                          messageInfo.push({ label: 'Page', value: pageMatch[1] || pageMatch[2] });
+                                        }
+                                        
+                                        // Extract row/item counts from message (various patterns)
+                                        const rowsMatch = msg.match(/(\d+)\s*(?:rows?|items?|records?|entries?)\s*(?:scraped|extracted|found|collected|processed|saved)/i) ||
+                                                         msg.match(/(?:scraped|extracted|found|collected|processed|saved)\s*(\d+)\s*(?:rows?|items?|records?|entries?)/i);
+                                        if (rowsMatch) {
+                                          messageInfo.push({ label: 'Rows Scraped', value: rowsMatch[1] });
+                                        }
+                                        
+                                        // Extract total counts
+                                        const totalMatch = msg.match(/(?:total|Total|TOTAL)\s*(?:of\s*)?(\d+)\s*(?:rows?|items?|records?|entries?)/i);
+                                        if (totalMatch) {
+                                          messageInfo.push({ label: 'Total Items', value: totalMatch[1] });
+                                        }
+                                        
+                                        // Extract "done" or "completed" status
+                                        if (msg.match(/(?:done|completed|finished|success)/i)) {
+                                          messageInfo.push({ label: 'Status', value: 'Done' });
+                                        }
+                                        
+                                        // Extract URL if present
+                                        const urlMatch = msg.match(/(https?:\/\/[^\s]+)/i);
+                                        if (urlMatch && urlMatch[1].length < 80) {
+                                          messageInfo.push({ label: 'URL', value: urlMatch[1] });
+                                        }
+                                        
+                                        return messageInfo.length > 0 ? (
+                                          <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg shadow-sm">
+                                            <div className="flex flex-wrap gap-4">
+                                              {messageInfo.map((info, idx) => (
+                                                <div key={idx} className="flex items-center gap-2 bg-white/60 px-3 py-1.5 rounded-md border border-green-100">
+                                                  <span className="text-xs font-bold text-green-900 uppercase tracking-wide">{info.label}:</span>
+                                                  <span className="text-sm font-semibold text-green-700">{String(info.value)}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ) : null;
+                                      })()}
+
+                                      {/* Key Details - Prominently Displayed */}
+                                      {log.details && Object.keys(log.details).length > 0 && (() => {
+                                        const details = log.details;
+                                        const keyInfo = [];
+                                        
+                                        // Extract important information - check multiple possible field names
+                                        const getValue = (...keys) => {
+                                          for (const key of keys) {
+                                            if (details[key] !== undefined && details[key] !== null) {
+                                              return details[key];
+                                            }
+                                          }
+                                          return null;
+                                        };
+                                        
+                                        // Page information
+                                        const page = getValue('page', 'page_number', 'current_page', 'page_num');
+                                        if (page !== null) {
+                                          keyInfo.push({ label: 'Page', value: page });
+                                        }
+                                        
+                                        // Rows/Items scraped
+                                        const rows = getValue('rows_scraped', 'items_scraped', 'items_count', 'rows_count', 'scraped_count', 'count');
+                                        if (rows !== null) {
+                                          keyInfo.push({ label: 'Rows Scraped', value: rows });
+                                        }
+                                        
+                                        // Total pages
+                                        const totalPages = getValue('total_pages', 'max_pages', 'pages_total');
+                                        if (totalPages !== null) {
+                                          keyInfo.push({ label: 'Total Pages', value: totalPages });
+                                        }
+                                        
+                                        // Total items
+                                        const totalItems = getValue('total_items', 'total_rows', 'total_count', 'expected_items');
+                                        if (totalItems !== null) {
+                                          keyInfo.push({ label: 'Total Items', value: totalItems });
+                                        }
+                                        
+                                        // Progress
+                                        const progress = getValue('progress', 'progress_percent', 'progress_pct', 'completion');
+                                        if (progress !== null) {
+                                          keyInfo.push({ label: 'Progress', value: typeof progress === 'number' ? `${progress}%` : progress });
+                                        }
+                                        
+                                        // URL
+                                        const url = getValue('url', 'page_url', 'current_url');
+                                        if (url !== null && typeof url === 'string' && url.length < 100) {
+                                          keyInfo.push({ label: 'URL', value: url });
+                                        }
+                                        
+                                        // Status message
+                                        const statusMsg = getValue('status_message', 'message', 'status_msg', 'note');
+                                        if (statusMsg !== null && statusMsg !== log.message) {
+                                          keyInfo.push({ label: 'Status', value: statusMsg });
+                                        }
+                                        
+                                        // Execution ID (if present and not too long)
+                                        const execId = getValue('execution_id', 'exec_id', 'task_id');
+                                        if (execId !== null && String(execId).length < 50) {
+                                          keyInfo.push({ label: 'Execution ID', value: String(execId) });
+                                        }
+                                        
+                                        return keyInfo.length > 0 ? (
+                                          <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg shadow-sm">
+                                            <div className="flex flex-wrap gap-4">
+                                              {keyInfo.map((info, idx) => (
+                                                <div key={idx} className="flex items-center gap-2 bg-white/60 px-3 py-1.5 rounded-md border border-blue-100">
+                                                  <span className="text-xs font-bold text-blue-900 uppercase tracking-wide">{info.label}:</span>
+                                                  <span className="text-sm font-semibold text-blue-700">{String(info.value)}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ) : null;
+                                      })()}
+
+                                      {/* Details Table - Always show if details exist, or show message if no details */}
+                                      {log.details && Object.keys(log.details).length > 0 ? (
+                                        <details className="mt-3 group" open={true}>
+                                          <summary className="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 transition-colors text-xs font-medium text-gray-700 select-none">
+                                            <span>View All Details ({Object.keys(log.details).length} {Object.keys(log.details).length === 1 ? 'field' : 'fields'})</span>
+                                            <span className="group-open:rotate-180 transition-transform">▼</span>
+                                          </summary>
+                                          
+                                          <div className="mt-3 overflow-x-auto border border-gray-300 rounded-lg shadow-sm">
+                                            <table className="w-full text-xs bg-white">
+                                              <thead className="bg-gradient-to-r from-purple-50 to-purple-100 border-b-2 border-purple-300">
+                                                <tr>
+                                                  <th className="px-4 py-3 text-left font-semibold text-purple-900 border-r border-purple-200 w-1/3">
+                                                    Key
+                                                  </th>
+                                                  <th className="px-4 py-3 text-left font-semibold text-purple-900">
+                                                    Value
+                                                  </th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-gray-200">
+                                                {Object.entries(log.details).map(([key, value], idx) => (
+                                                  <tr key={key} className={`transition-colors ${idx % 2 === 0 ? 'bg-white hover:bg-purple-50' : 'bg-gray-50 hover:bg-purple-50'}`}>
+                                                    <td className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 break-words max-w-xs">
+                                                      {key}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-gray-700 break-words">
+                                                      {typeof value === 'object' && value !== null 
+                                                        ? <code className="bg-gray-100 px-2 py-1 rounded text-xs text-gray-800">{JSON.stringify(value, null, 2)}</code>
+                                                        : String(value)}
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </details>
+                                      ) : (
+                                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-500 italic">
+                                          No additional details available for this log entry.
+                                        </div>
+                                      )}
+
+                                      {/* Error Traceback - Collapsible */}
+                                      {log.error_traceback && (
+                                        <details className="mt-3 group">
+                                          <summary className="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-100 hover:bg-red-200 transition-colors text-xs font-medium text-red-800 select-none">
+                                            <span>View Error Traceback</span>
+                                            <span className="group-open:rotate-180 transition-transform">▼</span>
+                                          </summary>
+                                          <pre className="mt-3 p-4 bg-gray-900 text-red-200 rounded-lg text-xs overflow-x-auto font-mono border border-red-300 shadow-sm">
+                                            {log.error_traceback}
+                                          </pre>
+                                        </details>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -643,6 +1140,178 @@ export default function QuickExtract() {
                         Maximum number of items to extract. {isGoogleMaps ? "Default: 40 for Google Maps" : "Leave empty for no limit"}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Advanced Options - Pagination */}
+                  <div className="mb-8">
+                    <button
+                      onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                      className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-xl hover:border-[#49A3C4] transition-all"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Settings size={18} className="text-[#49A3C4]" />
+                        <span className="font-semibold text-[#00364A]">Advanced Options</span>
+                        {paginationType && (
+                          <span className="text-xs bg-[#49A3C4] text-white px-2 py-1 rounded-full">
+                            Configured
+                          </span>
+                        )}
+                      </div>
+                      {showAdvancedOptions ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+
+                    {showAdvancedOptions && (
+                      <div className="mt-4 p-5 bg-blue-50/50 border border-blue-200 rounded-xl space-y-4">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                          <Layers size={18} className="text-blue-500" />
+                          Pagination Configuration
+                        </h3>
+                        
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-gray-700">Pagination Type</label>
+                          <select
+                            value={paginationType}
+                            onChange={(e) => {
+                              setPaginationType(e.target.value);
+                              setPaginationConfig({});
+                            }}
+                            className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                          >
+                            <option value="">Select pagination type</option>
+                            {paginationTypes.map((type) => (
+                              <option key={type} value={type}>
+                                {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {paginationType && (
+                          <div className="space-y-4 pt-2">
+                            {paginationType === "query_param" && (
+                              <>
+                                <div className="space-y-1">
+                                  <label className="text-sm font-medium text-gray-700">Param Name</label>
+                                  <input
+                                    type="text"
+                                    placeholder="page"
+                                    value={paginationConfig.param_name || ""}
+                                    onChange={(e) => handlePaginationChange("param_name", e.target.value)}
+                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-sm font-medium text-gray-700">Start Page</label>
+                                  <input
+                                    type="number"
+                                    placeholder="1"
+                                    value={paginationConfig.start_page || ""}
+                                    onChange={(e) => handlePaginationChange("start_page", Number(e.target.value))}
+                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                  />
+                                </div>
+                              </>
+                            )}
+
+                            {paginationType === "offset" && (
+                              <>
+                                <div className="space-y-1">
+                                  <label className="text-sm font-medium text-gray-700">Param Name</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. offset"
+                                    value={paginationConfig.param_name || ""}
+                                    onChange={(e) => handlePaginationChange("param_name", e.target.value)}
+                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-sm font-medium text-gray-700">Start Page</label>
+                                  <input
+                                    type="number"
+                                    placeholder="1"
+                                    value={paginationConfig.start_page || ""}
+                                    onChange={(e) => handlePaginationChange("start_page", Number(e.target.value))}
+                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-sm font-medium text-gray-700">Page Size</label>
+                                  <input
+                                    type="number"
+                                    placeholder="10"
+                                    value={paginationConfig.page_size || ""}
+                                    onChange={(e) => handlePaginationChange("page_size", Number(e.target.value))}
+                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-sm font-medium text-gray-700">Max Pages (Optional)</label>
+                                  <input
+                                    type="number"
+                                    placeholder="Optional"
+                                    value={paginationConfig.max_pages || ""}
+                                    onChange={(e) => handlePaginationChange("max_pages", Number(e.target.value))}
+                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                  />
+                                </div>
+                              </>
+                            )}
+
+                            {paginationType === "path" && (
+                              <div className="space-y-1">
+                                <label className="text-sm font-medium text-gray-700">Path Pattern (to be appended to base URL)</label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. /page/{page}"
+                                  value={paginationConfig.path_pattern || ""}
+                                  onChange={(e) => handlePaginationChange("path_pattern", e.target.value)}
+                                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                />
+                              </div>
+                            )}
+
+                            {(paginationType === "button_click" || paginationType === "ajax_click") && (
+                              <>
+                                <div className="space-y-1">
+                                  <label className="text-sm font-medium text-gray-700">Button Selector</label>
+                                  <input
+                                    type="text"
+                                    placeholder=".next-button"
+                                    value={paginationConfig.button_selector || ""}
+                                    onChange={(e) => handlePaginationChange("button_selector", e.target.value)}
+                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-sm font-medium text-gray-700">Wait Selector</label>
+                                  <input
+                                    type="text"
+                                    placeholder=".results-loaded"
+                                    value={paginationConfig.wait_selector || ""}
+                                    onChange={(e) => handlePaginationChange("wait_selector", e.target.value)}
+                                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                  />
+                                </div>
+                              </>
+                            )}
+
+                            {paginationType === "scroll" && (
+                              <div className="space-y-1">
+                                <label className="text-sm font-medium text-gray-700">Scroll Steps</label>
+                                <input
+                                  type="number"
+                                  placeholder="5"
+                                  value={paginationConfig.scroll_steps || ""}
+                                  onChange={(e) => handlePaginationChange("scroll_steps", Number(e.target.value))}
+                                  className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#49A3C4] focus:border-[#49A3C4] bg-white"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -714,11 +1383,11 @@ export default function QuickExtract() {
                 </div>
 
                 {/* Right Panel: Source Code View */}
-                <div className="w-1/2 bg-[#1e1e1e] border-l border-gray-200 p-0 flex flex-col">
+                {/* <div className="w-1/2 bg-[#1e1e1e] border-l border-gray-200 p-0 flex flex-col">
                   <div className="flex-grow overflow-hidden p-4">
                      <ServerHtmlPreview url={url} />
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
           )}
@@ -800,6 +1469,14 @@ export default function QuickExtract() {
                       setFields([{ id: Date.now(), attribute: "", selector: "", metadata: "text" }]);
                       setContainerSelector("");
                       setMaxItems("");
+                      setPaginationType("");
+                      setPaginationConfig({});
+                      setShowAdvancedOptions(false);
+                      setTaskExecutionId(null);
+                      setTaskStatus(null);
+                      setTaskLogs([]);
+                      setShowLogs(false);
+                      setExtractingAsTask(false);
                     }}
                     className="text-gray-500 font-semibold hover:text-[#00364A] px-6 py-2 transition-colors"
                   >
