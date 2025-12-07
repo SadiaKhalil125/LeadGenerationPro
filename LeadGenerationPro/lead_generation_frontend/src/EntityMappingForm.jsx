@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Eye, ArrowRight, ArrowRightCircle, ArrowRightCircleIcon, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, Code } from "lucide-react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import ServerHtmlPreview from "./ServerHtmlPreview";
 
 import API_BASE from "./api_base";
 
@@ -149,97 +150,7 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
-const ServerHtmlPreview = ({ url }) => {
-  const [status, setStatus] = useState('idle');
-  const [htmlContent, setHtmlContent] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-        fetchContent(url);
-      } else {
-        setStatus('idle');
-      }
-    }, 500);
-
-    return () => clearTimeout(handler);
-  }, [url]);
-
-  const fetchContent = async (urlToFetch) => {
-    setStatus('loading');
-    setHtmlContent('');
-    setErrorMessage('');
-    try {
-      const res = await fetch(`${API_BASE}/fetchcontent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json",
-                   "ngrok-skip-browser-warning": "true"
-         },
-        body: JSON.stringify({ url: urlToFetch }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to fetch content from the server.');
-      }
-      
-      setHtmlContent(data.content); // We use the raw content directly
-      setStatus('success');
-    } catch (err) {
-      setErrorMessage(err.message);
-      setStatus('error');
-    }
-  };
-
-  return (
-    <div className="w-full h-full flex flex-col bg-gray-800">
-      {status === 'idle' && (
-        <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
-          <Code size={48} className="mb-4 text-gray-500" />
-          <h3 className="text-lg font-semibold">HTML Source View</h3>
-          <p>Enter a URL to see the raw HTML source code.</p>
-        </div>
-      )}
-      {status === 'loading' && (
-        <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
-          <div className="animate-spin text-teal-500"><Code size={48} /></div>
-          <p className="mt-4 font-semibold">Fetching HTML Source...</p>
-        </div>
-      )}
-      {status === 'error' && (
-        <div className="flex-grow flex flex-col items-center justify-center text-red-400 p-4">
-          <AlertTriangle size={48} className="mb-4 text-red-500" />
-          <h3 className="text-lg font-bold">Fetch Failed</h3>
-          <p className="text-center mt-2 bg-red-900 bg-opacity-30 p-3 rounded-md">{errorMessage}</p>
-        </div>
-      )}
-      {status === 'success' && (
-        <div className="w-full h-full overflow-auto">
-          <SyntaxHighlighter
-            language="html"
-            style={vscDarkPlus}
-            showLineNumbers={true}
-            wrapLines={true}
-            customStyle={{ 
-              margin: 0,
-              height: '100%',
-              width: '100%',
-              padding: '1rem'
-            }}
-            codeTagProps={{
-              style: {
-                fontFamily: '"Fira Code", "Dank Mono", monospace',
-                fontSize: '14px',
-              }
-            }}
-          >
-            {htmlContent}
-          </SyntaxHighlighter>
-        </div>
-      )}
-    </div>
-  );
-};
 
 export default function EntityMappingScreen() {
   const [source, setSource] = useState("");

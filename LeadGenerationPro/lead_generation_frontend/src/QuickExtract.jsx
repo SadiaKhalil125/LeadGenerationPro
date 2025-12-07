@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import ServerHtmlPreview from "./ServerHtmlPreview";
 import API_BASE from "./api_base";
 
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
@@ -178,94 +179,6 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
-const ServerHtmlPreview = ({ url }) => {
-  const [status, setStatus] = useState('idle');
-  const [htmlContent, setHtmlContent] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-        fetchContent(url);
-      } else {
-        setStatus('idle');
-      }
-    }, 500);
-
-    return () => clearTimeout(handler);
-  }, [url]);
-
-  const fetchContent = async (urlToFetch) => {
-    setStatus('loading');
-    setHtmlContent('');
-    setErrorMessage('');
-    try {
-      const res = await fetch(`${API_BASE}/fetchcontent`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true"
-        },
-        body: JSON.stringify({ url: urlToFetch }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to fetch content from the server.');
-      }
-      
-      setHtmlContent(data.content);
-      setStatus('success');
-    } catch (err) {
-      setErrorMessage(err.message);
-      setStatus('error');
-    }
-  };
-
-  return (
-    <div className="w-full h-full flex flex-col bg-[#1e1e1e] rounded-xl overflow-hidden border border-gray-700 shadow-inner">
-      <div className="bg-[#2d2d2d] px-4 py-2 flex items-center gap-2 border-b border-gray-700">
-        <div className="flex gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-          <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-          <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
-        </div>
-        <span className="text-xs text-gray-400 ml-2 font-mono">source_view.html</span>
-      </div>
-      
-      {status === 'idle' && (
-        <div className="flex-grow flex flex-col items-center justify-center text-gray-500">
-          <Code size={48} className="mb-4 opacity-50" />
-          <h3 className="text-sm font-medium">Waiting for URL input...</h3>
-        </div>
-      )}
-      {status === 'loading' && (
-        <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
-          <Loader2 size={32} className="animate-spin text-[#49A3C4] mb-3" />
-          <p className="text-xs uppercase tracking-wider font-semibold">Fetching Source</p>
-        </div>
-      )}
-      {status === 'error' && (
-        <div className="flex-grow flex flex-col items-center justify-center text-red-400 p-8">
-          <AlertCircle size={40} className="mb-3" />
-          <p className="text-center text-sm bg-red-900/20 border border-red-900/50 p-4 rounded-lg">{errorMessage}</p>
-        </div>
-      )}
-      {status === 'success' && (
-        <div className="w-full h-full overflow-auto custom-scrollbar">
-          <SyntaxHighlighter
-            language="html"
-            style={vscDarkPlus}
-            showLineNumbers={true}
-            wrapLines={true}
-            customStyle={{ margin: 0, padding: '1.5rem', background: 'transparent' }}
-          >
-            {htmlContent}
-          </SyntaxHighlighter>
-        </div>
-      )}
-    </div>
-  );
-};
 
 /* --- Main Component --- */
 
@@ -289,6 +202,12 @@ export default function QuickExtract() {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [paginationType, setPaginationType] = useState("");
   const [paginationConfig, setPaginationConfig] = useState({});
+  const [storeInDatabase, setStoreInDatabase] = useState(false);
+  const [selectedEntity, setSelectedEntity] = useState("");
+  const [createNewEntity, setCreateNewEntity] = useState(false);
+  const [newEntityName, setNewEntityName] = useState("");
+  const [availableEntities, setAvailableEntities] = useState([]);
+  const [loadingEntities, setLoadingEntities] = useState(false);
 
   // --- EFFECTS ---
   useEffect(() => {
@@ -302,6 +221,75 @@ export default function QuickExtract() {
       setFields([{ id: Date.now(), attribute: "", selector: "", metadata: "text" }]);
     }
   }, []);
+
+  // Fetch available entities on component mount
+  useEffect(() => {
+    const fetchEntities = async () => {
+      setLoadingEntities(true);
+      try {
+        const res = await fetch(`${API_BASE}/entity/entities`, {
+          headers: { "ngrok-skip-browser-warning": "true" }
+        });
+        const data = await res.json();
+        console.log("Fetched entities data:", data);
+        if (data.entities && Array.isArray(data.entities)) {
+          const entityNames = data.entities.map(e => e.name || e);
+          console.log("Entity names:", entityNames);
+          setAvailableEntities(entityNames);
+        } else {
+          console.warn("No entities found or invalid format:", data);
+          setAvailableEntities([]);
+        }
+      } catch (err) {
+        console.error("Error fetching entities:", err);
+        setAvailableEntities([]);
+      } finally {
+        setLoadingEntities(false);
+      }
+    };
+    fetchEntities();
+  }, []);
+
+  // Auto-populate field mappings when entity is selected
+  useEffect(() => {
+    const fetchEntityColumns = async () => {
+      if (selectedEntity && !createNewEntity && storeInDatabase) {
+        try {
+          const res = await fetch(`${API_BASE}/entity/entity-info/${selectedEntity}`, {
+            headers: { "ngrok-skip-browser-warning": "true" }
+          });
+          const data = await res.json();
+          if (data.success && data.columns) {
+            // Filter out system columns (id, modified_at, source)
+            const entityColumns = data.columns
+              .filter((col) => {
+                const colName = typeof col === 'string' ? col : col.name;
+                return colName !== 'id' && colName !== 'modified_at' && colName !== 'source';
+              })
+              .map((col, idx) => {
+                const colName = typeof col === 'string' ? col : col.name;
+                return {
+                  id: Date.now() + idx,
+                  attribute: colName,
+                  selector: "",
+                  metadata: "text"
+                };
+              });
+            
+            // Auto-populate fields with entity columns
+            if (entityColumns.length > 0) {
+              setFields(entityColumns);
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching entity columns:", err);
+        }
+      }
+    };
+    
+    fetchEntityColumns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEntity, createNewEntity, storeInDatabase]);
 
   // --- LOGIC ---
   const addField = () => {
@@ -473,6 +461,52 @@ export default function QuickExtract() {
       return;
     }
     
+    // Handle entity creation if needed
+    let finalEntityName = null;
+    if (storeInDatabase) {
+      if (createNewEntity && newEntityName.trim()) {
+        try {
+          // Create entity from field mappings
+          const createRes = await fetch(`${API_BASE}/entity/create-entity-from-fields`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+              entity_name: newEntityName.trim(),
+              field_mappings: field_mappings
+            }),
+          });
+          const createData = await createRes.json();
+          if (createData.success) {
+            finalEntityName = createData.entity_name;
+            // Refresh entities list
+            const entitiesRes = await fetch(`${API_BASE}/entity/entities`, {
+              headers: { "ngrok-skip-browser-warning": "true" }
+            });
+            const entitiesData = await entitiesRes.json();
+            if (entitiesData.entities) {
+              setAvailableEntities(entitiesData.entities.map(e => e.name));
+              setSelectedEntity(finalEntityName);
+              setCreateNewEntity(false);
+            }
+          } else {
+            alert(`Failed to create entity: ${createData.detail || createData.message}`);
+            setExtractingAsTask(false);
+            return;
+          }
+        } catch (err) {
+          alert(`Error creating entity: ${err.message}`);
+          setExtractingAsTask(false);
+          return;
+        }
+      } else if (selectedEntity) {
+        finalEntityName = selectedEntity;
+      } else {
+        alert("Please select an existing entity or create a new one to store data in database.");
+        setExtractingAsTask(false);
+        return;
+      }
+    }
+    
     setExtractingAsTask(true);
     setTaskExecutionId(null);
     setTaskStatus(null);
@@ -487,8 +521,18 @@ export default function QuickExtract() {
         field_mappings: field_mappings,
         max_items: maxItemsValue,
         timeout: 15,
-        pagination_config: paginationPayload
+        pagination_config: paginationPayload,
+        entity_name: finalEntityName || null,
+        create_entity: false, // Already created if needed
+        source_name: "Quick Extract"
       };
+      
+      console.log("Quick Extract Request:", {
+        url: scrapeRequest.url,
+        entity_name: scrapeRequest.entity_name,
+        will_store_in_db: !!scrapeRequest.entity_name,
+        field_mappings_count: Object.keys(scrapeRequest.field_mappings).length
+      });
       
       const res = await fetch(`${API_BASE}/quick-extract/execute-as-task`, {
         method: "POST",
@@ -500,6 +544,9 @@ export default function QuickExtract() {
       if (data.success && data.execution_id) {
         setTaskExecutionId(data.execution_id);
         setTaskStatus({ status: "queued", message: data.message });
+        
+        // Fetch initial logs immediately
+        await fetchTaskLogs(data.execution_id);
         
         // Start polling for results
         pollTaskStatus(data.execution_id);
@@ -1046,7 +1093,7 @@ export default function QuickExtract() {
 
                                       {/* Details Table - Always show if details exist, or show message if no details */}
                                       {log.details && Object.keys(log.details).length > 0 ? (
-                                        <details className="mt-3 group" open={true}>
+                                        <details className="mt-3 group">
                                           <summary className="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 transition-colors text-xs font-medium text-gray-700 select-none">
                                             <span>View All Details ({Object.keys(log.details).length} {Object.keys(log.details).length === 1 ? 'field' : 'fields'})</span>
                                             <span className="group-open:rotate-180 transition-transform">▼</span>
@@ -1111,6 +1158,120 @@ export default function QuickExtract() {
                   )}
 
                   <div className="mb-8 space-y-6">
+                    {/* Entity Selection */}
+                    <div>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+                        Store Data in Entity (Optional)
+                      </label>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="storeInEntity"
+                            checked={storeInDatabase}
+                            onChange={(e) => {
+                              setStoreInDatabase(e.target.checked);
+                              if (!e.target.checked) {
+                                setSelectedEntity("");
+                                setCreateNewEntity(false);
+                                setNewEntityName("");
+                              }
+                            }}
+                            className="w-4 h-4 text-[#49A3C4] border-gray-300 rounded focus:ring-[#49A3C4] cursor-pointer"
+                          />
+                          <label htmlFor="storeInEntity" className="text-sm font-medium text-gray-700 cursor-pointer">
+                            Store extracted data in database entity table
+                          </label>
+                        </div>
+                        
+                        {storeInDatabase && (
+                          <div className="pl-7 space-y-3 border-l-2 border-[#49A3C4]">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="radio"
+                                id="selectExisting"
+                                name="entityOption"
+                                checked={!createNewEntity}
+                                onChange={() => {
+                                  setCreateNewEntity(false);
+                                  setNewEntityName("");
+                                }}
+                                className="w-4 h-4 text-[#49A3C4] border-gray-300 focus:ring-[#49A3C4]"
+                              />
+                              <label htmlFor="selectExisting" className="text-sm text-gray-700">
+                                Select existing entity
+                              </label>
+                            </div>
+                            
+                            {!createNewEntity && (
+                              <div className="pl-7 space-y-2">
+                                <select
+                                  value={selectedEntity}
+                                  onChange={(e) => setSelectedEntity(e.target.value)}
+                                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all text-sm text-[#00364A]"
+                                  disabled={loadingEntities}
+                                >
+                                  <option value="">-- Select Entity --</option>
+                                  {availableEntities.map((entity) => (
+                                    <option key={entity} value={entity}>
+                                      {entity}
+                                    </option>
+                                  ))}
+                                </select>
+                                {loadingEntities && (
+                                  <p className="text-xs text-gray-400 mt-1">Loading entities...</p>
+                                )}
+                                {selectedEntity && (
+                                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <p className="text-xs text-blue-800 font-medium">
+                                      ✓ Selected entity: <strong>{selectedEntity}</strong>
+                                    </p>
+                                    <p className="text-xs text-blue-600 mt-1">
+                                      Field mappings have been auto-populated with entity columns. You can modify selectors as needed.
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="radio"
+                                id="createNew"
+                                name="entityOption"
+                                checked={createNewEntity}
+                                onChange={() => setCreateNewEntity(true)}
+                                className="w-4 h-4 text-[#49A3C4] border-gray-300 focus:ring-[#49A3C4]"
+                              />
+                              <label htmlFor="createNew" className="text-sm text-gray-700">
+                                Create new entity from field mappings
+                              </label>
+                            </div>
+                            
+                            {createNewEntity && (
+                              <div className="pl-7 space-y-2">
+                                <div>
+                                  <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                                    Entity Name <span className="text-red-500">*</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder="Enter entity name (e.g., business_listings)"
+                                    value={newEntityName}
+                                    onChange={(e) => setNewEntityName(e.target.value)}
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all text-sm text-[#00364A]"
+                                  />
+                                </div>
+                                <p className="text-xs text-gray-400">
+                                  Entity table will be created automatically with columns matching your field mappings.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
                     <div>
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
                         Container Selector (Optional)
@@ -1383,11 +1544,11 @@ export default function QuickExtract() {
                 </div>
 
                 {/* Right Panel: Source Code View */}
-                {/* <div className="w-1/2 bg-[#1e1e1e] border-l border-gray-200 p-0 flex flex-col">
-                  <div className="flex-grow overflow-hidden p-4">
+                <div className="w-1/2 bg-[#1e1e1e] border-l border-gray-200 p-0 flex flex-col">
+                  <div className="flex-grow overflow-hidden ">
                      <ServerHtmlPreview url={url} />
                   </div>
-                </div> */}
+                </div>
               </div>
             </div>
           )}

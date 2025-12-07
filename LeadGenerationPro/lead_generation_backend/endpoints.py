@@ -1,5 +1,6 @@
 import sys
 import asyncio
+from bs4 import BeautifulSoup
 import httpx
 from dotenv import load_dotenv
 
@@ -22,6 +23,9 @@ from crawl4Util import extract_website
 from scraping_router import route_scraping_request
 from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud
 from routers.scheduler_config import scheduler, task_lifespan
+from urllib.parse import urljoin
+from playwright.async_api import async_playwright
+import random 
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +37,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=task_lifespan
 )
-
+RENDER_CACHE = {} 
 
 app.include_router(entity_crud.router, prefix="/entity", tags=["Entity Management"])
 app.include_router(source_crud.router, prefix="/source", tags=["Source Management"])
@@ -49,14 +53,108 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-@app.post("/fetchcontent")
-async def fetch_content(request: FetchContentRequest):
+
+
+@app.get("/rendered/{page_id}")
+def serve_page(page_id: str):
+    html = RENDER_CACHE.get(page_id)
+    if not html:
+        return HTMLResponse("<h1>Page expired</h1>", status_code=404)
+
+    return HTMLResponse(html)
+
+
+@app.post("/fetchcontent-js")
+async def fetch_content_js(payload: dict):
+    url = payload.get("url")
+
+    if not url:
+        return {"success": False, "error": "URL is required"}
+
     try:
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            resp = await client.get(request.url, timeout=10000)
-            return {"success": True, "content": resp.text}
+        async with async_playwright() as p:
+
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-web-security",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--enable-webgl",
+                    "--ignore-gpu-blocklist",
+                    "--use-gl=desktop",
+                    "--enable-features=VaapiVideoEncoder,VaapiVideoDecoder",
+                    "--disable-features=AudioServiceOutOfProcess",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--allow-running-insecure-content",
+                    "--disable-infobars",
+                    "--start-maximized",
+                ]
+            )
+
+            context = await browser.new_context(
+                viewport={"width": 1400, "height": 900},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.6367.60 Safari/537.36"
+                ),
+                locale="en-US",
+                java_script_enabled=True,
+                geolocation={"longitude": 0, "latitude": 0},
+                permissions=["geolocation"],
+                ignore_https_errors=True,
+            )
+
+            page = await context.new_page()
+
+            # REMOVE ALL BOT FLAGS
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+                Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+                Object.defineProperty(navigator, 'platform', { get: () => "Win32" });
+                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            """)
+
+            # Simulate real mouse movement (Google Maps checks this!)
+            async def simulate_human_activity():
+                for _ in range(10):
+                    x = random.randint(100, 1200)
+                    y = random.randint(100, 800)
+                    await page.mouse.move(x, y, steps=5)
+                    await page.wait_for_timeout(200)
+
+            await page.goto(url, wait_until="domcontentloaded")
+
+            await simulate_human_activity()
+
+            await page.wait_for_timeout(4000)
+
+            html = await page.content()
+            await browser.close()
+
+        # ---- SANITIZE ----
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in soup(["script"]):
+            tag.decompose()
+
+        for tag in soup.find_all(["a", "img", "link"]):
+            attr = "href" if tag.has_attr("href") else "src" if tag.has_attr("src") else None
+            if attr:
+                tag[attr] = urljoin(url, tag[attr])
+        
+        page_id = str(uuid.uuid4())
+        RENDER_CACHE[page_id] = str(soup)
+
+        return {"success": True, "content": str(soup), "page_id": page_id}
+
     except Exception as e:
         return {"success": False, "error": str(e)}
+
 
 @app.post("/scrapedynamic", response_model=ScrapeResponse)
 async def scrape_dynamic(request: ScrapeRequest):
@@ -351,6 +449,9 @@ async def quick_extract_execute_as_task(request: QuickExtractRequest):
                 "field_mappings": field_mappings_dict,
                 "max_items": request.max_items,
                 "timeout": request.timeout,
+                "entity_name": request.entity_name,
+                "create_entity": request.create_entity,
+                "source_name": request.source_name,
                 "pagination_config": request.pagination_config.model_dump() if request.pagination_config else None,
                 "captcha_params": request.captcha_params.model_dump() if request.captcha_params else None
             }

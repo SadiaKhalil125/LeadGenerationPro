@@ -168,7 +168,7 @@ class MessageResponse(BaseModel):
     timestamp: str
 
 class QuickExtractRequest(BaseModel):
-    """Request model for quick extraction without entity requirement."""
+    """Request model for quick extraction with optional entity storage."""
     url: HttpUrl
     container_selector: Optional[str] = None
     field_mappings: Dict[str, FieldMapping]
@@ -176,6 +176,9 @@ class QuickExtractRequest(BaseModel):
     timeout: Optional[int] = 15
     pagination_config: Optional[PaginationConfig] = None
     captcha_params: Optional[CaptchaParams] = None
+    entity_name: Optional[str] = None  # Optional: store data in this entity table
+    create_entity: Optional[bool] = False  # If true, create entity table from field mappings
+    source_name: Optional[str] = "Quick Extract"  # Source name for stored data
 
 class QuickExtractResponse(BaseModel):
     """Response model for quick extraction."""
