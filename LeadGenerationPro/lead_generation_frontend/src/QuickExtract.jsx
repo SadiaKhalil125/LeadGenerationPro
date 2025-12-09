@@ -19,12 +19,16 @@ import {
   Plus,
   Trash2,
   ArrowRightCircle,
-  FileText
+  FileText,
+  Search // Added Search icon
 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ServerHtmlPreview from "./ServerHtmlPreview";
 import API_BASE from "./api_base";
+
+// Point this to your Python API URL
+const PYTHON_API_URL = "http://localhost:8000"; 
 
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
 
@@ -179,6 +183,71 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
+// --- NEW COMPONENT: CSS Selector Input with Autocomplete ---
+const SelectorInput = ({ value, onChange, placeholder, options = [], className }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter(opt => 
+    opt.toLowerCase().includes(value?.toLowerCase() || "")
+  );
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setIsOpen(true)}
+        className={className} 
+      />
+      {options.length > 0 && (
+         <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#49A3C4]"
+         >
+            {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+         </button>
+      )}
+
+      {isOpen && options.length > 0 && (
+        <div className="absolute mt-2 w-full bg-white border border-gray-100 rounded-xl shadow-xl z-30 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+           {filteredOptions.length > 0 ? (
+             <div className="p-1">
+               {filteredOptions.map((option) => (
+                <div
+                  key={option}
+                  onClick={() => {
+                    onChange(option);
+                    setIsOpen(false);
+                  }}
+                  className="px-3 py-2 hover:bg-blue-50 cursor-pointer font-mono text-xs text-gray-700 rounded-lg border-b border-gray-50 last:border-0"
+                >
+                  {option}
+                </div>
+               ))}
+             </div>
+           ) : (
+             <div className="px-4 py-3 text-gray-400 text-xs italic text-center">No matching selectors found in container</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 /* --- Main Component --- */
 
@@ -209,20 +278,22 @@ export default function QuickExtract() {
   const [availableEntities, setAvailableEntities] = useState([]);
   const [loadingEntities, setLoadingEntities] = useState(false);
 
+  // --- NEW STATE for Selectors ---
+  const [scanningSelectors, setScanningSelectors] = useState(false);
+  const [availableSelectors, setAvailableSelectors] = useState([]);
+
   // --- EFFECTS ---
   useEffect(() => {
     const urlLower = url.toLowerCase();
     setIsGoogleMaps(urlLower.includes('google.com/maps') || urlLower.includes('maps.google.com'));
   }, [url]);
 
-  // Initialize with one empty field
   useEffect(() => {
     if (fields.length === 0) {
       setFields([{ id: Date.now(), attribute: "", selector: "", metadata: "text" }]);
     }
   }, []);
 
-  // Fetch available entities on component mount
   useEffect(() => {
     const fetchEntities = async () => {
       setLoadingEntities(true);
@@ -250,7 +321,6 @@ export default function QuickExtract() {
     fetchEntities();
   }, []);
 
-  // Auto-populate field mappings when entity is selected
   useEffect(() => {
     const fetchEntityColumns = async () => {
       if (selectedEntity && !createNewEntity && storeInDatabase) {
@@ -260,7 +330,6 @@ export default function QuickExtract() {
           });
           const data = await res.json();
           if (data.success && data.columns) {
-            // Filter out system columns (id, modified_at, source)
             const entityColumns = data.columns
               .filter((col) => {
                 const colName = typeof col === 'string' ? col : col.name;
@@ -276,7 +345,6 @@ export default function QuickExtract() {
                 };
               });
             
-            // Auto-populate fields with entity columns
             if (entityColumns.length > 0) {
               setFields(entityColumns);
             }
@@ -288,10 +356,49 @@ export default function QuickExtract() {
     };
     
     fetchEntityColumns();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEntity, createNewEntity, storeInDatabase]);
 
   // --- LOGIC ---
+
+  // --- NEW FUNCTION: Fetch Child Selectors ---
+  const handleScanSelectors = async () => {
+    if (!url) {
+        alert("Please go back and enter a URL first.");
+        return;
+    }
+    if (!containerSelector) {
+        alert("Please enter a Container Selector first (e.g. div.business-card).");
+        return;
+    }
+
+    setScanningSelectors(true);
+
+    try {
+        const res = await fetch(`${PYTHON_API_URL}/api/extract-selectors`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                url: url,
+                container_selector: containerSelector
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success && data.selectors) {
+            setAvailableSelectors(data.selectors);
+        } else {
+            alert("Failed to extract selectors. Check if the container exists.");
+        }
+
+    } catch (e) {
+        console.error("Scanning failed", e);
+        alert("Error connecting to selector extraction service.");
+    } finally {
+        setScanningSelectors(false);
+    }
+  };
+
   const addField = () => {
     setFields([...fields, { id: Date.now(), attribute: "", selector: "", metadata: "text" }]);
   };
@@ -338,7 +445,7 @@ export default function QuickExtract() {
     let hasValidMappings = false;
     
     fields.forEach((f) => {
-      if (!f.attribute.trim()) return; // Skip fields without attribute name
+      if (!f.attribute.trim()) return;
       if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
         field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
         hasValidMappings = true;
@@ -368,7 +475,7 @@ export default function QuickExtract() {
       });
       const data = await res.json();
       if (data.success) {
-        setPreviewData({ ...data, entity_name: "Quick Extract" }); // For display purposes
+        setPreviewData({ ...data, entity_name: "Quick Extract" });
       } else {
         alert(`Preview failed: ${data.message}`);
       }
@@ -394,7 +501,7 @@ export default function QuickExtract() {
     let hasValidMappings = false;
     
     fields.forEach((f) => {
-      if (!f.attribute.trim()) return; // Skip fields without attribute name
+      if (!f.attribute.trim()) return;
       if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
         field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
         hasValidMappings = true;
@@ -424,7 +531,7 @@ export default function QuickExtract() {
       });
       const data = await res.json();
       if (data.success) {
-        setPreviewData({ ...data, entity_name: "Quick Extract" }); // For display purposes
+        setPreviewData({ ...data, entity_name: "Quick Extract" });
       } else {
         alert(`Preview Next failed: ${data.message}`);
       }
@@ -435,8 +542,6 @@ export default function QuickExtract() {
     }
   };
 
-
-
   const handleExtractAsTask = async () => {
     if (!url.trim()) {
       alert("URL is required!");
@@ -446,7 +551,7 @@ export default function QuickExtract() {
     let hasValidMappings = false;
     
     fields.forEach((f) => {
-      if (!f.attribute.trim()) return; // Skip fields without attribute name
+      if (!f.attribute.trim()) return;
       if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
         field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
         hasValidMappings = true;
@@ -461,12 +566,10 @@ export default function QuickExtract() {
       return;
     }
     
-    // Handle entity creation if needed
     let finalEntityName = null;
     if (storeInDatabase) {
       if (createNewEntity && newEntityName.trim()) {
         try {
-          // Create entity from field mappings
           const createRes = await fetch(`${API_BASE}/entity/create-entity-from-fields`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -478,7 +581,6 @@ export default function QuickExtract() {
           const createData = await createRes.json();
           if (createData.success) {
             finalEntityName = createData.entity_name;
-            // Refresh entities list
             const entitiesRes = await fetch(`${API_BASE}/entity/entities`, {
               headers: { "ngrok-skip-browser-warning": "true" }
             });
@@ -523,16 +625,9 @@ export default function QuickExtract() {
         timeout: 15,
         pagination_config: paginationPayload,
         entity_name: finalEntityName || null,
-        create_entity: false, // Already created if needed
+        create_entity: false,
         source_name: "Quick Extract"
       };
-      
-      console.log("Quick Extract Request:", {
-        url: scrapeRequest.url,
-        entity_name: scrapeRequest.entity_name,
-        will_store_in_db: !!scrapeRequest.entity_name,
-        field_mappings_count: Object.keys(scrapeRequest.field_mappings).length
-      });
       
       const res = await fetch(`${API_BASE}/quick-extract/execute-as-task`, {
         method: "POST",
@@ -544,11 +639,7 @@ export default function QuickExtract() {
       if (data.success && data.execution_id) {
         setTaskExecutionId(data.execution_id);
         setTaskStatus({ status: "queued", message: data.message });
-        
-        // Fetch initial logs immediately
         await fetchTaskLogs(data.execution_id);
-        
-        // Start polling for results
         pollTaskStatus(data.execution_id);
       } else {
         alert(`Failed to queue task: ${data.detail || data.message || 'Unknown error'}`);
@@ -575,7 +666,7 @@ export default function QuickExtract() {
   };
 
   const pollTaskStatus = async (executionId) => {
-    const maxAttempts = 300; // Poll for up to 5 minutes (300 * 1 second)
+    const maxAttempts = 300; 
     let attempts = 0;
     
     const poll = async () => {
@@ -586,36 +677,29 @@ export default function QuickExtract() {
         const data = await res.json();
         
         setTaskStatus(data);
-        
-        // Fetch logs on each poll
         await fetchTaskLogs(executionId);
         
-        // Check if task is completed (status is "completed" and success is true)
         if (data.status === "completed" && data.success === true) {
-          // Task completed successfully - show logs and update status
           setExtractedData({ 
             ...data, 
             entity_name: "Quick Extract",
             data: data.data || []
           });
           setExtractingAsTask(false);
-          setShowLogs(true); // Automatically show logs when task completes
-          return; // Stop polling
+          setShowLogs(true);
+          return;
         } else if (data.status === "failed") {
-          // Task failed
           setExtractingAsTask(false);
-          return; // Stop polling
+          return;
         } else if (data.status === "processing" || data.status === "pending" || data.status === "queued") {
-          // Still processing, continue polling
           attempts++;
           if (attempts < maxAttempts) {
-            setTimeout(poll, 1000); // Poll every 1 second
+            setTimeout(poll, 1000);
           } else {
             alert("Task execution timed out");
             setExtractingAsTask(false);
           }
         } else {
-          // Unknown status, continue polling
           attempts++;
           if (attempts < maxAttempts) {
             setTimeout(poll, 1000);
@@ -636,7 +720,6 @@ export default function QuickExtract() {
       }
     };
     
-    // Start polling after 1 second
     setTimeout(poll, 1000);
   };
 
@@ -1221,16 +1304,6 @@ export default function QuickExtract() {
                                 {loadingEntities && (
                                   <p className="text-xs text-gray-400 mt-1">Loading entities...</p>
                                 )}
-                                {selectedEntity && (
-                                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                    <p className="text-xs text-blue-800 font-medium">
-                                      ✓ Selected entity: <strong>{selectedEntity}</strong>
-                                    </p>
-                                    <p className="text-xs text-blue-600 mt-1">
-                                      Field mappings have been auto-populated with entity columns. You can modify selectors as needed.
-                                    </p>
-                                  </div>
-                                )}
                               </div>
                             )}
                             
@@ -1262,9 +1335,6 @@ export default function QuickExtract() {
                                     className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all text-sm text-[#00364A]"
                                   />
                                 </div>
-                                <p className="text-xs text-gray-400">
-                                  Entity table will be created automatically with columns matching your field mappings.
-                                </p>
                               </div>
                             )}
                           </div>
@@ -1272,17 +1342,39 @@ export default function QuickExtract() {
                       </div>
                     </div>
                     
+                    {/* CONTAINER SELECTOR with SCAN BUTTON */}
                     <div>
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
                         Container Selector (Optional)
                       </label>
-                      <input
-                        placeholder="e.g. div.business-card"
-                        value={containerSelector || ""}
-                        onChange={(e) => setContainerSelector(e.target.value)}
-                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all font-mono text-sm text-[#00364A]"
-                      />
-                      <p className="text-xs text-gray-400 mt-2">The CSS selector that wraps each individual item.</p>
+                      <div className="flex gap-2">
+                        <input
+                          placeholder="e.g. div.business-card"
+                          value={containerSelector || ""}
+                          onChange={(e) => setContainerSelector(e.target.value)}
+                          className="flex-grow p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all font-mono text-sm text-[#00364A]"
+                        />
+                        <button
+                          onClick={handleScanSelectors}
+                          disabled={scanningSelectors}
+                          className="px-4 bg-[#e0f2f7] hover:bg-[#ccebf4] text-[#00364A] rounded-xl border border-[#b3dce9] flex items-center justify-center transition-colors shadow-sm"
+                          title="Scan for available elements inside this container"
+                        >
+                           {scanningSelectors ? (
+                              <Loader2 size={20} className="animate-spin text-[#49A3C4]" />
+                           ) : (
+                              <Search size={20} />
+                           )}
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-2">
+                        The CSS selector that wraps each individual item. Click search to auto-find child elements.
+                      </p>
+                      {availableSelectors.length > 0 && (
+                          <p className="text-xs text-green-600 mt-1 font-medium">
+                              ✓ Found {availableSelectors.length} possible child elements. Use dropdowns in fields below.
+                          </p>
+                      )}
                     </div>
                     
                     <div>
@@ -1297,9 +1389,6 @@ export default function QuickExtract() {
                         min="1"
                         className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#49A3C4] focus:ring-2 focus:ring-[#49A3C4]/20 outline-none transition-all text-sm text-[#00364A]"
                       />
-                      <p className="text-xs text-gray-400 mt-2">
-                        Maximum number of items to extract. {isGoogleMaps ? "Default: 40 for Google Maps" : "Leave empty for no limit"}
-                      </p>
                     </div>
                   </div>
 
@@ -1521,10 +1610,11 @@ export default function QuickExtract() {
                             </div>
                             <div className="grid grid-cols-5 gap-3">
                               <div className="col-span-3">
-                                <input
+                                <SelectorInput
                                   placeholder={isSupported ? "Auto-extract active" : "CSS Selector"}
                                   value={field.selector}
-                                  onChange={(e) => handleFieldChange(field.id, "selector", e.target.value)}
+                                  onChange={(val) => handleFieldChange(field.id, "selector", val)}
+                                  options={availableSelectors} // Pass scanned selectors
                                   className={`w-full p-2.5 text-sm rounded-lg border outline-none transition-all ${isSupported && !field.selector ? 'bg-blue-50/50 border-blue-100 text-[#49A3C4] placeholder:text-[#49A3C4]/70' : 'bg-gray-50 border-gray-200 focus:bg-white focus:border-[#49A3C4]'}`}
                                 />
                               </div>
@@ -1638,6 +1728,7 @@ export default function QuickExtract() {
                       setTaskLogs([]);
                       setShowLogs(false);
                       setExtractingAsTask(false);
+                      setAvailableSelectors([]);
                     }}
                     className="text-gray-500 font-semibold hover:text-[#00364A] px-6 py-2 transition-colors"
                   >

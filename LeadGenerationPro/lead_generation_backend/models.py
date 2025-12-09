@@ -188,3 +188,7 @@ class QuickExtractResponse(BaseModel):
     data: List[Dict[str, Any]]
     success: bool
     message: str
+
+class SelectorRequest(BaseModel):
+    url: str
+    container_selector: str
