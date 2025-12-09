@@ -4,6 +4,8 @@ from bs4 import BeautifulSoup
 import httpx
 from dotenv import load_dotenv
 
+from selectors_core import ScraperEngine
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -15,7 +17,7 @@ from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import asyncio
 import uuid
-from models import SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, FetchContentRequest, QuickExtractRequest, QuickExtractResponse, PaginationConfig
+from models import SelectorRequest, SourceInfo, SourcesListResponse, FieldMapping, ScrapeRequest, ScrapeResponse, EntityRequest, EntityMappingRequest, EntityInfo, EntitiesListResponse, Attribute, MappingsListResponse, MappingInfo, MappingFormRequest, TaskInfo,TaskRequest,TasksListResponse, TaskUpdateRequest, FetchContentRequest, QuickExtractRequest, QuickExtractResponse, PaginationConfig
 from utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -527,7 +529,16 @@ async def get_quick_extract_task_logs(execution_id: str):
         "total_logs": len(logs)
     }
 
-    
+
+@app.post("/api/extract-selectors")
+async def extract_selectors_endpoint(payload: SelectorRequest):
+    engine = ScraperEngine()
+    try:
+        selectors = await engine.get_child_selectors(payload.url, payload.container_selector)
+        return {"success": True, "selectors": selectors}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+     
 @app.get("/")
 async def root():
     return {

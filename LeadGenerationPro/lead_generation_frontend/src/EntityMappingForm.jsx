@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, ArrowRight, ArrowRightCircle, ArrowRightCircleIcon, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, X, Info, Globe, AlertTriangle, Code } from "lucide-react";
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Eye, ArrowRight, ArrowRightCircle, Search, ChevronDown, ChevronUp, X, Info, AlertTriangle, Code } from "lucide-react";
+// import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'; // Uncomment if you have this installed
+// import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Uncomment if installed
 import ServerHtmlPreview from "./ServerHtmlPreview";
 
 import API_BASE from "./api_base";
+
+// Point this to your new Python API URL
+const PYTHON_API_URL = "http://localhost:8000"; 
 
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
 
@@ -98,6 +101,7 @@ const PreviewModal = ({ data, onClose }) => {
   );
 };
 
+// Reusable Input with Dropdown for Metadata
 const MetadataInput = ({ value, onChange, options }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -116,7 +120,7 @@ const MetadataInput = ({ value, onChange, options }) => {
     <div className="relative" ref={dropdownRef}>
       <input
         type="text"
-        placeholder="Metadata (text, href, src)"
+        placeholder="Metadata"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setIsOpen(true)}
@@ -139,7 +143,7 @@ const MetadataInput = ({ value, onChange, options }) => {
                 onChange(option);
                 setIsOpen(false);
               }}
-              className="px-4 py-2 hover:bg-teal-50 cursor-pointer"
+              className="px-4 py-2 hover:bg-teal-50 cursor-pointer text-sm"
             >
               {option}
             </div>
@@ -150,6 +154,65 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
+// New Component: CSS Selector Input with Autocomplete from Backend
+const SelectorInput = ({ value, onChange, placeholder, options = [] }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Filter options based on what user is typing (optional, but nice)
+  const filteredOptions = options.filter(opt => 
+    opt.toLowerCase().includes(value?.toLowerCase() || "")
+  );
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setIsOpen(true)}
+        className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400 font-mono text-sm"
+      />
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+      >
+        {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+      </button>
+
+      {isOpen && options.length > 0 && (
+        <div className="absolute mt-2 w-full bg-white border rounded-xl shadow-lg z-10 max-h-60 overflow-y-auto">
+           {filteredOptions.length > 0 ? filteredOptions.map((option) => (
+            <div
+              key={option}
+              onClick={() => {
+                onChange(option);
+                setIsOpen(false);
+              }}
+              className="px-4 py-2 hover:bg-teal-50 cursor-pointer font-mono text-xs border-b border-gray-50 last:border-0"
+            >
+              {option}
+            </div>
+          )) : (
+             <div className="px-4 py-2 text-gray-400 text-xs italic">No matching selectors found in container</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 
 export default function EntityMappingScreen() {
@@ -167,9 +230,12 @@ export default function EntityMappingScreen() {
   
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const[previewNextLoading, setPreviewNextLoading] = useState(false);
+  const [previewNextLoading, setPreviewNextLoading] = useState(false);
   const [previewEntity, setPreviewEntity] = useState(null);
 
+  // New State for Selectors Scanning
+  const [scanningSelectors, setScanningSelectors] = useState({}); // { entityName: boolean }
+  const [availableSelectors, setAvailableSelectors] = useState({}); // { entityName: string[] }
 
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
 
@@ -245,13 +311,6 @@ export default function EntityMappingScreen() {
     );
   };
 
-  const toggleEntityStatus = (entity) => {
-    setEntityData((prev) => ({
-      ...prev,
-      [entity]: { ...prev[entity], enabled: !prev[entity].enabled },
-    }));
-  };
-
   const handleFieldChange = (entity, attribute, key, value) => {
     setEntityData((prev) => {
       const cur = prev[entity];
@@ -273,6 +332,51 @@ export default function EntityMappingScreen() {
     return Object.keys(GOOGLE_MAPS_FIELDS).some(key => 
       normalized.includes(key) || key.includes(normalized)
     );
+  };
+
+  // --- NEW FUNCTION: Fetch Child Selectors ---
+  const handleScanSelectors = async (entity) => {
+    const container = entityData[entity]?.containerSelector;
+    
+    if (!url) {
+        alert("Please enter a URL first.");
+        return;
+    }
+    if (!container) {
+        alert("Please enter a Container Selector first (e.g. li.product-item).");
+        return;
+    }
+
+    setScanningSelectors(prev => ({ ...prev, [entity]: true }));
+
+    try {
+        const res = await fetch(`${PYTHON_API_URL}/api/extract-selectors`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                url: url,
+                container_selector: container
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success && data.selectors) {
+            setAvailableSelectors(prev => ({
+                ...prev,
+                [entity]: data.selectors
+            }));
+            // alert(`Found ${data.selectors.length} unique elements inside the container.`);
+        } else {
+            alert("Failed to extract selectors.");
+        }
+
+    } catch (e) {
+        console.error("Scanning failed", e);
+        alert("Error connecting to selector extraction service.");
+    } finally {
+        setScanningSelectors(prev => ({ ...prev, [entity]: false }));
+    }
   };
 
   const handlePreview = async (entity) => {
@@ -503,7 +607,6 @@ export default function EntityMappingScreen() {
                         className="px-4 py-3 hover:bg-teal-50 cursor-pointer"
                       >
                         <p className="font-semibold">{s.name}</p>
-                        {/* <p className="text-sm text-gray-500">{s.url}</p> */}
                       </div>
                     ))}
                   </div>
@@ -587,7 +690,7 @@ export default function EntityMappingScreen() {
                       className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-cyan-500 to-cyan-600 text-white rounded-lg shadow-sm hover:bg-cyan-800"
                       disabled={previewNextLoading}
                     >
-                      <ArrowRightCircle size={16} /> {/* You can use any icon you like */}
+                      <ArrowRightCircle size={16} /> 
                       {previewNextLoading && previewEntity === entity ? 'Loading...' : 'Next Preview'}
                     </button>
                     
@@ -607,17 +710,36 @@ export default function EntityMappingScreen() {
                     <label className="block text-sm font-medium text-gray-600 mb-2">
                       CONTAINER SELECTOR
                     </label>
-                    <input
-                      placeholder=".class or #main"
-                      value={entityData[entity]?.containerSelector || ""}
-                      onChange={(e) =>
-                        setEntityData((prev) => ({
-                          ...prev,
-                          [entity]: { ...prev[entity], containerSelector: e.target.value },
-                        }))
-                      }
-                      className="w-full p-3 rounded-xl bg-white border border-gray-300 focus:ring-2 focus:ring-teal-400"
-                    />
+                    <div className="flex gap-2">
+                        <input
+                        placeholder=".class or #main"
+                        value={entityData[entity]?.containerSelector || ""}
+                        onChange={(e) =>
+                            setEntityData((prev) => ({
+                            ...prev,
+                            [entity]: { ...prev[entity], containerSelector: e.target.value },
+                            }))
+                        }
+                        className="flex-grow p-3 rounded-xl bg-white border border-gray-300 focus:ring-2 focus:ring-teal-400"
+                        />
+                        <button
+                            onClick={() => handleScanSelectors(entity)}
+                            disabled={scanningSelectors[entity]}
+                            className="px-4 bg-teal-100 hover:bg-teal-200 text-teal-800 rounded-xl border border-teal-300 flex items-center justify-center transition-colors"
+                            title="Scan for available elements inside this container"
+                        >
+                            {scanningSelectors[entity] ? (
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-teal-700"></div>
+                            ) : (
+                                <Search size={20} />
+                            )}
+                        </button>
+                    </div>
+                    {availableSelectors[entity] && (
+                        <p className="text-xs text-green-600 mt-2">
+                            ✓ Found {availableSelectors[entity].length} possible child elements. Use dropdowns below.
+                        </p>
+                    )}
                   </div>
                 )}
 
@@ -639,12 +761,15 @@ export default function EntityMappingScreen() {
                             disabled
                             className="p-3 rounded-xl bg-gray-200 border border-gray-300 text-gray-600"
                           />
-                          <input
-                            placeholder={isSupported ? "Auto (or custom CSS)" : "CSS Selector"}
-                            value={field.selector}
-                            onChange={(e) => handleFieldChange(entity, field.attribute, "selector", e.target.value)}
-                            className="p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
+                          
+                          {/* Use the new SelectorInput here */}
+                          <SelectorInput
+                             placeholder={isSupported ? "Auto (or custom CSS)" : "CSS Selector"}
+                             value={field.selector}
+                             onChange={(val) => handleFieldChange(entity, field.attribute, "selector", val)}
+                             options={availableSelectors[entity] || []}
                           />
+
                           <MetadataInput
                             value={field.metadata}
                             onChange={(val) => handleFieldChange(entity, field.attribute, "metadata", val)}

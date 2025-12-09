@@ -19,5 +19,6 @@ typing
 python-dateutil
 kafka-python
 capsolver
-
+nest-asyncio 
+fake-useragent
 
