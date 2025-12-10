@@ -65,7 +65,7 @@ class ScrapeResponse(BaseModel):
     data: List[Dict[str, Any]]
     success: bool
     message: str
-    
+    page_size: Optional[int] = None 
 class Attribute(BaseModel):
     name: str
     datatype: str   # e.g. "text", "int", "bool"
@@ -157,6 +157,7 @@ class PreviewMappingRequest(BaseModel):
     entity_name: str
     container_selector: Optional[str] = None
     field_mappings: Dict[str, FieldMapping]
+    preview_step:Optional[int] = 1
     
 class MessageRequest(BaseModel):
     text: str

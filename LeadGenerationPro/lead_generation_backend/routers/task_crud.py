@@ -1109,53 +1109,6 @@ async def get_task_execution_summary(task_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get execution summary: {str(e)}")
 
-
-@router.post("/preview-mapping")
-async def preview_mapping(request: PreviewMappingRequest):
-    """Preview scraping results for a mapping configuration without saving."""
-    try:
-        # Build ScrapeRequest from the preview request
-        scrape_request = ScrapeRequest(
-            entity_name=request.entity_name,
-            url=request.url,
-            container_selector=request.container_selector,
-            field_mappings=request.field_mappings,
-            max_items=5,  # Limit to 5 items for preview
-            timeout=15
-        )
-        
-        # Execute scraping using the dynamic scraper
-        scrape_response = await route_scraping_request(scrape_request)
-        
-        if not scrape_response.success:
-            return {
-                "success": False,
-                "message": f"Preview failed: {scrape_response.message}",
-                "data": [],
-                "total_items": 0
-            }
-        
-        # Limit to first 5 items for preview
-        preview_data = scrape_response.data[:5] if scrape_response.data else []
-        
-        return {
-            "success": True,
-            "message": f"Preview successful - showing first {len(preview_data)} items",
-            "data": preview_data,
-            "total_items": scrape_response.total_items,
-            "entity_name": request.entity_name,
-            "url": request.url,
-            "scraped_at": scrape_response.scraped_at.isoformat()
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "message": f"Preview error: {str(e)}",
-            "data": [],
-            "total_items": 0
-        }
-
 def get_source_by_url(url: str):
     """
     Get a specific source by its URL.
@@ -1187,82 +1140,117 @@ def get_source_by_url(url: str):
         print(f"Error fetching source by URL: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch source: {str(e)}")
     
-@router.post("/preview-next-mapping")
-async def preview_next_mapping(request: PreviewMappingRequest):
-    """Preview next page/scroll scraping results for a mapping configuration without saving."""
+@router.post("/preview-mapping")
+async def preview_mapping(request: PreviewMappingRequest):
+    """
+    General preview endpoint.
+    - step = 1  → first 5 items (cheap)
+    - step >= 2  → progressive pagination preview (last 5 items)
+    """
     try:
-        source=get_source_by_url(request.url)
-        if source is None: #abhi k liye (not actually needed)
+        step = request.preview_step or 1
+
+        # STEP 1 → SIMPLE PREVIEW
+        if step == 1:
+            scrape_request = ScrapeRequest(
+                entity_name=request.entity_name,
+                url=request.url,
+                container_selector=request.container_selector,
+                field_mappings=request.field_mappings,
+                max_items=5,
+                timeout=15
+            )
+            scrape_response = await route_scraping_request(scrape_request)
+
+            if not scrape_response.success:
+                return {
+                    "success": False,
+                    "message": f"Preview failed: {scrape_response.message}",
+                    "data": [],
+                    "total_items": 0
+                }
+
+            preview_data = scrape_response.data[:5]
             return {
-            "success": False,
-            "message": f"Next Preview failed: Source not found for URL {request.url}",
-            "data": [],
-            "total_items": 0
-        }
+                "success": True,
+                "message": f"Preview successful - Page 1",
+                "data": preview_data,
+                "total_items": scrape_response.total_items,
+                "preview_step": 1,
+                "entity_name": request.entity_name,
+                "url": request.url,
+                "scraped_at": scrape_response.scraped_at.isoformat(),
+                "page_size" :scrape_response.page_size
+            }
 
-        # Take a dict copy
-        pagination_dict = source.pagination_config.model_dump()  # All fields included
+        # STEP >= 2 → PAGINATED / NEXT PREVIEW
 
-
-        print ("Pagination:", pagination_dict["type"], ", Source:", source.name)
-       
-        if pagination_dict is None:
+        source = get_source_by_url(request.url)
+        if not source or not source.pagination_config:
             return {
-            "success": False,
-            "message": f"Next Preview failed: No pagination config found for source {source.get('name')}",
-            "data": [],
-            "total_items": 0
-        }
-        
-        # Prepare modified pagination config for preview
-        if pagination_dict["type"] not in ["button_click","scroll","ajax_click"]:
-            pagination_dict["max_pages"] = 2
-        elif pagination_dict["type"] in ["button_click","ajax_click"]:
-            pagination_dict["click_steps"] = 2
+                "success": False,
+                "message": "Pagination config not found for source",
+                "data": [],
+                "total_items": 0
+            }
+
+        pagination_dict = source.pagination_config.model_dump()
+        pagination_type = pagination_dict["type"]
+
+        # Adjust pagination depth based on step
+        if pagination_type not in ["button_click", "scroll", "ajax_click"]:
+            pagination_dict["max_pages"] = step
+        elif pagination_type in ["button_click", "ajax_click"]:
+            pagination_dict["click_steps"] = step
         else:
-            pagination_dict["scroll_steps"] = 2
+            pagination_dict["scroll_steps"] = step
 
-
-        # Build ScrapeRequest from the preview request
         scrape_request = ScrapeRequest(
             entity_name=request.entity_name,
             url=request.url,
             container_selector=request.container_selector,
             field_mappings=request.field_mappings,
-            max_items=500,  # setting 500 items to allow next page preview
+            max_items=500,  # must be > 5 (500 limit for now)
             timeout=15,
             pagination_config=pagination_dict
         )
-        print ("Going to execute")
-        # Execute scraping using the dynamic scraper
         scrape_response = await route_scraping_request(scrape_request)
-        
+
         if not scrape_response.success:
             return {
                 "success": False,
-                "message": f"Next Preview failed: {scrape_response.message}",
+                "message": f"Preview failed: {scrape_response.message}",
                 "data": [],
                 "total_items": 0
             }
         
-        # Limit to last 5 items for preview if next page items are coming
-        preview_data = scrape_response.data[-5:] if scrape_response.data else []
+        # CRITICAL: always last 5 to ensure data from last page
+        preview_data = scrape_response.data[-5:]
 
-        print(f"Next Preview Success - showing {len(preview_data)} items from next page")
+        if not preview_data:
+            return {
+                "success": False,
+                "message": "No items found for this page",
+                "data": [],
+                "total_items": 0
+            }
+
         return {
             "success": True,
-            "message": f"Next Preview Success - showing {len(preview_data)} items from next page",
+            "message": f"Preview successful - Page {step}",
             "data": preview_data,
             "total_items": scrape_response.total_items,
+            "preview_step": step,
             "entity_name": request.entity_name,
             "url": request.url,
-            "scraped_at": scrape_response.scraped_at.isoformat()
+            "scraped_at": scrape_response.scraped_at.isoformat(),
+            "page_size" :scrape_response.page_size
         }
-        
+
     except Exception as e:
         return {
             "success": False,
-            "message": f"Next Preview error: {str(e)}",
+            "message": f"Preview error: {str(e)}",
             "data": [],
             "total_items": 0
         }
