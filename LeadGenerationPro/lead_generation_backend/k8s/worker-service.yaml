@@ -25,8 +25,9 @@ spec:
             cpu: "1"
             memory: "2Gi"    
         env:       
+        # Use PLAINTEXT_DOCKER listener on port 9093 for Docker/K8s services
         - name: KAFKA_BOOTSTRAP
-          value: "host.docker.internal:9092"
+          value: "host.docker.internal:9093"
         - name: DB_HOST
           value: "leadgenerationpro.c6teemao2etw.us-east-1.rds.amazonaws.com" 
         - name: DB_PORT

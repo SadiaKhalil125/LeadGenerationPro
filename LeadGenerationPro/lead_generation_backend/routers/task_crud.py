@@ -15,8 +15,81 @@ import asyncio
 import logging
 import json
 import traceback
+from typing import Dict, Optional, List
+from threading import Lock
 
 logger = logging.getLogger(__name__)
+
+# In-memory storage for quick extract task results (execution_id -> result)
+# Also stored in database for cross-process access
+quick_extract_results: Dict[str, dict] = {}
+quick_extract_logs: Dict[str, List[dict]] = {}  # execution_id -> list of logs
+quick_extract_lock = Lock()
+
+def create_quick_extract_results_table(conn):
+    """Create quick_extract_results table if it doesn't exist."""
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS quick_extract_results (
+            execution_id VARCHAR(255) PRIMARY KEY,
+            status TEXT NOT NULL,
+            success BOOLEAN NOT NULL,
+            message TEXT,
+            data JSONB,
+            total_items INTEGER DEFAULT 0,
+            items_scraped INTEGER DEFAULT 0,
+            url TEXT,
+            scraped_at TIMESTAMP,
+            execution_duration_ms INTEGER,
+            error TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_quick_extract_results_execution_id ON quick_extract_results(execution_id);
+    """)
+    conn.commit()
+    cur.close()
+
+def create_quick_extract_logs_table(conn):
+    """Create quick_extract_logs table if it doesn't exist, and add new columns if missing."""
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS quick_extract_logs (
+            id SERIAL PRIMARY KEY,
+            execution_id VARCHAR(255) NOT NULL,
+            status TEXT NOT NULL,
+            log_level TEXT NOT NULL,
+            message TEXT NOT NULL,
+            details JSONB,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+    
+    # Add new columns if they don't exist (for existing tables)
+    try:
+        cur.execute("""
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                               WHERE table_name='quick_extract_logs' AND column_name='error_traceback') THEN
+                    ALTER TABLE quick_extract_logs ADD COLUMN error_traceback TEXT;
+                END IF;
+                
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                               WHERE table_name='quick_extract_logs' AND column_name='execution_duration_ms') THEN
+                    ALTER TABLE quick_extract_logs ADD COLUMN execution_duration_ms INT;
+                END IF;
+            END $$;
+        """)
+    except Exception as e:
+        logger.warning(f"Error adding columns to quick_extract_logs table: {e}")
+    
+    # Create index if it doesn't exist
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_quick_extract_logs_execution_id ON quick_extract_logs(execution_id);
+    """)
+    conn.commit()
+    cur.close()
 
 VALID_REPEATS = {"once", "daily", "weekly", "monthly", "yearly"}
 # DATABASE_URL = os.getenv("DATABASE_URL","postgresql://postgres:9042c98a@host.docker.internal:5432/LeadGenerationPro")
@@ -1036,53 +1109,6 @@ async def get_task_execution_summary(task_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get execution summary: {str(e)}")
 
-
-@router.post("/preview-mapping")
-async def preview_mapping(request: PreviewMappingRequest):
-    """Preview scraping results for a mapping configuration without saving."""
-    try:
-        # Build ScrapeRequest from the preview request
-        scrape_request = ScrapeRequest(
-            entity_name=request.entity_name,
-            url=request.url,
-            container_selector=request.container_selector,
-            field_mappings=request.field_mappings,
-            max_items=5,  # Limit to 5 items for preview
-            timeout=15
-        )
-        
-        # Execute scraping using the dynamic scraper
-        scrape_response = await route_scraping_request(scrape_request)
-        
-        if not scrape_response.success:
-            return {
-                "success": False,
-                "message": f"Preview failed: {scrape_response.message}",
-                "data": [],
-                "total_items": 0
-            }
-        
-        # Limit to first 5 items for preview
-        preview_data = scrape_response.data[:5] if scrape_response.data else []
-        
-        return {
-            "success": True,
-            "message": f"Preview successful - showing first {len(preview_data)} items",
-            "data": preview_data,
-            "total_items": scrape_response.total_items,
-            "entity_name": request.entity_name,
-            "url": request.url,
-            "scraped_at": scrape_response.scraped_at.isoformat()
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "message": f"Preview error: {str(e)}",
-            "data": [],
-            "total_items": 0
-        }
-
 def get_source_by_url(url: str):
     """
     Get a specific source by its URL.
@@ -1114,82 +1140,867 @@ def get_source_by_url(url: str):
         print(f"Error fetching source by URL: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch source: {str(e)}")
     
-@router.post("/preview-next-mapping")
-async def preview_next_mapping(request: PreviewMappingRequest):
-    """Preview next page/scroll scraping results for a mapping configuration without saving."""
+@router.post("/preview-mapping")
+async def preview_mapping(request: PreviewMappingRequest):
+    """
+    General preview endpoint.
+    - step = 1  → first 5 items (cheap)
+    - step >= 2  → progressive pagination preview (last 5 items)
+    """
     try:
-        source=get_source_by_url(request.url)
-        if source is None: #abhi k liye (not actually needed)
+        step = request.preview_step or 1
+
+        # STEP 1 → SIMPLE PREVIEW
+        if step == 1:
+            scrape_request = ScrapeRequest(
+                entity_name=request.entity_name,
+                url=request.url,
+                container_selector=request.container_selector,
+                field_mappings=request.field_mappings,
+                max_items=5,
+                timeout=15
+            )
+            scrape_response = await route_scraping_request(scrape_request)
+
+            if not scrape_response.success:
+                return {
+                    "success": False,
+                    "message": f"Preview failed: {scrape_response.message}",
+                    "data": [],
+                    "total_items": 0
+                }
+
+            preview_data = scrape_response.data[:5]
             return {
-            "success": False,
-            "message": f"Next Preview failed: Source not found for URL {request.url}",
-            "data": [],
-            "total_items": 0
-        }
+                "success": True,
+                "message": f"Preview successful - Page 1",
+                "data": preview_data,
+                "total_items": scrape_response.total_items,
+                "preview_step": 1,
+                "entity_name": request.entity_name,
+                "url": request.url,
+                "scraped_at": scrape_response.scraped_at.isoformat(),
+                "page_size" :scrape_response.page_size
+            }
 
-        # Take a dict copy
-        pagination_dict = source.pagination_config.model_dump()  # All fields included
+        # STEP >= 2 → PAGINATED / NEXT PREVIEW
 
-
-        print ("Pagination:", pagination_dict["type"], ", Source:", source.name)
-       
-        if pagination_dict is None:
+        source = get_source_by_url(request.url)
+        if not source or not source.pagination_config:
             return {
-            "success": False,
-            "message": f"Next Preview failed: No pagination config found for source {source.get('name')}",
-            "data": [],
-            "total_items": 0
-        }
-        
-        # Prepare modified pagination config for preview
-        if pagination_dict["type"] not in ["button_click","scroll","ajax_click"]:
-            pagination_dict["max_pages"] = 2
-        elif pagination_dict["type"] in ["button_click","ajax_click"]:
-            pagination_dict["click_steps"] = 2
+                "success": False,
+                "message": "Pagination config not found for source",
+                "data": [],
+                "total_items": 0
+            }
+
+        pagination_dict = source.pagination_config.model_dump()
+        pagination_type = pagination_dict["type"]
+
+        # Adjust pagination depth based on step
+        if pagination_type not in ["button_click", "scroll", "ajax_click"]:
+            pagination_dict["max_pages"] = step
+        elif pagination_type in ["button_click", "ajax_click"]:
+            pagination_dict["click_steps"] = step
         else:
-            pagination_dict["scroll_steps"] = 2
+            pagination_dict["scroll_steps"] = step
 
-
-        # Build ScrapeRequest from the preview request
         scrape_request = ScrapeRequest(
             entity_name=request.entity_name,
             url=request.url,
             container_selector=request.container_selector,
             field_mappings=request.field_mappings,
-            max_items=500,  # setting 500 items to allow next page preview
+            max_items=500,  # must be > 5 (500 limit for now)
             timeout=15,
             pagination_config=pagination_dict
         )
-        print ("Going to execute")
-        # Execute scraping using the dynamic scraper
         scrape_response = await route_scraping_request(scrape_request)
-        
+
         if not scrape_response.success:
             return {
                 "success": False,
-                "message": f"Next Preview failed: {scrape_response.message}",
+                "message": f"Preview failed: {scrape_response.message}",
                 "data": [],
                 "total_items": 0
             }
         
-        # Limit to last 5 items for preview if next page items are coming
-        preview_data = scrape_response.data[-5:] if scrape_response.data else []
+        # CRITICAL: always last 5 to ensure data from last page
+        preview_data = scrape_response.data[-5:]
 
-        print(f"Next Preview Success - showing {len(preview_data)} items from next page")
+        if not preview_data:
+            return {
+                "success": False,
+                "message": "No items found for this page",
+                "data": [],
+                "total_items": 0
+            }
+
         return {
             "success": True,
-            "message": f"Next Preview Success - showing {len(preview_data)} items from next page",
+            "message": f"Preview successful - Page {step}",
             "data": preview_data,
             "total_items": scrape_response.total_items,
+            "preview_step": step,
             "entity_name": request.entity_name,
             "url": request.url,
-            "scraped_at": scrape_response.scraped_at.isoformat()
+            "scraped_at": scrape_response.scraped_at.isoformat(),
+            "page_size" :scrape_response.page_size
         }
-        
+
     except Exception as e:
         return {
             "success": False,
-            "message": f"Next Preview error: {str(e)}",
+            "message": f"Preview error: {str(e)}",
             "data": [],
             "total_items": 0
         }
+
+def log_quick_extract(execution_id: str, status: str, log_level: str, message: str, details: dict = None, 
+                     error_traceback: str = None, execution_duration_ms: int = None):
+    """Log a message for quick extract task execution."""
+    log_entry = {
+        "execution_id": execution_id,
+        "status": status,
+        "log_level": log_level,
+        "message": message,
+        "details": details or {},
+        "error_traceback": error_traceback,
+        "execution_duration_ms": execution_duration_ms,
+        "created_at": datetime.now().isoformat()
+    }
+    # Store in memory
+    with quick_extract_lock:
+        if execution_id not in quick_extract_logs:
+            quick_extract_logs[execution_id] = []
+        quick_extract_logs[execution_id].append(log_entry)
+    
+    # Also store in database for cross-process access
+    try:
+        conn, cur = get_db_cursor()
+        create_quick_extract_logs_table(conn)
+        cur.execute("""
+            INSERT INTO quick_extract_logs (execution_id, status, log_level, message, details, error_traceback, execution_duration_ms)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (execution_id, status, log_level, message, json.dumps(details or {}), error_traceback, execution_duration_ms))
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.debug(f"Stored log in database: execution_id={execution_id}, status={status}, message={message[:50]}")
+    except Exception as e:
+        logger.warning(f"Failed to store log in database: {e}", exc_info=True)
+
+async def execute_quick_extract_task(execution_id: str, request_data: dict):
+    """
+    Execute a quick extract task without storing data in database.
+    This is called by the worker when processing quick extract tasks from Kafka.
+    """
+    execution_start = datetime.now()
+    
+    try:
+        # Initialize logs
+        log_quick_extract(execution_id, "started", "info", "Task execution started", {"execution_id": execution_id})
+        
+        # Update status to processing
+        with quick_extract_lock:
+            quick_extract_results[execution_id] = {
+                "status": "processing",
+                "message": "Task execution started",
+                "execution_id": execution_id,
+                "started_at": execution_start.isoformat()
+            }
+        
+        # Reconstruct QuickExtractRequest from request_data
+        from models import FieldMapping
+        from pydantic import HttpUrl
+        
+        log_quick_extract(execution_id, "processing", "info", "Fetching task details from request", {
+            "has_url": bool(request_data.get("url")),
+            "has_field_mappings": bool(request_data.get("field_mappings")),
+            "has_pagination": bool(request_data.get("pagination_config")),
+            "has_captcha": bool(request_data.get("captcha_params"))
+        })
+        
+        # Convert field_mappings back to proper format
+        field_mappings = {}
+        for key, value in request_data.get("field_mappings", {}).items():
+            if isinstance(value, dict):
+                field_mappings[key] = FieldMapping(**value)
+            else:
+                field_mappings[key] = value
+        
+        log_quick_extract(execution_id, "processing", "info", "Task details retrieved successfully", {
+            "url": request_data.get("url"),
+            "field_mappings_count": len(field_mappings),
+            "max_items": request_data.get("max_items"),
+            "container_selector": request_data.get("container_selector"),
+            "field_names": list(field_mappings.keys()),
+            "entity_name": request_data.get("entity_name"),
+            "entity_name_type": type(request_data.get("entity_name")).__name__,
+            "entity_name_bool": bool(request_data.get("entity_name")),
+            "source_name": request_data.get("source_name"),
+            "will_store_in_db": bool(request_data.get("entity_name"))
+        })
+        
+        # Reconstruct pagination_config if present
+        pagination_config = None
+        if request_data.get("pagination_config"):
+            pagination_config = PaginationConfig(**request_data["pagination_config"])
+            pagination_details = {
+                "pagination_type": pagination_config.type,
+                "start_page": pagination_config.start_page if hasattr(pagination_config, 'start_page') else 1,
+            }
+            if pagination_config.type == "query_param":
+                pagination_details["param_name"] = pagination_config.param_name
+            elif pagination_config.type == "offset":
+                pagination_details["param_name"] = pagination_config.param_name
+                pagination_details["page_size"] = pagination_config.page_size
+                if hasattr(pagination_config, 'max_pages') and pagination_config.max_pages:
+                    pagination_details["max_pages"] = pagination_config.max_pages
+            elif pagination_config.type == "path":
+                pagination_details["path_pattern"] = pagination_config.path_pattern
+            elif pagination_config.type in ["button_click", "ajax_click"]:
+                pagination_details["button_selector"] = pagination_config.button_selector
+                pagination_details["wait_selector"] = pagination_config.wait_selector
+            elif pagination_config.type == "scroll":
+                pagination_details["scroll_steps"] = pagination_config.scroll_steps
+            
+            log_quick_extract(execution_id, "processing", "info", "Pagination configuration detected", pagination_details)
+        else:
+            log_quick_extract(execution_id, "processing", "info", "No pagination configuration - single page extraction")
+        
+        # Reconstruct captcha_params if present
+        captcha_params = None
+        if request_data.get("captcha_params"):
+            captcha_params = CaptchaParams(**request_data["captcha_params"])
+            log_quick_extract(execution_id, "processing", "info", "Captcha protection detected", {
+                "captcha_type": getattr(captcha_params, 'captcha_type', 'unknown')
+            })
+        
+        # Build ScrapeRequest
+        scrape_request_details = {
+            "entity_name": "quick_extract_task",
+            "has_pagination": pagination_config is not None,
+            "has_captcha": captcha_params is not None,
+            "timeout": request_data.get("timeout", 15),
+            "max_items": request_data.get("max_items")
+        }
+        if pagination_config:
+            scrape_request_details["pagination_type"] = pagination_config.type
+        log_quick_extract(execution_id, "processing", "info", "Building scrape request", scrape_request_details)
+        scrape_request = ScrapeRequest(
+            entity_name="quick_extract_task",
+            url=HttpUrl(request_data["url"]),
+            container_selector=request_data.get("container_selector"),
+            field_mappings=field_mappings,
+            max_items=request_data.get("max_items"),
+            timeout=request_data.get("timeout", 15),
+            pagination_config=pagination_config,
+            captcha_params=captcha_params
+        )
+        
+        # Execute scraping
+        scraping_details = {
+            "url": str(request_data["url"]),
+            "timeout": request_data.get("timeout", 15),
+            "max_items": request_data.get("max_items"),
+        }
+        if pagination_config:
+            scraping_details["pagination_enabled"] = True
+            scraping_details["pagination_type"] = pagination_config.type
+        else:
+            scraping_details["pagination_enabled"] = False
+        
+        log_quick_extract(execution_id, "processing", "info", "Starting web scraping", scraping_details)
+        scrape_start = datetime.now()
+        scrape_response = await route_scraping_request(scrape_request)
+        scrape_duration = int((datetime.now() - scrape_start).total_seconds() * 1000)
+        
+        # Log scraping progress
+        log_quick_extract(execution_id, "processing", "info", f"Web scraping completed in {scrape_duration}ms", {
+            "scraping_duration_ms": scrape_duration,
+            "scraping_success": scrape_response.success,
+            "scraping_message": scrape_response.message
+        })
+        
+        execution_duration = int((datetime.now() - execution_start).total_seconds() * 1000)
+        
+        if not scrape_response.success:
+            log_quick_extract(execution_id, "failed", "error", f"Scraping failed: {scrape_response.message}", {
+                "scraping_message": scrape_response.message,
+                "scraping_duration_ms": scrape_duration
+            })
+            result = {
+                "success": False,
+                "status": "failed",
+                "message": scrape_response.message,
+                "execution_id": execution_id,
+                "execution_duration_ms": execution_duration,
+                "data": [],
+                "total_items": 0,
+                "url": str(scrape_response.url),
+                "scraped_at": scrape_response.scraped_at.isoformat()
+            }
+            
+            # Store failed result
+            with quick_extract_lock:
+                quick_extract_results[execution_id] = result
+                logger.info(f"Stored failed quick extract result in memory for execution_id: {execution_id}")
+            
+            # Also store in database
+            try:
+                conn, cur = get_db_cursor()
+                create_quick_extract_results_table(conn)
+                cur.execute("""
+                    INSERT INTO quick_extract_results 
+                    (execution_id, status, success, message, data, total_items, items_scraped, url, scraped_at, execution_duration_ms, error, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON CONFLICT (execution_id) 
+                    DO UPDATE SET 
+                        status = EXCLUDED.status,
+                        success = EXCLUDED.success,
+                        message = EXCLUDED.message,
+                        data = EXCLUDED.data,
+                        total_items = EXCLUDED.total_items,
+                        items_scraped = EXCLUDED.items_scraped,
+                        url = EXCLUDED.url,
+                        scraped_at = EXCLUDED.scraped_at,
+                        execution_duration_ms = EXCLUDED.execution_duration_ms,
+                        error = EXCLUDED.error,
+                        updated_at = NOW()
+                """, (
+                    execution_id,
+                    result['status'],
+                    result['success'],
+                    result.get('message'),
+                    json.dumps(result.get('data', [])),
+                    result.get('total_items', 0),
+                    result.get('items_scraped', 0),
+                    result.get('url'),
+                    result.get('scraped_at'),
+                    result.get('execution_duration_ms', 0),
+                    result.get('error')
+                ))
+                conn.commit()
+                cur.close()
+                conn.close()
+            except Exception as e:
+                logger.error(f"Failed to store failed result in database: {e}")
+        else:
+            items_count = len(scrape_response.data) if scrape_response.data else 0
+            log_quick_extract(execution_id, "processing", "info", "Scraping completed successfully", {
+                "items_scraped": items_count,
+                "total_items_found": scrape_response.total_items,
+                "scraping_duration_ms": scrape_duration,
+                "url": str(scrape_response.url),
+                "scraped_at": scrape_response.scraped_at.isoformat() if scrape_response.scraped_at else None
+            })
+            
+            # Store data in database if entity_name is provided
+            entity_name = request_data.get("entity_name")
+            # Normalize entity_name - strip whitespace and handle empty strings
+            if entity_name:
+                entity_name = str(entity_name).strip()
+                if not entity_name:
+                    entity_name = None
+            
+            source_name = request_data.get("source_name", "Quick Extract")
+            items_stored = 0
+            items_failed = 0
+            upsert_errors = []
+            
+            log_quick_extract(execution_id, "processing", "info", "Checking if data should be stored in database", {
+                "entity_name": entity_name,
+                "entity_name_raw": request_data.get("entity_name"),
+                "entity_name_type": type(entity_name).__name__ if entity_name else "None",
+                "has_entity_name": bool(entity_name),
+                "has_scraped_data": bool(scrape_response.data),
+                "items_count": items_count if scrape_response.data else 0,
+                "will_store": bool(entity_name and scrape_response.data),
+                "source_name": source_name
+            })
+            
+            if entity_name and scrape_response.data:
+                try:
+                    conn, cur = get_db_cursor()
+                    log_quick_extract(execution_id, "processing", "info", f"Retrieving entity table structure for {entity_name}", {
+                        "entity_name": entity_name
+                    })
+                    
+                    # Get entity table structure
+                    # PostgreSQL stores unquoted table names in lowercase, so we need to check both
+                    # First try exact match, then try lowercase
+                    cur.execute("""
+                        SELECT column_name, data_type 
+                        FROM information_schema.columns 
+                        WHERE (table_name = %s OR LOWER(table_name) = LOWER(%s))
+                        AND column_name != 'id'
+                        ORDER BY ordinal_position
+                    """, (entity_name, entity_name))
+                    
+                    table_columns = {row[0]: row[1] for row in cur.fetchall()}
+                    
+                    # If no columns found with case-insensitive match, try to find the actual table name
+                    if not table_columns:
+                        # Try to find the table with case-insensitive search
+                        cur.execute("""
+                            SELECT table_name 
+                            FROM information_schema.tables 
+                            WHERE LOWER(table_name) = LOWER(%s)
+                            AND table_schema = 'public'
+                        """, (entity_name,))
+                        actual_table = cur.fetchone()
+                        if actual_table:
+                            actual_table_name = actual_table[0]
+                            log_quick_extract(execution_id, "processing", "info", f"Found table with different case: '{actual_table_name}' (requested: '{entity_name}')", {
+                                "requested_name": entity_name,
+                                "actual_name": actual_table_name
+                            })
+                            # Retry with actual table name
+                            cur.execute("""
+                                SELECT column_name, data_type 
+                                FROM information_schema.columns 
+                                WHERE table_name = %s 
+                                AND column_name != 'id'
+                                ORDER BY ordinal_position
+                            """, (actual_table_name,))
+                            table_columns = {row[0]: row[1] for row in cur.fetchall()}
+                            entity_name = actual_table_name  # Use the actual table name for upsert
+                    
+                    if not table_columns:
+                        log_quick_extract(execution_id, "processing", "warning", f"Entity table '{entity_name}' not found or has no columns. Data will not be stored.", {
+                            "entity_name": entity_name,
+                            "searched_name": request_data.get("entity_name")
+                        })
+                    else:
+                        log_quick_extract(execution_id, "processing", "info", "Entity table structure retrieved", {
+                            "table_name": entity_name,
+                            "column_count": len(table_columns),
+                            "columns": list(table_columns.keys())
+                        })
+                        
+                        # Insert / Update scraped data in the entity table
+                        log_quick_extract(execution_id, "processing", "info", "Starting to upsert scraped data into database", {
+                            "total_items_to_store": items_count,
+                            "entity_name": entity_name,
+                            "source_name": source_name
+                        })
+                        
+                        # Insert/Update scraped data
+                        for idx, item in enumerate(scrape_response.data):
+                            # Map scraped data to table columns
+                            # Try exact match first, then case-insensitive match
+                            insert_data = {}
+                            for col in table_columns.keys():
+                                # Try exact match
+                                if col in item:
+                                    insert_data[col] = item[col]
+                                else:
+                                    # Try case-insensitive match
+                                    matched_key = None
+                                    for key in item.keys():
+                                        if key.lower() == col.lower():
+                                            matched_key = key
+                                            break
+                                    if matched_key:
+                                        insert_data[col] = item[matched_key]
+                                    else:
+                                        # Column not found in scraped data, set to None
+                                        insert_data[col] = None
+                            
+                            # Log first item for debugging
+                            if idx == 0:
+                                log_quick_extract(execution_id, "processing", "debug", "Mapping scraped data to entity columns", {
+                                    "scraped_data_keys": list(item.keys()),
+                                    "entity_columns": list(table_columns.keys()),
+                                    "mapped_data_keys": list(insert_data.keys()),
+                                    "has_data": any(v is not None for v in insert_data.values())
+                                })
+                            
+                            try:
+                                await upsert_entity_record(cur, entity_name, source_name, insert_data)
+                                items_stored += 1
+                                # Log progress every 5 items for more frequent updates
+                                if (idx + 1) % 5 == 0 or (idx + 1) == items_count:
+                                    log_quick_extract(execution_id, "processing", "debug", f"Upserted {idx + 1}/{items_count} items", {
+                                        "items_stored": items_stored,
+                                        "items_failed": items_failed,
+                                        "progress_percent": round((idx + 1) / items_count * 100, 1) if items_count > 0 else 0
+                                    })
+                            except Exception as e:
+                                items_failed += 1
+                                error_msg = str(e)
+                                upsert_errors.append({'item_index': idx, 'error': error_msg})
+                                # Rollback the connection so subsequent commands (like logging) are allowed
+                                try:
+                                    conn.rollback()
+                                except Exception:
+                                    pass
+                                log_quick_extract(execution_id, "error", "error", f"Error upserting row {idx + 1}: {error_msg}", {
+                                    "item_index": idx,
+                                    "error": error_msg,
+                                    "item_data": {k: str(v)[:100] for k, v in item.items()}
+                                })
+                                continue
+                        
+                        conn.commit()
+                        cur.close()
+                        conn.close()
+                        
+                        log_quick_extract(execution_id, "processing", "info", "Data upsert completed and committed", {
+                            "items_stored": items_stored,
+                            "items_failed": items_failed,
+                            "total_items": items_count,
+                            "success_rate": round((items_stored / items_count * 100), 1) if items_count > 0 else 0,
+                            "entity_name": entity_name
+                        })
+                        
+                        # Verify data was stored by checking the table
+                        if items_stored > 0:
+                            try:
+                                verify_conn, verify_cur = get_db_cursor()
+                                verify_cur.execute(
+                                    sql.SQL("SELECT COUNT(*) FROM {} WHERE source = %s").format(
+                                        sql.Identifier(entity_name)
+                                    ), (source_name,))
+                                stored_count = verify_cur.fetchone()[0]
+                                verify_cur.close()
+                                verify_conn.close()
+                                log_quick_extract(execution_id, "processing", "info", f"Verified {stored_count} records in database for entity '{entity_name}' with source '{source_name}'", {
+                                    "entity_name": entity_name,
+                                    "source_name": source_name,
+                                    "stored_count": stored_count,
+                                    "expected_count": items_stored
+                                })
+                            except Exception as verify_err:
+                                log_quick_extract(execution_id, "processing", "warning", f"Could not verify stored records: {str(verify_err)}", {
+                                    "error": str(verify_err)
+                                })
+                except Exception as e:
+                    log_quick_extract(execution_id, "error", "error", f"Failed to store data in database: {str(e)}", {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "entity_name": entity_name
+                    }, error_traceback=traceback.format_exc())
+            
+            # Add pagination summary if pagination was used
+            if pagination_config:
+                estimated_pages = None
+                if items_count > 0 and pagination_config.type == "offset" and hasattr(pagination_config, 'page_size') and pagination_config.page_size:
+                    estimated_pages = (items_count // pagination_config.page_size) + (1 if items_count % pagination_config.page_size > 0 else 0)
+                
+                pagination_summary = {
+                    "pagination_type": pagination_config.type,
+                    "items_scraped": items_count,
+                }
+                if estimated_pages:
+                    pagination_summary["estimated_pages_processed"] = estimated_pages
+                
+                log_quick_extract(execution_id, "processing", "info", f"Pagination completed. Scraped {items_count} items across pages.", pagination_summary)
+            
+            completion_message = f"Task execution completed successfully"
+            if entity_name and items_stored > 0:
+                completion_message += f". Stored {items_stored} items in '{entity_name}' table."
+            else:
+                completion_message += f". Scraped {items_count} items."
+            
+            log_quick_extract(execution_id, "completed", "info", completion_message, {
+                "items_scraped": items_count,
+                "items_stored": items_stored if entity_name else 0,
+                "items_failed": items_failed if entity_name else 0,
+                "total_items": scrape_response.total_items,
+                "total_execution_duration_ms": execution_duration,
+                "scraping_duration_ms": scrape_duration,
+                "url": str(scrape_response.url),
+                "entity_name": entity_name,
+                "source_name": source_name if entity_name else None,
+                "success": True
+            }, execution_duration_ms=execution_duration)
+            result = {
+                "success": True,
+                "status": "completed",
+                "message": completion_message,
+                "execution_id": execution_id,
+                "execution_duration_ms": execution_duration,
+                "data": scrape_response.data or [],
+                "total_items": scrape_response.total_items,
+                "url": str(scrape_response.url),
+                "scraped_at": scrape_response.scraped_at.isoformat(),
+                "items_scraped": items_count,
+                "items_stored": items_stored if entity_name else 0,
+                "entity_name": entity_name
+            }
+        
+        # Store result - CRITICAL: Must store before returning
+        # Store in memory
+        with quick_extract_lock:
+            quick_extract_results[execution_id] = result
+            logger.info(f"Stored quick extract result in memory for execution_id: {execution_id}, status: {result['status']}, success: {result['success']}")
+        
+        # Also store in database for cross-process access
+        try:
+            conn, cur = get_db_cursor()
+            create_quick_extract_results_table(conn)
+            cur.execute("""
+                INSERT INTO quick_extract_results 
+                (execution_id, status, success, message, data, total_items, items_scraped, url, scraped_at, execution_duration_ms, error, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (execution_id) 
+                DO UPDATE SET 
+                    status = EXCLUDED.status,
+                    success = EXCLUDED.success,
+                    message = EXCLUDED.message,
+                    data = EXCLUDED.data,
+                    total_items = EXCLUDED.total_items,
+                    items_scraped = EXCLUDED.items_scraped,
+                    url = EXCLUDED.url,
+                    scraped_at = EXCLUDED.scraped_at,
+                    execution_duration_ms = EXCLUDED.execution_duration_ms,
+                    error = EXCLUDED.error,
+                    updated_at = NOW()
+            """, (
+                execution_id,
+                result['status'],
+                result['success'],
+                result.get('message'),
+                json.dumps(result.get('data', [])),
+                result.get('total_items', 0),
+                result.get('items_scraped', 0),
+                result.get('url'),
+                result.get('scraped_at'),
+                result.get('execution_duration_ms', 0),
+                result.get('error')
+            ))
+            conn.commit()
+            cur.close()
+            conn.close()
+            logger.info(f"Stored quick extract result in database for execution_id: {execution_id}")
+        except Exception as e:
+            logger.error(f"Failed to store result in database: {e}", exc_info=True)
+        
+        return result
+        
+    except Exception as e:
+        error_msg = str(e)
+        execution_duration = int((datetime.now() - execution_start).total_seconds() * 1000)
+        error_traceback = traceback.format_exc()
+        
+        log_quick_extract(execution_id, "failed", "error", f"Quick extract task failed: {error_msg}", {
+            "error": error_msg,
+            "exception_type": type(e).__name__
+        }, error_traceback=error_traceback, execution_duration_ms=execution_duration)
+        
+        result = {
+            "success": False,
+            "status": "failed",
+            "message": f"Quick extract task failed: {error_msg}",
+            "execution_id": execution_id,
+            "execution_duration_ms": execution_duration,
+            "data": [],
+            "total_items": 0,
+            "error": error_msg
+        }
+        
+        with quick_extract_lock:
+            quick_extract_results[execution_id] = result
+            logger.info(f"Stored exception result in memory for execution_id: {execution_id}")
+        
+        # Also store in database
+        try:
+            conn, cur = get_db_cursor()
+            create_quick_extract_results_table(conn)
+            cur.execute("""
+                INSERT INTO quick_extract_results 
+                (execution_id, status, success, message, data, total_items, items_scraped, url, scraped_at, execution_duration_ms, error, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (execution_id) 
+                DO UPDATE SET 
+                    status = EXCLUDED.status,
+                    success = EXCLUDED.success,
+                    message = EXCLUDED.message,
+                    data = EXCLUDED.data,
+                    total_items = EXCLUDED.total_items,
+                    items_scraped = EXCLUDED.items_scraped,
+                    url = EXCLUDED.url,
+                    scraped_at = EXCLUDED.scraped_at,
+                    execution_duration_ms = EXCLUDED.execution_duration_ms,
+                    error = EXCLUDED.error,
+                    updated_at = NOW()
+            """, (
+                execution_id,
+                result['status'],
+                result['success'],
+                result.get('message'),
+                json.dumps(result.get('data', [])),
+                result.get('total_items', 0),
+                result.get('items_scraped', 0),
+                result.get('url'),
+                result.get('scraped_at'),
+                result.get('execution_duration_ms', 0),
+                result.get('error')
+            ))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Failed to store exception result in database: {e}")
+        
+        logger.error(f"Quick extract task {execution_id} failed", exc_info=True)
+        return result
+
+def get_quick_extract_result(execution_id: str) -> Optional[dict]:
+    """
+    Get the result of a quick extract task by execution_id.
+    Returns None if task not found or still processing.
+    First checks memory, then database for cross-process access.
+    """
+    # First check memory
+    with quick_extract_lock:
+        result = quick_extract_results.get(execution_id)
+        if result:
+            logger.debug(f"Found result in memory for execution_id: {execution_id}, status: {result.get('status')}, success: {result.get('success')}")
+            return result
+    
+    # If not in memory, check database (for cross-process access)
+    try:
+        conn, cur = get_db_cursor()
+        create_quick_extract_results_table(conn)
+        cur.execute("""
+            SELECT status, success, message, data, total_items, items_scraped, url, scraped_at, execution_duration_ms, error
+            FROM quick_extract_results
+            WHERE execution_id = %s
+        """, (execution_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if row:
+            # Handle data - PostgreSQL JSONB returns dict/list directly, not string
+            data = row[3] if row[3] else []
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except (json.JSONDecodeError, TypeError):
+                    data = []
+            elif not isinstance(data, (list, dict)):
+                data = []
+            
+            result = {
+                "status": row[0],
+                "success": row[1],
+                "message": row[2],
+                "data": data,
+                "total_items": row[4] or 0,
+                "items_scraped": row[5] or 0,
+                "url": row[6],
+                "scraped_at": row[7].isoformat() if row[7] else None,
+                "execution_duration_ms": row[8] or 0,
+                "error": row[9],
+                "execution_id": execution_id
+            }
+            # Also store in memory for faster access next time
+            with quick_extract_lock:
+                quick_extract_results[execution_id] = result
+            logger.debug(f"Found result in database for execution_id: {execution_id}, status: {result.get('status')}, success: {result.get('success')}")
+            return result
+    except Exception as e:
+        logger.error(f"Error fetching result from database: {e}", exc_info=True)
+    
+    logger.debug(f"No result found for execution_id: {execution_id}")
+    return None
+
+def get_quick_extract_logs(execution_id: str) -> List[dict]:
+    """
+    Get execution logs for a quick extract task by execution_id.
+    Returns empty list if no logs found.
+    First checks database (for cross-process access), then memory.
+    """
+    # First check database (logs are written by worker process, so they're in DB)
+    try:
+        conn, cur = get_db_cursor()
+        create_quick_extract_logs_table(conn)  # This will add missing columns
+        
+        # Check if new columns exist, if not use fallback query
+        cur.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'quick_extract_logs' AND column_name IN ('error_traceback', 'execution_duration_ms')
+        """)
+        existing_columns = [row[0] for row in cur.fetchall()]
+        has_error_traceback = 'error_traceback' in existing_columns
+        has_execution_duration = 'execution_duration_ms' in existing_columns
+        
+        if has_error_traceback and has_execution_duration:
+            # Use full query with all columns
+            cur.execute("""
+                SELECT status, log_level, message, details, error_traceback, execution_duration_ms, created_at
+                FROM quick_extract_logs
+                WHERE execution_id = %s
+                ORDER BY created_at ASC
+            """, (execution_id,))
+        else:
+            # Fallback query for older table structure
+            cur.execute("""
+                SELECT status, log_level, message, details, created_at
+                FROM quick_extract_logs
+                WHERE execution_id = %s
+                ORDER BY created_at ASC
+            """, (execution_id,))
+        
+        rows = cur.fetchall()
+        logger.debug(f"Fetching logs for execution_id={execution_id}, found {len(rows)} rows")
+        
+        logs = []
+        for row in rows:
+            # Handle details - PostgreSQL JSONB returns dict directly, not string
+            details = row[3] if len(row) > 3 and row[3] else {}
+            if isinstance(details, str):
+                try:
+                    details = json.loads(details)
+                except (json.JSONDecodeError, TypeError):
+                    details = {}
+            elif not isinstance(details, dict):
+                details = {}
+            
+            # Handle different row lengths based on which query was used
+            if len(row) >= 7:
+                # Full query with all columns
+                logs.append({
+                    "execution_id": execution_id,
+                    "status": row[0],
+                    "log_level": row[1],
+                    "message": row[2],
+                    "details": details,
+                    "error_traceback": row[4],
+                    "execution_duration_ms": row[5],
+                    "created_at": row[6].isoformat() if row[6] else None
+                })
+            else:
+                # Fallback query without new columns
+                logs.append({
+                    "execution_id": execution_id,
+                    "status": row[0],
+                    "log_level": row[1],
+                    "message": row[2],
+                    "details": details,
+                    "error_traceback": None,
+                    "execution_duration_ms": None,
+                    "created_at": row[4].isoformat() if len(row) > 4 and row[4] else None
+                })
+        cur.close()
+        conn.close()
+        
+        # Store in memory for faster access
+        if logs:
+            with quick_extract_lock:
+                quick_extract_logs[execution_id] = logs
+            logger.debug(f"Retrieved {len(logs)} logs from database for execution_id={execution_id}")
+        else:
+            logger.debug(f"No logs found in database for execution_id={execution_id}")
+        
+        return logs
+    except Exception as e:
+        logger.error(f"Error fetching logs from database: {e}", exc_info=True)
+        # Fallback to memory if database query fails
+        with quick_extract_lock:
+            logs = quick_extract_logs.get(execution_id, [])
+            return logs

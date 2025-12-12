@@ -41,6 +41,8 @@ def build_paginated_url(base_url: str, page: int, pagination: PaginationConfig) 
 
 
 def build_extraction_schema(request: ScrapeRequest):
+    # Filter out fields with empty selectors to avoid CSS parser errors
+    # Empty selectors are used for Google Maps auto-extraction and should be handled by Google Maps scraper
     fields = [
         {
             "name": name,
@@ -48,7 +50,11 @@ def build_extraction_schema(request: ScrapeRequest):
             "type": fm.extract
         }
         for name, fm in request.field_mappings.items()
+        if fm.selector and fm.selector.strip()  # Only include fields with non-empty selectors
     ]
+
+    if not fields:
+        raise ValueError("No valid field mappings with selectors provided for CSS scraping. Empty selectors are for Google Maps auto-extraction.")
 
     return {
         "name": request.entity_name,
@@ -262,6 +268,15 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
 
                 page += 1
 
+            # ---- Build response ----
+            page_size = None
+            if pagination and pagination.type == "scroll":
+                page_size = len(all_data)/pagination.scroll_steps if pagination.scroll_steps else len(all_data)
+            elif pagination and pagination.type in ["button_click", "ajax_click"]:
+                page_size = len(all_data)/pagination.click_steps if pagination.click_steps else len(all_data)
+            else:
+                page_size=len(all_data)/page if page>0 else len(all_data)
+
             return ScrapeResponse(
                 entity_name=request.entity_name,
                 url=str(request.url),
@@ -269,7 +284,8 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 total_items=len(all_data),
                 data=all_data,
                 success=True,
-                message=f"Scraped {len(all_data)} items across {page} pages"
+                message=f"Scraped {len(all_data)} items across {page} pages",
+                page_size = int(page_size)
             )
 
     except Exception as e:

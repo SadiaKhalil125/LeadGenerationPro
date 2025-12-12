@@ -4,7 +4,7 @@ import sys
 import asyncio
 from datetime import datetime
 from kafka import KafkaConsumer, KafkaProducer
-from routers.task_crud import execute_task
+from routers.task_crud import execute_task, execute_quick_extract_task
 import httpx
 sys.path.append('/app')
 
@@ -22,8 +22,8 @@ except ImportError as e:
 # --- Configuration ---
 KAFKA_TOPIC = "scraping_tasks"
 KAFKA_STATUS_TOPIC = "task_status_updates"
-# BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
+# BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "host.docker.internal:9092")
 
 # --- Kafka Clients ---
 print(f" Worker connecting to Kafka at {BOOTSTRAP}...")
@@ -90,21 +90,54 @@ while True:
             try:
                 task_msg = message.value
                 task_id = task_msg.get("task_id")
+                payload = task_msg.get("payload", {})
 
                 if task_id:
-                    print(f"➡ Received task {task_id}. Handing off to execute_task function.")
-                    send_status_update(task_id, "processing", "Worker picked up the task.")
-
-                    result = asyncio.run(execute_task(task_id))
-
-                    if result and result.get("success"):
-                        success_msg = f"Task completed. Stored {result.get('items_stored', 0)} items."
-                        print(f" {success_msg}")
-                        send_status_update(task_id, "completed", success_msg, result)
+                    # Check if this is a quick extract task
+                    if payload.get("quick_extract"):
+                        execution_id = payload.get("execution_id")
+                        request_data = payload.get("request", {})
+                        
+                        if execution_id and request_data:
+                            print(f"➡ Received quick extract task {task_id} (execution_id: {execution_id}).")
+                            send_status_update(task_id, "processing", "Worker picked up the quick extract task.")
+                            
+                            result = asyncio.run(execute_quick_extract_task(execution_id, request_data))
+                            
+                            # Verify result was stored
+                            from routers.task_crud import get_quick_extract_result
+                            stored_result = get_quick_extract_result(execution_id)
+                            if stored_result:
+                                print(f"✅ Result stored successfully for execution_id: {execution_id}, status: {stored_result.get('status')}")
+                            else:
+                                print(f"❌ WARNING: Result NOT found after execution for execution_id: {execution_id}")
+                            
+                            if result and result.get("success"):
+                                success_msg = f"Quick extract completed. Scraped {result.get('items_scraped', 0)} items."
+                                print(f" {success_msg}")
+                                send_status_update(task_id, "completed", success_msg, result)
+                            else:
+                                failure_msg = f"Quick extract failed. Message: {result.get('message', 'N/A')}"
+                                print(f" {failure_msg}")
+                                send_status_update(task_id, "failed", failure_msg, result)
+                        else:
+                            print(f"Invalid quick extract task payload: missing execution_id or request")
+                            send_status_update(task_id, "failed", "Invalid quick extract task payload")
                     else:
-                        failure_msg = f"Task processed but failed. Message: {result.get('message', 'N/A')}"
-                        print(f" {failure_msg}")
-                        send_status_update(task_id, "failed", failure_msg, result)
+                        # Regular task execution
+                        print(f"➡ Received task {task_id}. Handing off to execute_task function.")
+                        send_status_update(task_id, "processing", "Worker picked up the task.")
+
+                        result = asyncio.run(execute_task(task_id))
+
+                        if result and result.get("success"):
+                            success_msg = f"Task completed. Stored {result.get('items_stored', 0)} items."
+                            print(f" {success_msg}")
+                            send_status_update(task_id, "completed", success_msg, result)
+                        else:
+                            failure_msg = f"Task processed but failed. Message: {result.get('message', 'N/A')}"
+                            print(f" {failure_msg}")
+                            send_status_update(task_id, "failed", failure_msg, result)
                 else:
                     print(f"Received message without a 'task_id': {task_msg}")
 

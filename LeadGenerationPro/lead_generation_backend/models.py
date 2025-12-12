@@ -65,7 +65,7 @@ class ScrapeResponse(BaseModel):
     data: List[Dict[str, Any]]
     success: bool
     message: str
-    
+    page_size: Optional[int] = None 
 class Attribute(BaseModel):
     name: str
     datatype: str   # e.g. "text", "int", "bool"
@@ -100,25 +100,6 @@ class MappingInfo(BaseModel):
 class MappingsListResponse(BaseModel):
     total_mappings: int
     mappings: List[MappingInfo]
-
-class PaginationConfig(BaseModel):
-    type: str  # "query_param" | "offset" | "path" | "button_click" | "scroll" 
-    param_name: Optional[str] = "page"  # for query or offset
-    start_page: Optional[int] = 1
-    page_size: Optional[int] = None   # for offset
-    max_pages: Optional[int] = None
-
-    # for path
-    path_pattern: Optional[str] = None
-
-    # for button click or ajax
-    button_selector: Optional[str] = None
-    wait_selector: Optional[str] = None
-
-    # for scroll
-    scroll_steps: Optional[int] = None
-    click_steps: Optional[int] = None
-
 
 class SourceInfo(BaseModel):
     id: int
@@ -176,6 +157,7 @@ class PreviewMappingRequest(BaseModel):
     entity_name: str
     container_selector: Optional[str] = None
     field_mappings: Dict[str, FieldMapping]
+    preview_step:Optional[int] = 1
     
 class MessageRequest(BaseModel):
     text: str
@@ -185,3 +167,29 @@ class MessageResponse(BaseModel):
     sender: str
     text: str
     timestamp: str
+
+class QuickExtractRequest(BaseModel):
+    """Request model for quick extraction with optional entity storage."""
+    url: HttpUrl
+    container_selector: Optional[str] = None
+    field_mappings: Dict[str, FieldMapping]
+    max_items: Optional[int] = None
+    timeout: Optional[int] = 15
+    pagination_config: Optional[PaginationConfig] = None
+    captcha_params: Optional[CaptchaParams] = None
+    entity_name: Optional[str] = None  # Optional: store data in this entity table
+    create_entity: Optional[bool] = False  # If true, create entity table from field mappings
+    source_name: Optional[str] = "Quick Extract"  # Source name for stored data
+
+class QuickExtractResponse(BaseModel):
+    """Response model for quick extraction."""
+    url: str
+    scraped_at: datetime
+    total_items: int
+    data: List[Dict[str, Any]]
+    success: bool
+    message: str
+
+class SelectorRequest(BaseModel):
+    url: str
+    container_selector: str

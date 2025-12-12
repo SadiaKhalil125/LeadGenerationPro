@@ -20,6 +20,7 @@ import Homepage from './Homepage'
 import Login from './Login'
 import Chatbot from './Chatbot'
 import QuickExtract from './QuickExtract'
+import LeadGeneratorPage from './UserLeadsDashboard';
 
 function App() {
 
@@ -45,6 +46,7 @@ function App() {
         <Route path="/homepage" element={<Homepage/>}/>
         <Route path="/chatbot" element={<Chatbot />} />
         <Route path="/quick-extract" element={<QuickExtract />} />
+        <Route path="/userleadsdashboard" element={<LeadGeneratorPage />} />
       </Routes>
     </BrowserRouter>
   );

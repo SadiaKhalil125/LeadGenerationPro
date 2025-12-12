@@ -34,7 +34,8 @@ spec:
         ports:
         - containerPort: 8000
         env:
+        # Use PLAINTEXT_DOCKER listener on port 9093 for Docker/K8s services
         - name: KAFKA_BOOTSTRAP
-          value: "host.docker.internal:9092"
+          value: "host.docker.internal:9093"
         - name: DATABASE_URL
           value: "postgresql://postgres:9042c98a@host.docker.internal:5432/LeadGenerationPro"

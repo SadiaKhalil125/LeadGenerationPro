@@ -42,24 +42,24 @@ def has_google_maps_support(field_mappings: dict) -> tuple[bool, dict, dict]:
         
         if canonical_name:
             # Field is supported by Google Maps
-            supported[field_name] = {
-                'canonical': canonical_name,
-                'original_mapping': field_mapping
-            }
+            # Only include in supported if selector is empty (for auto-extraction)
+            # If selector is provided, user wants custom CSS scraping
+            if not field_mapping.selector or not field_mapping.selector.strip():
+                # Empty selector = use Google Maps auto-extraction
+                supported[field_name] = {
+                    'canonical': canonical_name,
+                    'original_mapping': field_mapping
+                }
+            else:
+                # Custom selector provided = use CSS scraping
+                unsupported[field_name] = field_mapping
         else:
             # Field requires custom CSS selector
             if field_mapping.selector and field_mapping.selector.strip():
                 unsupported[field_name] = field_mapping
     
-    # Can use Google Maps if at least one field is supported and has no selector
+    # Can use Google Maps if at least one field remains in supported (has empty selector)
     can_use_google = len(supported) > 0
-    
-    # If user provided custom selectors for supported fields, use custom scraping
-    for field_name in list(supported.keys()):
-        if field_mappings[field_name].selector and field_mappings[field_name].selector.strip():
-            # User wants custom selector even for supported field
-            unsupported[field_name] = field_mappings[field_name]
-            del supported[field_name]
     
     return can_use_google, supported, unsupported
 
