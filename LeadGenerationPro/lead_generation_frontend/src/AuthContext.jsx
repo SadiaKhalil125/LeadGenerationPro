@@ -1,26 +1,44 @@
-import { createContext, useState } from "react";
+import { createContext, useState, useEffect } from "react";
 
 export const AuthContext = createContext();
 
-export function AuthProvider({ children }) {
-  const [auth, setAuth] = useState({
-    user: null,
-    token: null,
-  });
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  // 1. Add a loading state
+  const [loading, setLoading] = useState(true); 
 
-  const login = (user, token) => {
-    setAuth({ user, token });
-    localStorage.setItem("auth", JSON.stringify({ user, token }));
+  useEffect(() => {
+    // 2. Check LocalStorage on mount
+    const storedUser = localStorage.getItem("user");
+    const storedToken = localStorage.getItem("token");
+
+    if (storedUser && storedToken) {
+      setUser(JSON.parse(storedUser));
+      setToken(storedToken);
+    }
+    // 3. Mark loading as false once check is done
+    setLoading(false); 
+  }, []);
+
+  const login = (userData, authToken) => {
+    setUser(userData);
+    setToken(authToken);
+    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("token", authToken);
   };
 
   const logout = () => {
-    setAuth({ user: null, token: null });
-    localStorage.removeItem("auth");
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    window.location.href = "/login"; 
   };
 
   return (
-    <AuthContext.Provider value={{ auth, login, logout }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
-}
+};

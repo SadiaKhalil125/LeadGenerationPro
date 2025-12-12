@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-
+import { Link } from 'react-router-dom';
 export default function LeadGeneratorPage() {
   const [businessType, setBusinessType] = useState('');
   const [location, setLocation] = useState('');
@@ -159,18 +159,18 @@ export default function LeadGeneratorPage() {
             alignItems: 'center',
             gap: '30px'
           }}>
-            <a href="/dashboard" style={{
-              fontWeight: '500',
-              color: '#00364A',
-              textDecoration: 'none',
-              transition: 'all 0.3s',
-              padding: '8px 20px',
-              borderRadius: '10px'
-            }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.1)'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
-              Dashboard
-            </a>
+            <Link to="/chatbot" style={{
+    fontWeight: '500',
+    color: '#00364A',
+    textDecoration: 'none',
+    transition: 'all 0.3s',
+    padding: '8px 20px',
+    borderRadius: '10px'
+  }}
+  onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.1)'}
+  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
+    Chatbot
+  </Link>
             <a href="#" style={{
               fontWeight: '500',
               color: '#00364A',

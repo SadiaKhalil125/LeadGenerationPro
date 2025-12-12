@@ -1,29 +1,51 @@
-from fastapi import APIRouter
-import os
-from routers.get_db_connection import get_db_cursor
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
 from models import MessageRequest, MessageResponse
 from typing import List
 from routers.chat_service import generate_response
-from routers.chat_repository import save_message, get_history, init_db,clear_session
+from routers.chat_repository import save_message, get_history, clear_session
+
+# --- Auth Dependency Setup ---
+from .auth import SECRET_KEY, ALGORITHM # Import from your auth.py
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+def get_current_user_id(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: int = payload.get("user_id")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        return user_id
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+# --- Routes ---
 router = APIRouter()
 
-
-
-@router.post("/chat/{session_id}", response_model=MessageResponse)
-def chat_endpoint(session_id: str, request: MessageRequest):
-    # 1. Save User Message
-    user_save_result = save_message(session_id, "user", request.text)
+@router.post("/chat", response_model=MessageResponse)
+def chat_endpoint(request: MessageRequest, user_id: int = Depends(get_current_user_id)):
+    """
+    We remove session_id from the URL. 
+    We generate a consistent session ID for the user (e.g., 'user_123_default')
+    so they always see their own history.
+    """
+    # Create a persistent session ID for this user
+    session_id = f"user_{user_id}_default"
     
-    # 2. Fetch History for Context
-    history = get_history(session_id)
+    # 1. Save User Message (linked to user_id)
+    user_save_result = save_message(session_id, user_id, "user", request.text)
+    
+    # 2. Fetch History
+    history = get_history(session_id, user_id)
     
     # 3. Generate AI Response
     bot_text = generate_response(request.text, history)
     
     # 4. Save Bot Message
-    bot_save_result = save_message(session_id, "bot", bot_text)
+    bot_save_result = save_message(session_id, user_id, "bot", bot_text)
     
-    # 5. Return Bot Message to Frontend
     return {
         "id": bot_save_result[0],
         "sender": "bot",
@@ -31,9 +53,12 @@ def chat_endpoint(session_id: str, request: MessageRequest):
         "timestamp": str(bot_save_result[1])
     }
 
-@router.get("/chat/{session_id}/history", response_model=List[MessageResponse])
-def get_history_endpoint(session_id: str):
-    raw_history = get_history(session_id)
+@router.get("/history", response_model=List[MessageResponse])
+def get_history_endpoint(user_id: int = Depends(get_current_user_id)):
+    session_id = f"user_{user_id}_default"
+    
+    raw_history = get_history(session_id, user_id)
+    
     formatted_history = []
     for msg in raw_history:
         formatted_history.append({
@@ -44,7 +69,8 @@ def get_history_endpoint(session_id: str):
         })
     return formatted_history
 
-@router.delete("/chat/{session_id}")
-def delete_session_endpoint(session_id: str):
-    clear_session(session_id)
+@router.delete("/delete_session")
+def delete_session_endpoint(user_id: int = Depends(get_current_user_id)):
+    session_id = f"user_{user_id}_default"
+    clear_session(session_id, user_id)
     return {"status": "success", "message": "Session deleted"}
