@@ -159,7 +159,7 @@ export default function LeadGeneratorPage() {
             alignItems: 'center',
             gap: '30px'
           }}>
-            <a href="/" style={{
+            <a href="/dashboard" style={{
               fontWeight: '500',
               color: '#00364A',
               textDecoration: 'none',
