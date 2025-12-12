@@ -2,7 +2,9 @@ import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, AuthContext } from "./AuthContext";
+import { useContext } from "react";
 import WebScraperForm from './WebScraperForm'
 import EntityForm from "./EntityForm"
 import EntityMappingForm from './EntityMappingForm'
@@ -22,14 +24,22 @@ import Chatbot from './Chatbot'
 import QuickExtract from './QuickExtract'
 import LeadGeneratorPage from './UserLeadsDashboard';
 
+const ProtectedRoute = ({ children }) => {
+  const { user } = useContext(AuthContext);
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
 function App() {
 
   return (
-   <BrowserRouter> 
+    <AuthProvider>
+   <Router> 
       {/* <NavigationPage /> */}
       <Routes>
-
-        <Route path="/" element={<NavigationPage />} />
+        <Route path="/dashboard" element={<NavigationPage />} />
         <Route path="/entityform" element={<EntityForm />} />
         <Route path="/entitylist" element={<EntityList />} />
         <Route path="/entitymappingform" element={<EntityMappingForm />} />
@@ -43,12 +53,13 @@ function App() {
         <Route path="/entity-data" element={<EntityDataPage />} />
         <Route path="/addsource" element={<SourceCreator />} />
         <Route path="/login" element={<Login/>} />
-        <Route path="/homepage" element={<Homepage/>}/>
+        <Route path="/" element={<Homepage/>}/>
         <Route path="/chatbot" element={<Chatbot />} />
         <Route path="/quick-extract" element={<QuickExtract />} />
         <Route path="/userleadsdashboard" element={<LeadGeneratorPage />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
+    </AuthProvider>
   );
 }
 

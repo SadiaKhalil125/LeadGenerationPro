@@ -23,15 +23,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from crawl4Util import extract_website
 from scraping_router import route_scraping_request
-from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud
+from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login
 from routers.scheduler_config import scheduler, task_lifespan
-# from routers.login import create_users_table
-# from routers.login import router as login_router
-from routers.login import router as login_router, create_users_table
+from routers.login import create_users_table
 from urllib.parse import urljoin
 from playwright.async_api import async_playwright
 import random 
-
 from contextlib import asynccontextmanager
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -45,12 +42,14 @@ async def combined_lifespan(app: FastAPI):
     # run task scheduler lifespan
     async with task_lifespan(app):
         yield
+
 app = FastAPI(
     title="Dynamic Web Scraper API",
     description="A flexible web scraper that accepts entity configurations at runtime",
     version="1.0.0",
     lifespan=combined_lifespan
 )
+
 RENDER_CACHE = {} 
 
 app.include_router(entity_crud.router, prefix="/entity", tags=["Entity Management"])
@@ -58,7 +57,9 @@ app.include_router(source_crud.router, prefix="/source", tags=["Source Managemen
 app.include_router(entity_mappings_crud.router, prefix="/mapping", tags=["Entity Mappings Management"])
 app.include_router(task_crud.router, prefix="/task", tags=["Task Management"])
 app.include_router(chat_crud.router, prefix="/chat", tags=["Chat Management"])
-app.include_router(login_router, prefix="/auth")
+app.include_router(login.router, prefix="/auth", tags=["Authentication"])
+
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,

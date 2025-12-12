@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Dict, List, Optional, Any
 from pydantic import HttpUrl
 from datetime import datetime
@@ -193,3 +193,12 @@ class QuickExtractResponse(BaseModel):
 class SelectorRequest(BaseModel):
     url: str
     container_selector: str
+
+class UserSignup(BaseModel):
+    full_name: str
+    email: EmailStr
+    password: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
