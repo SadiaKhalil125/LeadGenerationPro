@@ -1,21 +1,17 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useContext } from 'react';
 import { User, MessageSquare, X, ChevronRight, MessageCircle, Trash2 } from 'lucide-react';
 import axios from 'axios';
+import { AuthContext } from './AuthContext';
+import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-// --- CONFIG ---
-const API_BASE_URL = "http://localhost:8000/chat"; // Adjust port if needed
-
-// Helper to manage session ID in localStorage
-const getSessionId = () => {
-  let id = localStorage.getItem("chat_session_id");
-  if (!id) {
-    id = "sess_" + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem("chat_session_id", id);
-  }
-  return id;
-};
+const API_BASE_URL = "http://localhost:8000"; // Pointing to root, as discussed
 
 export default function ChatbotInterface() {
+  const { user, token, loading } = useContext(AuthContext); 
+  const navigate = useNavigate();
+
   const [showWelcome, setShowWelcome] = useState(true);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -23,11 +19,18 @@ export default function ChatbotInterface() {
   const [isLoading, setIsLoading] = useState(false);
   
   const messagesEndRef = useRef(null);
-  const sessionIdRef = useRef(getSessionId());
-  const sessionId = sessionIdRef.current;
 
-  // Static FAQ data (only for clicking, answer comes from AI now if you prefer)
-  // Or we can treat FAQ clicks as inputs to the AI
+  // Redirect if not logged in
+  useEffect(() => {
+    // 1. If the AuthContext is still reading localStorage, DO NOTHING
+    if (loading) return; 
+
+    // 2. Once loading is finished, IF there is no token, then redirect
+    if (!token) {
+      navigate('/login');
+    }
+  }, [token, loading, navigate]);
+
   const faqData = [
     { question: "How do I reset my password?", answer: "To reset your password..." },
     { question: "What programming languages do you support?", answer: "We support..." },
@@ -40,12 +43,16 @@ export default function ChatbotInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // 1. Fetch History on Mount
+  // 1. Fetch History on Mount (Using Token)
   useEffect(() => {
+    if (!token) return;
+
     const fetchHistory = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/chat/${sessionId}/history`);
-        // Format timestamp string to Date object
+        const res = await axios.get(`${API_BASE_URL}/chat/history`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
         const formatted = res.data.map(msg => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
@@ -57,7 +64,7 @@ export default function ChatbotInterface() {
       }
     };
     fetchHistory();
-  }, [sessionId]);
+  }, [token]);
 
   useEffect(() => {
     scrollToBottom();
@@ -67,11 +74,13 @@ export default function ChatbotInterface() {
     setShowWelcome(false);
   };
 
-  // 2. Handle Delete Session
+  // 2. Handle Delete Session (Using Token)
   const handleDeleteSession = async () => {
     if (!window.confirm("Are you sure you want to clear the conversation?")) return;
     try {
-      await axios.delete(`${API_BASE_URL}/chat/${sessionId}`);
+      await axios.delete(`${API_BASE_URL}/chat/delete_session`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setMessages([]);
       setShowFAQ(true);
     } catch (err) {
@@ -79,14 +88,13 @@ export default function ChatbotInterface() {
     }
   };
 
-  // 3. Central Send Logic
+  // 3. Send Logic (Using Token)
   const sendMessage = async (textToSend) => {
     if (!textToSend.trim()) return;
 
     setShowFAQ(false);
     setIsLoading(true);
 
-    // Optimistically add User Message
     const optimisticMsg = {
       id: Date.now(),
       text: textToSend,
@@ -96,12 +104,11 @@ export default function ChatbotInterface() {
     setMessages(prev => [...prev, optimisticMsg]);
 
     try {
-      // API Call
-      const res = await axios.post(`${API_BASE_URL}/chat/${sessionId}`, {
-        text: textToSend
-      });
+      const res = await axios.post(`${API_BASE_URL}/chat/chat`, 
+        { text: textToSend }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      // Add Bot Response from API
       const botMsg = {
         id: res.data.id,
         text: res.data.text,
@@ -111,16 +118,13 @@ export default function ChatbotInterface() {
       setMessages(prev => [...prev, botMsg]);
     } catch (err) {
       console.error("Error sending message:", err);
-      // Optional: Add an error message bubble
+      alert("Session expired or server error. Please login again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleFAQClick = (faq) => {
-    // We send the FAQ question to the AI to get a generative response, 
-    // OR you can modify this to display the static answer immediately.
-    // Here, we treat it as a user input to the AI:
     sendMessage(faq.question);
   };
 
@@ -136,24 +140,32 @@ export default function ChatbotInterface() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#C7D8ED]">
+        <div className="text-[#00364A] font-bold text-xl animate-pulse">
+           Verifying Session...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex items-center justify-center p-4 relative overflow-hidden" style={{ backgroundColor: '#C7D8ED' }}>
       
-      {/* Background Animations (Kept existing) */}
+      {/* Background Animations */}
       <div className="absolute inset-0 pointer-events-none">
         <MessageSquare className="absolute text-white opacity-20" style={{ width: '80px', height: '80px', top: '10%', left: '5%', animation: 'float1 20s infinite ease-in-out' }} />
-        {/* ... (Your other background icons remain here) ... */}
       </div>
 
       <style>{`
         @keyframes float1 { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 25% { transform: translate(30px, -40px) rotate(5deg); } 50% { transform: translate(-20px, -80px) rotate(-5deg); } 75% { transform: translate(40px, -60px) rotate(3deg); } }
-        /* Add other keyframes from your code here */
       `}</style>
       
       {/* Chatbot Interface */}
       <div className={`flex flex-col h-full w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden border-4 transition-all duration-300 ${showWelcome ? 'blur-md' : ''}`} style={{ backgroundColor: 'white', borderColor: '#00364A' }}>
         
-        {/* Header - Now with DELETE button */}
+        {/* Header */}
         <div className="shadow-md border-b-4 p-4" style={{ backgroundColor: 'white', borderColor: '#00364A' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -161,14 +173,15 @@ export default function ChatbotInterface() {
                 <MessageSquare className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold" style={{ color: '#00364A' }}>AI Assistant</h1>
+                <h1 className="text-2xl font-bold" style={{ color: '#00364A' }}>
+                    {user ? `${user.name}'s Assistant` : 'AI Assistant'}
+                </h1>
                 <p className="text-sm" style={{ color: '#666' }}>
                   {isLoading ? 'AI is thinking...' : 'Online • Powered by Gemini'}
                 </p>
               </div>
             </div>
             
-            {/* DELETE SESSION BUTTON */}
             <button 
               onClick={handleDeleteSession}
               className="p-2 rounded-full hover:bg-red-50 text-red-500 transition-colors"
@@ -187,7 +200,6 @@ export default function ChatbotInterface() {
                 key={message.id}
                 className={`flex gap-3 ${message.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
               >
-                {/* Avatar */}
                 <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center`}
                   style={{ backgroundColor: message.sender === 'user' ? '#004d66' : '#00364A' }}
                 >
@@ -198,29 +210,67 @@ export default function ChatbotInterface() {
                   )}
                 </div>
 
-                {/* Message Bubble */}
-                <div className={`flex flex-col max-w-md ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`rounded-2xl px-4 py-3 shadow-md ${
-                    message.sender === 'user' 
-                      ? 'rounded-tr-none text-white' 
-                      : 'rounded-tl-none border-2'
-                  }`}
-                  style={{
-                    backgroundColor: message.sender === 'user' ? '#00364A' : 'white',
-                    color: message.sender === 'user' ? 'white' : '#00364A',
-                    borderColor: message.sender === 'bot' ? 'rgba(199, 216, 237, 0.8)' : 'transparent'
-                  }}
-                  >
-                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
-                  </div>
-                  <span className="text-xs mt-1 px-2" style={{ color: '#666' }}>
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
+                {/* Message Bubble with React Markdown */}
+<div className={`flex flex-col max-w-md ${message.sender === 'user' ? 'items-end' : 'items-start'}`}>
+  <div className={`rounded-2xl px-4 py-3 shadow-md ${
+    message.sender === 'user' 
+      ? 'rounded-tr-none text-white' 
+      : 'rounded-tl-none border-2'
+  }`}
+  style={{
+    backgroundColor: message.sender === 'user' ? '#00364A' : 'white',
+    color: message.sender === 'user' ? 'white' : '#00364A', // This sets the parent color
+    borderColor: message.sender === 'bot' ? 'rgba(199, 216, 237, 0.8)' : 'transparent'
+  }}
+  >
+    {/* REMOVED 'markdown-body' class to prevent color override */}
+    <div className="text-sm overflow-hidden">
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Force all elements to inherit the parent color (White for user, Dark for bot)
+          strong: ({node, ...props}) => <span className="font-bold text-inherit" {...props} />,
+          ul: ({node, ...props}) => <ul className="list-disc pl-5 my-2 space-y-1 text-inherit" {...props} />,
+          ol: ({node, ...props}) => <ol className="list-decimal pl-5 my-2 space-y-1 text-inherit" {...props} />,
+          li: ({node, ...props}) => <li className="pl-1 text-inherit" {...props} />,
+          
+          // CRITICAL FIX: Ensure paragraphs inherit color
+          p: ({node, ...props}) => <p className="mb-2 last:mb-0 leading-relaxed text-inherit" {...props} />,
+          
+          // Links need specific colors to be visible on both backgrounds
+          a: ({node, ...props}) => (
+            <a 
+              className={`underline hover:opacity-80 ${message.sender === 'user' ? 'text-blue-200' : 'text-blue-600'}`} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              {...props} 
+            />
+          ),
+          // Code blocks need their own background
+          code: ({node, inline, className, children, ...props}) => {
+              return inline ? (
+                <code className={`px-1 py-0.5 rounded ${message.sender === 'user' ? 'bg-black/20 text-white' : 'bg-gray-100 text-black'}`} {...props}>
+                  {children}
+                </code>
+              ) : (
+                <pre className={`p-2 rounded my-2 overflow-x-auto ${message.sender === 'user' ? 'bg-black/20 text-white' : 'bg-gray-100 text-black'}`} {...props}>
+                  <code>{children}</code>
+                </pre>
+              )
+          }
+        }}
+      >
+        {message.text}
+      </ReactMarkdown>
+    </div>
+  </div>
+  <span className="text-xs mt-1 px-2" style={{ color: '#666' }}>
+    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+  </span>
+</div>
               </div>
             ))}
             
-            {/* Loading Indicator */}
             {isLoading && (
                <div className="flex gap-3">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: '#00364A' }}>
@@ -250,14 +300,6 @@ export default function ChatbotInterface() {
                   onClick={() => handleFAQClick(faq)}
                   className="w-full text-left rounded-lg p-3 transition-all duration-200 shadow-sm border-2"
                   style={{ backgroundColor: 'white', borderColor: 'rgba(199, 216, 237, 0.8)' }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(199, 216, 237, 0.5)';
-                    e.currentTarget.style.transform = 'scale(1.02)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.backgroundColor = 'white';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
                 >
                   <p className="text-sm font-medium flex items-center gap-2" style={{ color: '#00364A' }}>
                     <ChevronRight className="w-4 h-4" style={{ color: '#00364A' }} />
@@ -313,7 +355,7 @@ export default function ChatbotInterface() {
               <div className="p-4 rounded-full mb-6 shadow-lg" style={{ backgroundColor: '#00364A' }}>
                 <MessageSquare className="w-12 h-12 text-white" />
               </div>
-              <h2 className="text-3xl font-bold mb-4" style={{ color: '#00364A' }}>Welcome!</h2>
+              <h2 className="text-3xl font-bold mb-4" style={{ color: '#00364A' }}>Welcome{user ? `, ${user.name}` : ''}!</h2>
               <p className="text-lg leading-relaxed mb-6" style={{ color: '#00364A' }}>
                 I'm your AI Assistant. I use Google's Gemini to answer your technical questions concisely.
               </p>
