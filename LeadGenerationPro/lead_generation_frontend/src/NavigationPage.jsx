@@ -8,8 +8,8 @@ import {
   ClipboardPlus,
   CalendarCheck,
   Settings,
-  X,
-} from "lucide-react";
+} 
+from "lucide-react";
 
 const NavigationPage = () => {
   const [openMenu, setOpenMenu] = useState(null);
@@ -31,6 +31,14 @@ const NavigationPage = () => {
         { label: "Entity Data Table", path: "/entity-data", description: "Browse entity data in table format" },
       ],
     },
+    manager: {
+      label: "Source",
+      icon: <Settings size={20} />,
+      items: [
+        { label: "Source Manager", path: "/sourcemanagement", description: "Manage data sources and connections" },
+        { label: "Add New Source", path: "/addsource", description: "Configure a new data source" },
+      ],
+    },
     mapping: {
       label: "Mapping",
       icon: <ClipboardPlus size={20} />,
@@ -40,7 +48,7 @@ const NavigationPage = () => {
       ],
     },
     task: {
-      label: "Task",
+      label: "Scheduled",
       icon: <CalendarCheck size={20} />,
       items: [
         { label: "Schedule a Task", path: "/taskscheduler", description: "Create and schedule new automated tasks" },
@@ -48,14 +56,7 @@ const NavigationPage = () => {
         { label: "Task Executor", path: "/taskexecutor", description: "Execute tasks manually or view execution logs" },
       ],
     },
-    manager: {
-      label: "Source",
-      icon: <Settings size={20} />,
-      items: [
-        { label: "Source Manager", path: "/sourcemanagement", description: "Manage data sources and connections" },
-        { label: "Add New Source", path: "/addsource", description: "Configure a new data source" },
-      ],
-    },
+
   };
 
   const styles = {
@@ -147,28 +148,7 @@ const NavigationPage = () => {
       marginBottom: "4px",
       display: sidebarOpen ? "block" : "none",
     },
-    navButtonsContainer: {
-      marginTop: "auto",
-      display: "flex",
-      flexDirection: "column",
-      gap: "12px",
-    },
-    navButton: {
-      width: "100%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "14px 16px",
-      borderRadius: "12px",
-      fontSize: "15px",
-      fontWeight: "600",
-      backgroundColor: "white",
-      color: "#00364A",
-      border: "none",
-      cursor: "pointer",
-      transition: "all 0.2s ease",
-      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-    },
+
     mainContent: {
       flex: 1,
       transition: "all 0.3s ease-in-out",
@@ -211,26 +191,7 @@ const NavigationPage = () => {
       padding: "40px",
       minHeight: "600px",
     },
-    welcomeCard: {
-      textAlign: "center",
-      padding: "60px 40px",
-      backgroundColor: "#E0EFFF",
-      borderRadius: "20px",
-      boxShadow: "0 8px 24px rgba(0, 54, 74, 0.08)",
-      border: "1px solid rgba(0, 54, 74, 0.1)",
-    },
-    welcomeTitle: {
-      fontSize: "32px",
-      fontWeight: "700",
-      marginBottom: "16px",
-      color: "#00364A",
-      letterSpacing: "0.3px",
-    },
-    welcomeText: {
-      color: "#00364A",
-      fontSize: "16px",
-      fontWeight: "500",
-    },
+
     contentCard: {
       backgroundColor: "#E0EFFF",
       padding: "32px",
@@ -296,6 +257,82 @@ const NavigationPage = () => {
       position: "relative",
       overflow: "hidden",
     },
+    quickAccessTitle: {
+      fontSize: "42px",
+      fontWeight: "700",
+      marginBottom: "48px",
+      color: "#00364A",
+      letterSpacing: "0.3px",
+      textAlign: "center",
+    },
+    quickAccessGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+      gap: "24px",
+      maxWidth: "1200px",
+      margin: "0 auto",
+    },
+    quickAccessCard: {
+      padding: "24px",
+      backgroundColor: "white",
+      borderRadius: "16px",
+      boxShadow: "0 4px 20px rgba(0, 54, 74, 0.08)",
+      border: "2px solid #E0E0E0",
+      transition: "all 0.3s ease",
+      textAlign: "left",
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+      position: "relative",
+    },
+    quickAccessIconSmall: {
+      width: "48px",
+      height: "48px",
+      backgroundColor: "#5A7A8C",
+      borderRadius: "12px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "white",
+      position: "absolute",
+      top: "24px",
+      right: "24px",
+    },
+    stepLabel: {
+      fontSize: "24px",
+      fontWeight: "700",
+      color: "#1A1A1A",
+      margin: "0",
+      marginBottom: "8px",
+    },
+    quickAccessCardTitle: {
+      fontSize: "16px",
+      fontWeight: "600",
+      color: "#1A1A1A",
+      margin: "0",
+      marginBottom: "4px",
+    },
+    quickAccessCardText: {
+      fontSize: "13px",
+      fontWeight: "400",
+      color: "#6B7280",
+      margin: "0",
+      lineHeight: "1.5",
+      marginBottom: "8px",
+    },
+    actionButton: (color) => ({
+      padding: "12px 24px",
+      backgroundColor: color,
+      color: "white",
+      border: "2px solid " + color,
+      borderRadius: "8px",
+      fontSize: "14px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+      marginTop: "auto",
+      alignSelf: "flex-start",
+    }),
   };
 
   return (
@@ -354,8 +391,7 @@ const NavigationPage = () => {
               </div>
             </div>
           ))}
-
-
+          
         </div>
       </aside>
 
@@ -390,12 +426,158 @@ const NavigationPage = () => {
         {/* Content Area */}
         <main style={styles.main}>
           {!openMenu && (
-            <div style={styles.welcomeCard}>
-              <h2 style={styles.welcomeTitle}>Welcome to Your Dashboard</h2>
-              <p style={styles.welcomeText}>
-                Select a category from the sidebar to view available options and
-                manage your system efficiently.
-              </p>
+            <div>
+              <h2 style={styles.quickAccessTitle}>Quick Access</h2>
+              <div style={styles.quickAccessGrid}>
+                <div
+                  style={styles.quickAccessCard}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
+                    e.currentTarget.style.borderColor = "#5A7A8C";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
+                    e.currentTarget.style.borderColor = "#E0E0E0";
+                  }}
+                >
+                  <div style={styles.quickAccessIconSmall}>
+                    <LayoutGrid size={24} strokeWidth={2} />
+                  </div>
+                  <h2 style={styles.stepLabel}>Step 1</h2>
+                  <h3 style={styles.quickAccessCardTitle}>Create an Entity</h3>
+                  <p style={styles.quickAccessCardText}>
+                    Add a new entity to the database
+                  </p>
+                  <button
+                    style={styles.actionButton("#2C5F6F")}
+                    onClick={() => navigate("/entityform")}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "white";
+                      e.currentTarget.style.color = "#2C5F6F";
+                      e.currentTarget.style.border = "2px solid #2C5F6F";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "#2C5F6F";
+                      e.currentTarget.style.color = "white";
+                      e.currentTarget.style.border = "2px solid #2C5F6F";
+                    }}
+                  >
+                    Create Entity
+                  </button>
+                </div>
+
+                <div
+                  style={styles.quickAccessCard}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
+                    e.currentTarget.style.borderColor = "#5A7A8C";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
+                    e.currentTarget.style.borderColor = "#E0E0E0";
+                  }}
+                >
+                  <div style={styles.quickAccessIconSmall}>
+                    <Settings size={24} strokeWidth={2} />
+                  </div>
+                  <h2 style={styles.stepLabel}>Step 2</h2>
+                  <h3 style={styles.quickAccessCardTitle}>Add New Source</h3>
+                  <p style={styles.quickAccessCardText}>
+                    Use the Source Manager to register and manage data sources
+                  </p>
+                  <button
+                    style={styles.actionButton("#2C5F6F")}
+                    onClick={() => navigate("/addsource")}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "white";
+                      e.currentTarget.style.color = "#2C5F6F";
+                      e.currentTarget.style.border = "2px solid #2C5F6F";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "#2C5F6F";
+                      e.currentTarget.style.color = "white";
+                      e.currentTarget.style.border = "2px solid #2C5F6F";
+                    }}
+                  >
+                    Add Source
+                  </button>
+                </div>
+
+                <div
+                  style={styles.quickAccessCard}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
+                    e.currentTarget.style.borderColor = "#5A7A8C";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
+                    e.currentTarget.style.borderColor = "#E0E0E0";
+                  }}
+                >
+                  <div style={styles.quickAccessIconSmall}>
+                    <ClipboardPlus size={24} strokeWidth={2} />
+                  </div>
+                  <h2 style={styles.stepLabel}>Step 3</h2>
+                  <h3 style={styles.quickAccessCardTitle}>Entity Mapping</h3>
+                  <p style={styles.quickAccessCardText}>
+                    Review existing mappings and create a new, configured mapping in the Mapping module if none is available.
+
+                  </p>
+                  <button
+                    style={styles.actionButton("#2C5F6F")}
+                    onClick={() => navigate("/mappingmanager")}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "white";
+                      e.currentTarget.style.color = "#2C5F6F";
+                      e.currentTarget.style.border = "2px solid #2C5F6F";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "#2C5F6F";
+                      e.currentTarget.style.color = "white";
+                      e.currentTarget.style.border = "2px solid #2C5F6F";
+                    }}
+                  >
+                    View Mappings
+                  </button>
+                </div>
+
+                <div
+                  style={styles.quickAccessCard}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
+                    e.currentTarget.style.borderColor = "#5A7A8C";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
+                    e.currentTarget.style.borderColor = "#E0E0E0";
+                  }}
+                >
+                  <div style={styles.quickAccessIconSmall}>
+                    <CalendarCheck size={24} strokeWidth={2} />
+                  </div>
+                  <h2 style={styles.stepLabel}>Step 4</h2>
+                  <h3 style={styles.quickAccessCardTitle}>Schedule a Task</h3>
+                  <p style={styles.quickAccessCardText}>
+                    Create and schedule new automated tasks
+                  </p>
+                  <button
+                    style={styles.actionButton("#2C5F6F")}
+                    onClick={() => navigate("/taskscheduler")}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "white";
+                      e.currentTarget.style.color = "#2C5F6F";
+                      e.currentTarget.style.border = "2px solid #2C5F6F";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "#2C5F6F";
+                      e.currentTarget.style.color = "white";
+                      e.currentTarget.style.border = "2px solid #2C5F6F";
+                    }}
+                  >
+                    Schedule Task
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
