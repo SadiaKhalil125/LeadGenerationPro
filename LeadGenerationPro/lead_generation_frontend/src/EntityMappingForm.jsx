@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Eye, ArrowRight, ArrowRightCircle, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, Info, AlertTriangle, Code } from "lucide-react";
+import React, { useState, useEffect, useRef} from "react";
+import { Eye, ArrowRight, ArrowLeft, ArrowRightCircle, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, Info, AlertTriangle, Code, RefreshCw } from "lucide-react";
 import ServerHtmlPreview from "./ServerHtmlPreview";
-
+import { useNavigate } from "react-router-dom";
 import API_BASE from "./api_base";
 
 // Point this to your new Python API URL
@@ -168,7 +168,7 @@ const MetadataInput = ({ value, onChange, options }) => {
         onClick={() => setIsOpen(!isOpen)}
         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
       >
-        {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+        {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
       </button>
 
       {isOpen && (
@@ -226,7 +226,7 @@ const SelectorInput = ({ value, onChange, placeholder, options = [] }) => {
         onClick={() => setIsOpen(!isOpen)}
         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
       >
-        {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+        {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
       </button>
 
       {isOpen && options.length > 0 && (
@@ -271,7 +271,7 @@ export default function EntityMappingScreen() {
   const [previewEntity, setPreviewEntity] = useState(null);
   const [previewCache, setPreviewCache] = useState({}); // entity_name: {step1: data, step2: data, ...}
   const [isSubPreviewLoading, setIsSubPreviewLoading] = useState(false);
-
+  const navigate = useNavigate();
   // New State for Selectors Scanning
   const [scanningSelectors, setScanningSelectors] = useState({}); // { entityName: boolean }
   const [availableSelectors, setAvailableSelectors] = useState({}); // { entityName: string[] }
@@ -575,53 +575,154 @@ export default function EntityMappingScreen() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <div className="w-1/2 h-full overflow-y-auto p-8">
-        <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl border-t-8 border-teal-400 p-10">
-          <h1 className="text-3xl font-bold text-center text-gray-700 mb-8">
+    <div style={{
+      display: 'flex',
+      height: '100vh',
+      backgroundColor: '#C7D8ED',
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    }}>
+      {/* Left Panel - Configuration */}
+      <div style={{
+        width: '50%',
+        height: '100%',
+        overflowY: 'auto',
+        padding: '30px'
+      }}>
+        
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '25px',
+          boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+          padding: '40px',
+          borderTop: '8px solid #49A3C4'
+        }}>
+          <div
+          style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
+          <button
+             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 24px',
+              backgroundColor: 'white',
+              color: '#00364A',
+              borderRadius: '12px',
+              border: '2px solid #00364A',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#00364A';
+              e.target.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'white';
+              e.target.style.color = '#00364A';
+            }}
+            onClick={() => navigate('/dashboard')}
+          >
+          <ArrowLeft size={18} />
+         
+            </button>
+            
+          <h1 style={{
+            fontSize: '32px',
+            fontWeight: '800',
+            textAlign: 'center',
+            color: '#00364A',
+            marginBottom: '20px'
+          }}>
             Entity Mapping Configuration
           </h1>
-
+          </div>
           {isGoogleMaps && (
-            <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg flex gap-3">
-              <Info className="text-blue-600 flex-shrink-0 mt-1" size={20} />
+            <div style={{
+              marginBottom: '25px',
+              padding: '15px 20px',
+              backgroundColor: '#E0F2FE',
+              borderLeft: '4px solid #49A3C4',
+              borderRadius: '8px',
+              display: 'flex',
+              gap: '12px'
+            }}>
+              <Info size={20} color="#00364A" style={{ marginTop: '2px' }} />
               <div>
-                <p className="font-semibold text-blue-800">Google Maps Detected</p>
-                <p className="text-sm text-blue-700 mt-1">
+                <p style={{ fontWeight: '700', color: '#00364A', margin: '0 0 5px 0' }}>Google Maps Detected</p>
+                <p style={{ fontSize: '14px', color: '#00364A', opacity: 0.8, margin: 0 }}>
                   For supported fields, you can leave selectors empty for auto-extraction.
                 </p>
               </div>
             </div>
           )}
 
-          <div className="space-y-6 mb-8">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', marginBottom: '30px' }}>
             <div>
-              <label className="block mb-2 text-gray-700 font-semibold text-sm uppercase">Source</label>
-              <div className="relative" ref={sourcesDropdownRef}>
+              <label style={{ display: 'block', marginBottom: '8px', color: '#00364A', fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>Source</label>
+              <div style={{ position: 'relative' }} ref={sourcesDropdownRef}>
                 <input
                   type="text"
                   value={source}
                   onChange={(e) => setSource(e.target.value)}
                   onFocus={() => setSourcesDropdownOpen(true)}
                   placeholder="Enter or select source"
-                  className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
+                  style={{
+                    width: '100%',
+                    padding: '14px 20px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                    color: '#00364A',
+                    fontSize: '15px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
                 />
                 <button
                   onClick={() => setSourcesDropdownOpen(!sourcesDropdownOpen)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  style={{
+                    position: 'absolute',
+                    right: '15px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: '#00364A',
+                    cursor: 'pointer',
+                    opacity: 0.5
+                  }}
                 >
                   {sourcesDropdownOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                 </button>
 
                 {sourcesDropdownOpen && existingSources.length > 0 && (
-                  <div className="absolute mt-2 w-full bg-white border rounded-xl shadow-lg z-30 max-h-60 overflow-y-auto">
+                  <div style={{
+                    position: 'absolute',
+                    marginTop: '8px',
+                    width: '100%',
+                    backgroundColor: 'white',
+                    border: '1px solid rgba(0, 54, 74, 0.1)',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 30px rgba(0, 54, 74, 0.1)',
+                    zIndex: 30,
+                    maxHeight: '240px',
+                    overflowY: 'auto'
+                  }}>
                     {existingSources.map((s) => (
                       <div
                         key={s.id}
                         onClick={() => handleSourceSelect(s)}
-                        className="px-4 py-3 hover:bg-teal-50 cursor-pointer"
+                        style={{
+                          padding: '12px 20px',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          color: '#00364A',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.1)'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
                       >
-                        <p className="font-semibold">{s.name}</p>
+                        {s.name}
                       </div>
                     ))}
                   </div>
@@ -630,35 +731,77 @@ export default function EntityMappingScreen() {
             </div>
 
             <div>
-              <label className="block mb-2 text-gray-700 font-semibold text-sm uppercase">URL</label>
+              <label style={{ display: 'block', marginBottom: '8px', color: '#00364A', fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>URL</label>
               <input
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="Enter URL"
-                className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400"
+                style={{
+                  width: '100%',
+                  padding: '14px 20px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                  color: '#00364A',
+                  fontSize: '15px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
               />
             </div>
           </div>
 
-          <div className="mb-8 relative" ref={entitiesDropdownRef}>
-            <label className="block mb-4 text-gray-700 font-semibold text-sm uppercase">
+          <div style={{ marginBottom: '30px', position: 'relative' }} ref={entitiesDropdownRef}>
+            <label style={{ display: 'block', marginBottom: '16px', color: '#00364A', fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>
               Select Entities
             </label>
             <div
               onClick={() => setEntitiesDropdownOpen(!entitiesDropdownOpen)}
-              className="flex justify-between items-center w-full p-4 rounded-xl bg-gray-50 border border-gray-300 cursor-pointer"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+                padding: '16px 20px',
+                borderRadius: '12px',
+                backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#00364A',
+                fontWeight: '500',
+                boxSizing: 'border-box'
+              }}
             >
               <span>{selectedEntities.length > 0 ? selectedEntities.join(", ") : "Choose entities..."}</span>
-              <ChevronDown className="w-5 h-5" />
+              <ChevronDown size={20} />
             </div>
 
             {entitiesDropdownOpen && (
-              <div className="absolute mt-2 w-full bg-white border rounded-xl shadow-lg z-20">
+              <div style={{
+                position: 'absolute',
+                marginTop: '8px',
+                width: '100%',
+                backgroundColor: 'white',
+                border: '1px solid rgba(0, 54, 74, 0.1)',
+                borderRadius: '12px',
+                boxShadow: '0 10px 30px rgba(0, 54, 74, 0.1)',
+                zIndex: 20
+              }}>
                 {entities.map((entity) => (
                   <label
                     key={entity}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-100 cursor-pointer"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px 20px',
+                      cursor: 'pointer',
+                      transition: 'background 0.2s',
+                      color: '#00364A'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(73, 163, 196, 0.1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleEntityToggle(entity);
@@ -668,7 +811,11 @@ export default function EntityMappingScreen() {
                       type="checkbox"
                       checked={selectedEntities.includes(entity)}
                       readOnly
-                      className="h-5 w-5 accent-teal-500"
+                      style={{
+                        width: '18px',
+                        height: '18px',
+                        accentColor: '#49A3C4'
+                      }}
                     />
                     <span>{entity}</span>
                   </label>
@@ -677,26 +824,41 @@ export default function EntityMappingScreen() {
             )}
           </div>
 
-          <div className="space-y-6">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
             {selectedEntities.map((entity) => (
               <div 
                 key={entity} 
-                className={`p-6 rounded-2xl border shadow-md ${
-                  entityData[entity]?.enabled 
-                    ? 'border-gray-200 bg-gray-50' 
-                    : 'border-gray-300 bg-gray-100 opacity-75'
-                }`}
+                style={{
+                  padding: '25px',
+                  borderRadius: '20px',
+                  border: `2px solid ${entityData[entity]?.enabled ? 'rgba(0, 54, 74, 0.1)' : 'rgba(0, 54, 74, 0.05)'}`,
+                  backgroundColor: entityData[entity]?.enabled ? '#F8FBFF' : '#F3F4F6',
+                  opacity: entityData[entity]?.enabled ? 1 : 0.75,
+                  boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)'
+                }}
               >
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className={`text-2xl font-bold ${entityData[entity]?.enabled ? 'text-gray-800' : 'text-gray-500'}`}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+                  <h2 style={{ fontSize: '24px', fontWeight: '800', color: entityData[entity]?.enabled ? '#00364A' : '#6B7280', margin: 0 }}>
                     {entity}
                   </h2>
-                  <div className="flex gap-2">
+                  <div style={{ display: 'flex', gap: '10px' }}>
                     <button
                       onClick={() => handlePreview(entity, 1)}
-                      className="flex items-center gap-2 px-4 py-2 font-bold bg-gradient-to-b from-cyan-600 to-cyan-600 text-white rounded-lg shadow-sm hover:from-cyan-500 hover:to-cyan-600"
                       disabled={previewLoading}
-                      title="Fetch some items from source to test mappings"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 16px',
+                        backgroundColor: '#49A3C4',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '10px',
+                        fontWeight: '700',
+                        fontSize: '14px',
+                        cursor: previewLoading ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.3s'
+                      }}
                     >
                       <Eye size={16} />
                       {previewLoading && previewEntity === entity ? 'Loading..' : 'Preview'}
@@ -706,11 +868,11 @@ export default function EntityMappingScreen() {
                 </div>
 
                 {!isGoogleMaps && (
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <div style={{ marginBottom: '25px' }}>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px', textTransform: 'uppercase' }}>
                       CONTAINER SELECTOR
                     </label>
-                    <div className="flex gap-2">
+                    <div style={{ display: 'flex', gap: '10px' }}>
                         <input
                         placeholder=".class or #main"
                         value={entityData[entity]?.containerSelector || ""}
@@ -720,23 +882,51 @@ export default function EntityMappingScreen() {
                             [entity]: { ...prev[entity], containerSelector: e.target.value },
                             }))
                         }
-                        className="flex-grow p-3 rounded-xl bg-white border border-gray-300 focus:ring-2 focus:ring-teal-400"
+                        style={{
+                          flex: 1,
+                          padding: '12px 16px',
+                          borderRadius: '12px',
+                          border: 'none',
+                          backgroundColor: 'white',
+                          border: '1px solid rgba(0, 54, 74, 0.15)',
+                          outline: 'none',
+                          color: '#00364A'
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#49A3C4'}
+                        onBlur={(e) => e.target.style.borderColor = 'rgba(0, 54, 74, 0.15)'}
                         />
                         <button
                             onClick={() => handleScanSelectors(entity)}
                             disabled={scanningSelectors[entity]}
-                            className="px-4 bg-gradient-to-b from-sky-100 to-sky-100 text-teal-900 rounded-xl border border-teal-300 flex items-center justify-center transition-colors"
+                            style={{
+                              padding: '0 16px',
+                              backgroundColor: '#E0F2FE',
+                              color: '#00364A',
+                              borderRadius: '12px',
+                              border: '1px solid #49A3C4',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
                             title="Scan for available elements inside this container"
                         >
                             {scanningSelectors[entity] ? (
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-teal-700"></div>
+                                <div style={{
+                                  width: '20px',
+                                  height: '20px',
+                                  border: '2px solid #00364A',
+                                  borderTop: '2px solid transparent',
+                                  borderRadius: '50%',
+                                  animation: 'spin 1s linear infinite'
+                                }}></div>
                             ) : (
                                 <Search size={20} />
                             )}
                         </button>
                     </div>
                     {availableSelectors[entity] && (
-                        <p className="text-xs text-green-600 mt-2">
+                        <p style={{ fontSize: '12px', color: '#059669', marginTop: '8px', fontWeight: '600' }}>
                             ✓ Found {availableSelectors[entity].length} possible child elements. Use dropdowns below.
                         </p>
                     )}
@@ -748,18 +938,26 @@ export default function EntityMappingScreen() {
                   .map((field) => {
                     const isSupported = isGoogleMaps && isGoogleMapsSupported(field.attribute);
                     return (
-                      <div key={`${entity}-${field.attribute}`} className="mb-4">
+                      <div key={`${entity}-${field.attribute}`} style={{ marginBottom: '15px' }}>
                         {isSupported && (
-                          <div className="text-xs text-green-600 mb-1 flex items-center gap-1">
+                          <div style={{ fontSize: '12px', color: '#059669', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
                             <Info size={12} />
                             Google Maps auto-extract available
                           </div>
                         )}
-                        <div className="grid grid-cols-3 gap-4">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
                           <input
                             value={field.attribute}
                             disabled
-                            className="p-3 rounded-xl bg-gray-200 border border-gray-300 text-gray-600"
+                            style={{
+                              padding: '12px 16px',
+                              borderRadius: '12px',
+                              backgroundColor: 'rgba(0, 54, 74, 0.05)',
+                              border: '1px solid rgba(0, 54, 74, 0.1)',
+                              color: '#00364A',
+                              fontSize: '14px',
+                              fontWeight: '600'
+                            }}
                           />
                           
                           {/* Use the new SelectorInput here */}
@@ -784,16 +982,42 @@ export default function EntityMappingScreen() {
           </div>
 
           {selectedEntities.length > 0 && (
-            <div className="mt-10 flex justify-center gap-6">
+            <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'center', gap: '20px' }}>
               <button
                 onClick={handleSave}
-                className="px-16 py-5 bg-gradient-to-b from-teal-500 to-teal-600 text-white rounded-2xl shadow-xl font-bold text-xl hover:scale-105 transition-all"
+                style={{
+                  padding: '16px 40px',
+                  backgroundColor: '#00364A',
+                  color: 'white',
+                  borderRadius: '15px',
+                  boxShadow: '0 8px 20px rgba(0, 54, 74, 0.25)',
+                  fontWeight: '800',
+                  fontSize: '18px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
+                onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
               >
                 Save Configuration
               </button>
               <button
                 onClick={() => window.location.href = "/mappingmanager"}
-                className="px-16 py-5 bg-gradient-to-b from-gray-200 to-gray-300 text-teal-900 rounded-2xl shadow-xl font-extrabold text-xl hover:scale-105 transition-all"
+                style={{
+                  padding: '16px 40px',
+                  backgroundColor: '#E0F2FE',
+                  color: '#00364A',
+                  borderRadius: '15px',
+                  boxShadow: '0 8px 20px rgba(0, 54, 74, 0.1)',
+                  fontWeight: '800',
+                  fontSize: '18px',
+                  border: '2px solid #49A3C4',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
+                onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
               >
                 Go to Mappings
               </button>
@@ -802,8 +1026,23 @@ export default function EntityMappingScreen() {
         </div>
       </div>
       
-      <div className="w-1/2 h-full p-8 flex flex-col">
-        <div className="bg-white w-full flex-grow rounded-2xl shadow-xl border-t-8 border-blue-400 overflow-hidden">
+      {/* Right Panel - Preview */}
+      <div style={{
+        width: '50%',
+        height: '100%',
+        padding: '30px',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          width: '100%',
+          flexGrow: 1,
+          borderRadius: '25px',
+          boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+          borderTop: '8px solid #49A3C4',
+          overflow: 'hidden'
+        }}>
           <ServerHtmlPreview url={url} />
         </div>
       </div>
@@ -818,6 +1057,9 @@ export default function EntityMappingScreen() {
           isLoading={isSubPreviewLoading}
         />
       )}
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }

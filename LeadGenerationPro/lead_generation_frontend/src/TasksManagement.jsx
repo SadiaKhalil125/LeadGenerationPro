@@ -17,10 +17,12 @@ import {
     Clock,
     Check,
     RotateCw,
-    Maximize
+    Maximize,
+    ArrowLeft,
+    Plus
 } from 'lucide-react';
 import API_BASE from "./api_base";
-
+import { useNavigate } from 'react-router-dom';
 const TasksManagement = () => {
     const [tasks, setTasks] = useState([]);
     const [editingTask, setEditingTask] = useState(null);
@@ -31,7 +33,7 @@ const TasksManagement = () => {
     const [loading, setLoading] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
     const [response, setResponse] = useState(null);
-
+    const navigate = useNavigate();
     useEffect(() => {
         fetchTasks();
     }, []);
@@ -248,6 +250,21 @@ const TasksManagement = () => {
                             }}>Review, edit, and manage all scheduled tasks</p>
                         </div>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <StyledButton 
+                        onClick={()=>navigate('/dashboard')} 
+                        variant="outline"
+                        icon={<ArrowLeft size={18} />}
+                    >
+                        Dashboard
+                    </StyledButton>
+                    <StyledButton 
+                        onClick={()=>navigate('/taskscheduler')} 
+                        variant="outline"
+                        icon={<Plus size={18} />}
+                    >
+                        Create Task
+                    </StyledButton>
                     <StyledButton 
                         onClick={fetchTasks} 
                         variant="outline"
@@ -255,6 +272,7 @@ const TasksManagement = () => {
                     >
                         Refresh
                     </StyledButton>
+                    </div>
                 </div>
 
                 <div style={{ padding: '50px' }}>

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Database, ExternalLink, Layers, Save, X, AlertTriangle, Lock } from "lucide-react";
+import { Database, ExternalLink, Layers, Save, X, AlertTriangle, Lock , List, ArrowLeft} from "lucide-react";
 import API_BASE from "./api_base";
-
+import { useNavigate } from "react-router-dom";
 export default function SourceCreator() {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -10,6 +10,7 @@ export default function SourceCreator() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [isCaptchaProtected, setIsCaptchaProtected] = useState(false);
+  const navigate = useNavigate();
   const [captchaParams, setCaptchaParams] = useState({
     api_key: "",
     site_url: "",
@@ -147,16 +148,16 @@ export default function SourceCreator() {
               }}>Define the source URL and configuration</p>
             </div>
           </div>
-          
+          <div style={{ display: 'flex', gap: '5px' }}>
           <button
-            onClick={resetForm}
+            onClick={()=>navigate('/dashboard')}
             style={{
               padding: '12px 24px',
               backgroundColor: 'transparent',
               color: '#00364A',
               border: '2px solid rgba(0, 54, 74, 0.2)',
               borderRadius: '12px',
-              fontWeight: '600',
+              fontWeight: '500',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -172,9 +173,64 @@ export default function SourceCreator() {
               e.target.style.backgroundColor = 'transparent';
             }}
           >
-            <X size={18} />
+            <ArrowLeft size={15} />
+            
+          </button>
+           <button
+            onClick={()=>navigate('/sourcemanagement')}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'transparent',
+              color: '#00364A',
+              border: '2px solid rgba(0, 54, 74, 0.2)',
+              borderRadius: '12px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.borderColor = '#00364A';
+              e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
+              e.target.style.backgroundColor = 'transparent';
+            }}
+          >
+            <List size={15} />
+            View All
+          </button>
+          <button
+            onClick={resetForm}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'transparent',
+              color: '#00364A',
+              border: '2px solid rgba(0, 54, 74, 0.2)',
+              borderRadius: '12px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.borderColor = '#00364A';
+              e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
+              e.target.style.backgroundColor = 'transparent';
+            }}
+          >
+            <X size={15} />
             Reset Form
           </button>
+          </div>
         </div>
 
         <div style={{ padding: '50px' }}>

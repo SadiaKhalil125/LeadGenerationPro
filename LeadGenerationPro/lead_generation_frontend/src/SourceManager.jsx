@@ -16,7 +16,8 @@ import {
   Map,
   List,
   Calendar,
-  Settings
+  Settings,
+  ArrowLeft
 } from 'lucide-react';
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
@@ -278,6 +279,13 @@ const SourceManagement = () => {
           </div>
           
           <div style={{ display: 'flex', gap: '15px' }}>
+            <StyledButton 
+              onClick={()=>navigate('/dashboard')} 
+              variant="outline"
+              icon={<ArrowLeft size={18} />}
+            >
+              Dashboard
+            </StyledButton>
             <StyledButton 
               onClick={fetchSources} 
               variant="outline"
