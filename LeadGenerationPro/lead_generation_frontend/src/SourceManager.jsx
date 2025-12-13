@@ -21,8 +21,6 @@ import {
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
 
-
-
 const SourceManagement = () => {
   const [sources, setSources] = useState([]);
   const [expandedSource, setExpandedSource] = useState(null);
@@ -35,8 +33,6 @@ const SourceManagement = () => {
   const [editForm, setEditForm] = useState({ name: '', url: '' });
   const [editPaginationType, setEditPaginationType] = useState('');
   const [editPaginationConfig, setEditPaginationConfig] = useState({});
-  const [showNewSourceForm, setShowNewSourceForm] = useState(false);
-  const [newSourceForm, setNewSourceForm] = useState({ name: '', url: '' });
   const [response, setResponse] = useState(null);
   const navigate = useNavigate();
 
@@ -120,7 +116,6 @@ const SourceManagement = () => {
     }
   };
 
-
   const handleSaveEdit = async () => {
     try {
       setLoading(true);
@@ -138,7 +133,6 @@ const SourceManagement = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -161,7 +155,6 @@ const SourceManagement = () => {
       setLoading(false);
     }
   };
-
 
   const handleDelete = async (sourceId, force = false) => {
     try {
@@ -190,32 +183,6 @@ const SourceManagement = () => {
     }
   };
 
-  const handleNewSource = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${API_BASE}/source/save-source?name=${encodeURIComponent(newSourceForm.name)}&url=${encodeURIComponent(newSourceForm.url)}`, {
-        method: 'POST',
-        headers: { "ngrok-skip-browser-warning": "true" }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to create source');
-      }
-
-      const data = await response.json();
-      setResponse({ type: 'success', message: data.message });
-      await fetchSources();
-      setShowNewSourceForm(false);
-      setNewSourceForm({ name: '', url: '' });
-    } catch (err) {
-      setError(err.message);
-      setResponse({ type: 'error', message: err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Calculate stats
   const totalMappings = sources.reduce((acc, source) => {
     const deps = dependencies[source.id];
@@ -229,541 +196,773 @@ const SourceManagement = () => {
 
   if (pageLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="flex flex-col items-center">
-          <Loader2 className="animate-spin text-teal-600 mb-4" size={40} />
-          <h1 className="text-2xl font-bold text-gray-900">Loading Source Data...</h1>
-          <p className="text-gray-600">Please wait a moment.</p>
-        </div>
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#C7D8ED',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: '20px'
+      }}>
+        <div style={{
+           width: '40px',
+           height: '40px',
+           border: '4px solid #49A3C4',
+           borderTop: '4px solid transparent',
+           borderRadius: '50%',
+           animation: 'spin 1s linear infinite'
+        }} />
+        <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Source Data...</h1>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center mb-4 md:mb-0">
-                <div className="bg-white/20 p-3 rounded-xl mr-4">
-                  <Database size={28} />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold">Source Management</h1>
-                  <p className="text-teal-100">Manage your web scraping sources and their dependencies</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={fetchSources}
-                  className="flex items-center px-4 py-2.5 bg-white/20 text-black rounded-xl hover:bg-white/30 transition-colors duration-200"
-                >
-                  <RefreshCw size={18} className="mr-2" /> Refresh
-                </button>
-                <button
-                  onClick={() => navigate("/addsource")}
-                  className="flex items-center px-4 py-2.5 bg-white text-teal-600 rounded-xl hover:bg-gray-100 transition-colors duration-200 font-medium"
-                >
-                  <Plus size={18} className="mr-2" />
-                  Add Source
-                </button>
-              </div>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#C7D8ED',
+      color: '#00364A',
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      padding: '40px 20px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '1200px',
+        backgroundColor: 'white',
+        borderRadius: '25px',
+        boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+        overflow: 'hidden'
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '40px 50px',
+          borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              backgroundColor: '#49A3C4',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white'
+            }}>
+              <Database size={28} />
+            </div>
+            <div>
+              <h1 style={{
+                fontSize: '32px',
+                fontWeight: '800',
+                color: '#00364A',
+                margin: 0,
+                lineHeight: '1.2'
+              }}>Source Management</h1>
+              <p style={{
+                fontSize: '16px',
+                color: '#00364A',
+                opacity: 0.7,
+                margin: '5px 0 0 0'
+              }}>Manage your web scraping sources and their dependencies</p>
             </div>
           </div>
+          
+          <div style={{ display: 'flex', gap: '15px' }}>
+            <StyledButton 
+              onClick={fetchSources} 
+              variant="outline"
+              icon={<RefreshCw size={18} />}
+            >
+              Refresh
+            </StyledButton>
+            <StyledButton 
+              onClick={() => navigate("/addsource")} 
+              variant="primary"
+              icon={<Plus size={18} />}
+            >
+              Add Source
+            </StyledButton>
+          </div>
+        </div>
 
-          <div className="p-6">
-            {/* Stats Section */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
-                <h4 className="text-sm font-semibold text-gray-500">Total Sources</h4>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{sources.length}</p>
-              </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
-                <h4 className="text-sm font-semibold text-blue-700">Entity Mappings</h4>
-                <p className="text-3xl font-bold text-blue-600 mt-1">{totalMappings}</p>
-              </div>
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                <h4 className="text-sm font-semibold text-green-700">Active Tasks</h4>
-                <p className="text-3xl font-bold text-green-600 mt-1">{totalTasks}</p>
-              </div>
-            </div>
+        <div style={{ padding: '50px' }}>
+          {/* Stats Section */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '20px',
+            marginBottom: '40px'
+          }}>
+            <StatCard title="Total Sources" value={sources.length} color="#00364A" />
+            <StatCard title="Entity Mappings" value={totalMappings} color="#49A3C4" />
+            <StatCard title="Active Tasks" value={totalTasks} color="#00364A" />
+          </div>
 
-            {/* Response Messages */}
-            {response && (
-              <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${response.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          {/* Response Messages */}
+          {response && (
+            <div style={{
+              marginBottom: '30px',
+              padding: '20px 25px',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '15px',
+              backgroundColor: response.type === 'success' ? '#E0F2FE' : '#FEF2F2',
+              border: `2px solid ${response.type === 'success' ? '#49A3C4' : '#EF4444'}`,
+              color: '#00364A'
+            }}>
+              <div style={{
+                color: response.type === 'success' ? '#49A3C4' : '#EF4444'
+              }}>
                 {response.type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
-                <span>{response.message}</span>
-                <button 
-                  onClick={() => setResponse(null)}
-                  className="ml-auto text-gray-500 hover:text-gray-700"
-                >
-                  <X size={16} />
-                </button>
               </div>
-            )}
+              <span style={{ fontWeight: '500', flex: 1 }}>{response.message}</span>
+              <button 
+                onClick={() => setResponse(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#00364A',
+                  opacity: 0.5
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+          )}
 
-            {/* New Source Form -> NOT IN USE NOW, MADE A SEPERATE PAGE*/}
-            {showNewSourceForm && (
-              <div className="mb-6 p-5 bg-gray-50/70 border border-gray-200 rounded-xl">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Add New Source</h3>
-                  <button
-                    onClick={() => setShowNewSourceForm(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                      <Database size={16} />Source Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={newSourceForm.name}
-                      onChange={(e) => setNewSourceForm(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                      placeholder="Enter source name"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                      <ExternalLink size={16} />URL *
-                    </label>
-                    <input
-                      type="url"
-                      value={newSourceForm.url}
-                      onChange={(e) => setNewSourceForm(prev => ({ ...prev, url: e.target.value }))}
-                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                      placeholder="https://example.com"
-                    />
-                  </div>
-                  <div className="flex justify-end items-center gap-3 pt-2">
-                    <button
-                      onClick={handleNewSource}
-                      disabled={loading || !newSourceForm.name || !newSourceForm.url}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 font-medium text-white bg-gradient-to-b from-teal-600 to-teal-700 rounded-lg hover:bg-teal-700 disabled:bg-gray-400 transition-colors"
-                    >
-                      {loading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                      Save Source
-                    </button>
-                    <button
-                      onClick={() => setShowNewSourceForm(false)}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 font-medium bg-gradient-to-b text-gray-700 from-gray-200 to-gray-300 hover:bg-gradient-to-t rounded-lg transition-colors"
-                    >
-                      <X size={18} /> Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+          {/* Sources List */}
+          {sources.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '60px',
+              backgroundColor: '#F8FBFF',
+              borderRadius: '20px',
+              border: '2px dashed rgba(0, 54, 74, 0.1)'
+            }}>
+              <Database size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#00364A', marginBottom: '5px' }}>No Sources Found</h3>
+              <p style={{ color: '#00364A', opacity: 0.6 }}>Add your first source to get started with web scraping.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {sources.map((source) => (
+                <div key={source.id} style={{
+                  backgroundColor: 'white',
+                  border: '2px solid rgba(0, 54, 74, 0.08)',
+                  borderRadius: '20px',
+                  boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
+                  overflow: 'hidden',
+                  transition: 'all 0.3s'
+                }}>
+                  {editingSource === source.id ? (
+                    /* Edit Mode */
+                    <div style={{ padding: '30px', backgroundColor: '#F8FBFF' }}>
+                      <h3 style={{
+                        fontSize: '18px',
+                        fontWeight: '700',
+                        color: '#00364A',
+                        marginBottom: '20px'
+                      }}>
+                        Editing: <span style={{ color: '#49A3C4' }}>{source.name}</span>
+                      </h3>
+                      <div style={{ display: 'grid', gap: '20px' }}>
+                        <StyledInput
+                          label="Source Name *"
+                          icon={<Database size={16} />}
+                          value={editForm.name}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                        />
+                        <StyledInput
+                          label="URL *"
+                          icon={<ExternalLink size={16} />}
+                          value={editForm.url}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, url: e.target.value }))}
+                        />
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <label style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Settings size={16} color="#49A3C4" /> Pagination Type
+                          </label>
+                          <StyledSelect
+                            value={editPaginationType}
+                            onChange={(e) => {
+                              const selected = e.target.value;
+                              setEditPaginationType(selected);
+                              setEditPaginationConfig({ type: selected });
+                            }}
+                          >
+                            <option value="">None</option>
+                            <option value="query_param">Query Param</option>
+                            <option value="offset">Offset</option>
+                            <option value="path">Path</option>
+                            <option value="button_click">Button Click</option>
+                            <option value="scroll">Scroll</option>
+                            <option value="ajax_click">Ajax Click</option>
+                          </StyledSelect>
+                        </div>
 
-            {/* Sources List */}
-            {sources.length === 0 ? (
-              <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                <Database size={48} className="mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-700">No Sources Found</h3>
-                <p className="text-gray-500 mt-1">Add your first source to get started with web scraping.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {sources.map((source) => (
-                  <div key={source.id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md">
-                    {editingSource === source.id ? (
-                      /* Edit Mode */
-                      <div className="p-5 bg-gray-50/70">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                          Editing: <span className="text-teal-600">{source.name}</span>
-                        </h3>
-                        <div className="space-y-4">
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                              <Database size={16} />Source Name *
-                            </label>
-                            <input
-                              type="text"
-                              value={editForm.name}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                              className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                              <ExternalLink size={16} />URL *
-                            </label>
-                            <input
-                              type="url"
-                              value={editForm.url}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, url: e.target.value }))}
-                              className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                            />
-                          </div>
-                          
-                          {/* Pagination Type Dropdown */}
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                              <Settings size={16} /> Pagination Type
-                            </label>
-                            <select
-                              value={editPaginationType}
-                              onChange={(e) => {
-                                const selected = e.target.value;
-                                setEditPaginationType(selected);
-                                setEditPaginationConfig({ type: selected }); // reset fields when changing type
-                              }}
-                              className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                            >
-                              <option value="">None</option>
-                              <option value="query_param">Query Param</option>
-                              <option value="offset">Offset</option>
-                              <option value="path">Path</option>
-                              <option value="button_click">Button Click</option>
-                              <option value="scroll">Scroll</option>
-                              <option value="ajax_click">Ajax Click</option>
-                            </select>
-                          </div>
-
-                          {/* Dynamic Fields Depending on Pagination Type */}
-                          {editPaginationType && (
-                            <div className="mt-2 space-y-3 bg-white/40 p-3 rounded-lg border border-gray-200">
-                              {(editPaginationType === "query_param" || editPaginationType === "offset") && (
-                                <>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700">Param Name</label>
-                                    <input
-                                      type="text"
-                                      value={editPaginationConfig.param_name || ""}
-                                      placeholder="e.g. page"
-                                      onChange={(e) =>
-                                        setEditPaginationConfig((prev) => ({ ...prev, param_name: e.target.value }))
-                                      }
-                                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700">Start Page</label>
-                                    <input
+                        {/* Dynamic Fields */}
+                        {editPaginationType && (
+                          <div style={{
+                            padding: '20px',
+                            backgroundColor: 'white',
+                            borderRadius: '15px',
+                            border: '1px solid rgba(0, 54, 74, 0.1)',
+                            display: 'grid',
+                            gap: '15px'
+                          }}>
+                            {(editPaginationType === "query_param" || editPaginationType === "offset") && (
+                              <>
+                                <DynamicField
+                                  label="Param Name"
+                                  placeholder="e.g. page"
+                                  value={editPaginationConfig.param_name || ""}
+                                  onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, param_name: e.target.value }))}
+                                />
+                                <DynamicField
+                                  label="Start Page"
+                                  placeholder="1"
+                                  type="number"
+                                  value={editPaginationConfig.start_page || ""}
+                                  onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, start_page: Number(e.target.value) }))}
+                                />
+                                {editPaginationType === "offset" && (
+                                  <>
+                                    <DynamicField
+                                      label="Page Size"
+                                      placeholder="10"
                                       type="number"
-                                      value={editPaginationConfig.start_page || ""}
-                                      placeholder="1"
-                                      onChange={(e) =>
-                                        setEditPaginationConfig((prev) => ({ ...prev, start_page: Number(e.target.value) }))
-                                      }
-                                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                      value={editPaginationConfig.page_size || ""}
+                                      onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, page_size: Number(e.target.value) }))}
                                     />
-                                  </div>
-                                  {editPaginationType === "offset" && (
-                                    <>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700">Page Size</label>
-                                        <input
-                                          type="number"
-                                          value={editPaginationConfig.page_size || ""}
-                                          placeholder="10"
-                                          onChange={(e) =>
-                                            setEditPaginationConfig((prev) => ({ ...prev, page_size: Number(e.target.value) }))
-                                          }
-                                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700">Max Pages</label>
-                                        <input
-                                          type="number"
-                                          value={editPaginationConfig.max_pages || ""}
-                                          placeholder="Optional"
-                                          onChange={(e) =>
-                                            setEditPaginationConfig((prev) => ({ ...prev, max_pages: Number(e.target.value) }))
-                                          }
-                                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                                        />
-                                      </div>
-                                    </>
-                                  )}
-                                </>
-                              )}
-
-                              {editPaginationType === "path" && (
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700">Path Pattern</label>
-                                  <input
-                                    type="text"
-                                    value={editPaginationConfig.path_pattern || ""}
-                                    placeholder="e.g. /page/{page_num}"
-                                    onChange={(e) =>
-                                      setEditPaginationConfig((prev) => ({ ...prev, path_pattern: e.target.value }))
-                                    }
-                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                                  />
-                                </div>
-                              )}
-
-                              {(editPaginationType === "button_click" || editPaginationType === "ajax_click") && (
-                                <>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700">Button Selector</label>
-                                    <input
-                                      type="text"
-                                      value={editPaginationConfig.button_selector || ""}
-                                      placeholder="e.g .load-more-btn"
-                                      onChange={(e) =>
-                                        setEditPaginationConfig((prev) => ({ ...prev, button_selector: e.target.value }))
-                                      }
-                                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                    <DynamicField
+                                      label="Max Pages"
+                                      placeholder="Optional"
+                                      type="number"
+                                      value={editPaginationConfig.max_pages || ""}
+                                      onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, max_pages: Number(e.target.value) }))}
                                     />
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700">Wait Selector</label>
-                                    <input
-                                      type="text"
-                                      value={editPaginationConfig.wait_selector || ""}
-                                      placeholder="e.g .item-loaded"
-                                      onChange={(e) =>
-                                        setEditPaginationConfig((prev) => ({ ...prev, wait_selector: e.target.value }))
-                                      }
-                                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                                    />
-                                  </div>
-                                </>
-                              )}
-
-                              {editPaginationType === "scroll" && (
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700">Scroll Steps</label>
-                                  <input
-                                    type="number"
-                                    value={editPaginationConfig.scroll_steps || ""}
-                                    placeholder="5"
-                                    onChange={(e) =>
-                                      setEditPaginationConfig((prev) => ({ ...prev, scroll_steps: Number(e.target.value) }))
-                                    }
-                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="flex justify-end items-center gap-3 pt-2">
-                            <button
-                              onClick={handleSaveEdit}
-                              disabled={loading}
-                              className="inline-flex items-center justify-center gap-2 px-4 py-2 font-medium text-white bg-gradient-to-b from-teal-600 to-teal-700 rounded-lg hover:bg-teal-700 disabled:bg-gray-400 transition-colors"
-                            >
-                              {loading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                              Update
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingSource(null);
-                                setEditForm({ name: '', url: '' });
-                                setEditPaginationType('');
-                                setEditPaginationConfig({});
-                              }}
-                              className="inline-flex items-center justify-center gap-2 px-4 py-2 font-medium bg-gradient-to-b text-gray-700 from-gray-200 to-gray-300 hover:bg-gradient-to-t rounded-lg transition-colors"
-                            >
-                              <X size={18} /> Cancel
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      /* View Mode */
-                      <div className="p-5">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-3">
-                              <button
-                                onClick={() => handleExpand(source.id)}
-                                className="text-gray-400 hover:text-teal-600 transition-colors"
-                              >
-                                {expandedSource === source.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                              </button>
-                              <h3 className="text-lg font-semibold text-gray-900">{source.name}</h3>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm text-gray-600 ml-8">
-                              <div className="flex items-center gap-2">
-                                <ExternalLink size={16} className="text-teal-500" />
-                                <span className="font-medium text-gray-800">URL:</span>
-                                <a
-                                  href={source.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:text-blue-800 truncate"
-                                >
-                                  {source.url}
-                                </a>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Database size={16} className="text-teal-500" />
-                                <span className="font-medium text-gray-800">ID:</span>
-                                {source.id}
-                              </div>
-                              {source.pagination_config && (
-                                  <div className="flex items-center gap-2">
-                                    <Settings size={16} className="text-teal-500" />
-                                    <span className="font-medium text-gray-800">Pagination:</span>
-                                    
-                                      {source.pagination_config.type || 'None'}
-                                    
-                                  </div>
+                                  </>
                                 )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              onClick={() => handleEdit(source)}
-                              disabled={loading}
-                              className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-md transition-colors"
-                              title="Edit source"
-                            >
-                              <Edit size={16} />
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(source.id)}
-                              disabled={loading}
-                              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-100 rounded-md transition-colors"
-                              title="Delete source"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
+                              </>
+                            )}
 
-                        {/* Expanded Content */}
-                        {expandedSource === source.id && (
-                          <div className="mt-6 pt-6 border-t border-gray-200 bg-gray-50/50 -m-5 p-5 rounded-b-xl">
-                            <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                              <List size={18} className="text-teal-500" />
-                              Dependencies
-                            </h4>
-                            {dependencies[source.id] ? (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2">
-                                    <Map size={16} className="text-blue-500" />
-                                    <span className="font-medium text-gray-700">Entity Mappings</span>
-                                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
-                                      {dependencies[source.id].mappings.length}
-                                    </span>
-                                  </div>
-                                  {dependencies[source.id].mappings.length > 0 && (
-                                    <div className="space-y-1 pl-6">
-                                      {dependencies[source.id].mappings.map(mapping => (
-                                        <div key={mapping.id} className="text-sm text-gray-600 flex items-center gap-2">
-                                          <div className="w-1 h-1 bg-blue-400 rounded-full"></div>
-                                          <span className="font-medium">{mapping.mapping_name}</span>
-                                          <span className="text-gray-400">({mapping.entity_name})</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2">
-                                    <Calendar size={16} className="text-green-500" />
-                                    <span className="font-medium text-gray-700">Active Tasks</span>
-                                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-                                      {dependencies[source.id].tasks.length}
-                                    </span>
-                                  </div>
-                                  {dependencies[source.id].tasks.length > 0 && (
-                                    <div className="space-y-1 pl-6">
-                                      {dependencies[source.id].tasks.map(task => (
-                                        <div key={task.id} className="text-sm text-gray-600 flex items-center gap-2">
-                                          <div className="w-1 h-1 bg-green-400 rounded-full"></div>
-                                          <span className="font-medium">{task.task_name}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center py-4">
-                                <Loader2 className="animate-spin text-teal-600 mr-2" size={16} />
-                                <span className="text-sm text-gray-500">Loading dependencies...</span>
-                              </div>
+                            {editPaginationType === "path" && (
+                              <DynamicField
+                                label="Path Pattern"
+                                placeholder="e.g. /page/{page_num}"
+                                value={editPaginationConfig.path_pattern || ""}
+                                onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, path_pattern: e.target.value }))}
+                              />
+                            )}
+
+                            {(editPaginationType === "button_click" || editPaginationType === "ajax_click") && (
+                              <>
+                                <DynamicField
+                                  label="Button Selector"
+                                  placeholder="e.g .load-more-btn"
+                                  value={editPaginationConfig.button_selector || ""}
+                                  onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, button_selector: e.target.value }))}
+                                />
+                                <DynamicField
+                                  label="Wait Selector"
+                                  placeholder="e.g .item-loaded"
+                                  value={editPaginationConfig.wait_selector || ""}
+                                  onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, wait_selector: e.target.value }))}
+                                />
+                              </>
+                            )}
+
+                            {editPaginationType === "scroll" && (
+                              <DynamicField
+                                label="Scroll Steps"
+                                placeholder="5"
+                                type="number"
+                                value={editPaginationConfig.scroll_steps || ""}
+                                onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, scroll_steps: Number(e.target.value) }))}
+                              />
                             )}
                           </div>
                         )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
 
-            {/* Delete Confirmation Modal */}
-            {deleteConfirm && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4">
-                  <div className="p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="bg-red-100 p-3 rounded-xl">
-                        <AlertTriangle className="text-red-600" size={24} />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', marginTop: '10px' }}>
+                          <StyledButton 
+                            onClick={() => {
+                              setEditingSource(null);
+                              setEditForm({ name: '', url: '' });
+                              setEditPaginationType('');
+                              setEditPaginationConfig({});
+                            }} 
+                            variant="secondary"
+                            icon={<X size={18} />}
+                          >
+                            Cancel
+                          </StyledButton>
+                          <StyledButton 
+                            onClick={handleSaveEdit} 
+                            variant="primary"
+                            disabled={loading}
+                            icon={loading ? <Loader2 size={18} className="spin" /> : <Save size={18} />}
+                          >
+                            Update
+                          </StyledButton>
+                        </div>
                       </div>
-                      <h3 className="text-xl font-semibold text-gray-900">Delete Source</h3>
                     </div>
-                    
-                    {(() => {
-                      const source = sources.find(s => s.id === deleteConfirm);
-                      const deps = dependencies[deleteConfirm];
-                      return (
-                        <>
-                          <p className="text-gray-600 mb-4">
-                            Are you sure you want to delete "<strong>{source?.name}</strong>"?
-                          </p>
+                  ) : (
+                    /* View Mode */
+                    <div style={{ padding: '25px 30px' }}>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        gap: '20px',
+                        flexWrap: 'wrap'
+                      }}>
+                        <div style={{ flex: 1, minWidth: '280px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
+                            <button
+                              onClick={() => handleExpand(source.id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: expandedSource === source.id ? '#49A3C4' : '#00364A',
+                                opacity: expandedSource === source.id ? 1 : 0.4,
+                                padding: '5px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                transition: 'all 0.3s'
+                              }}
+                            >
+                              {expandedSource === source.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                            </button>
+                            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', margin: 0 }}>{source.name}</h3>
+                          </div>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', paddingLeft: '40px' }}>
+                            <InfoItem icon={<ExternalLink size={14} />} label="URL">
+                              <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ color: '#49A3C4', textDecoration: 'none' }}>
+                                {source.url}
+                              </a>
+                            </InfoItem>
+                            <InfoItem icon={<Database size={14} />} label="ID">
+                              {source.id}
+                            </InfoItem>
+                            {source.pagination_config && (
+                              <InfoItem icon={<Settings size={14} />} label="Pagination">
+                                {source.pagination_config.type || 'None'}
+                              </InfoItem>
+                            )}
+                          </div>
+                        </div>
 
-                          {deps && (deps.mappings.length > 0 || deps.tasks.length > 0) && (
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
-                              <div className="text-yellow-800 text-sm">
-                                <div className="font-semibold mb-2 flex items-center gap-2">
-                                  <AlertTriangle size={16} />
-                                  Warning: This will also delete:
-                                </div>
-                                <ul className="list-disc list-inside space-y-1 ml-4">
-                                  {deps.mappings.length > 0 && (
-                                    <li>{deps.mappings.length} entity mapping(s)</li>
-                                  )}
-                                  {deps.tasks.length > 0 && (
-                                    <li>{deps.tasks.length} task(s)</li>
-                                  )}
-                                </ul>
-                              </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <IconButton onClick={() => handleEdit(source)} icon={<Edit size={16} />} color="#49A3C4" />
+                          <IconButton onClick={() => setDeleteConfirm(source.id)} icon={<Trash2 size={16} />} color="#EF4444" />
+                        </div>
+                      </div>
+
+                      {/* Expanded Content */}
+                      {expandedSource === source.id && (
+                        <div style={{
+                          marginTop: '25px',
+                          paddingTop: '25px',
+                          borderTop: '1px solid rgba(0, 54, 74, 0.1)',
+                          animation: 'fadeIn 0.3s ease'
+                        }}>
+                          <h4 style={{
+                            fontSize: '16px',
+                            fontWeight: '700',
+                            color: '#00364A',
+                            marginBottom: '20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px'
+                          }}>
+                            <List size={18} color="#49A3C4" />
+                            Dependencies
+                          </h4>
+                          
+                          {dependencies[source.id] ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '30px' }}>
+                              <DependencySection 
+                                title="Entity Mappings" 
+                                count={dependencies[source.id].mappings.length} 
+                                icon={<Map size={16} color="#49A3C4" />}
+                                items={dependencies[source.id].mappings.map(m => ({
+                                  id: m.id,
+                                  primary: m.mapping_name,
+                                  secondary: `(${m.entity_name})`
+                                }))}
+                              />
+                              <DependencySection 
+                                title="Active Tasks" 
+                                count={dependencies[source.id].tasks.length} 
+                                icon={<Calendar size={16} color="#49A3C4" />}
+                                items={dependencies[source.id].tasks.map(t => ({
+                                  id: t.id,
+                                  primary: t.task_name
+                                }))}
+                              />
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#00364A', opacity: 0.6 }}>
+                              <Loader2 className="spin" size={16} />
+                              <span style={{ fontSize: '14px' }}>Loading dependencies...</span>
                             </div>
                           )}
-
-                          <div className="flex gap-3">
-                            <button
-                              onClick={() => handleDelete(deleteConfirm, true)}
-                              disabled={loading}
-                              className="flex-1 bg-gradient-to-b from-red-600 to-red-700 hover:bg-red-700 text-white py-2.5 px-4 rounded-lg font-medium transition-colors disabled:bg-gray-400"
-                            >
-                              {loading ? <Loader2 className="animate-spin mx-auto" size={16} /> : 'Delete Everything'}
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="flex-1 bg-gradient-to-b from-gray-200 to-gray-300 hover:bg-gradient-to-t text-gray-700 py-2.5 px-4 rounded-lg font-medium transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+              ))}
+            </div>
+          )}
+
+          {/* Delete Confirmation Modal */}
+          {deleteConfirm && (
+            <div style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0, 54, 74, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              backdropFilter: 'blur(3px)'
+            }}>
+              <div style={{
+                backgroundColor: 'white',
+                borderRadius: '25px',
+                padding: '40px',
+                width: '100%',
+                maxWidth: '500px',
+                boxShadow: '0 20px 60px rgba(0, 54, 74, 0.3)',
+                animation: 'scaleIn 0.3s ease'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+                  <div style={{
+                    width: '45px',
+                    height: '45px',
+                    backgroundColor: '#FEF2F2',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <AlertTriangle color="#EF4444" size={24} />
+                  </div>
+                  <h3 style={{ fontSize: '24px', fontWeight: '700', color: '#00364A', margin: 0 }}>Delete Source</h3>
+                </div>
+
+                {(() => {
+                  const source = sources.find(s => s.id === deleteConfirm);
+                  const deps = dependencies[deleteConfirm];
+                  return (
+                    <>
+                      <p style={{ fontSize: '16px', color: '#00364A', opacity: 0.8, marginBottom: '25px', lineHeight: '1.5' }}>
+                        Are you sure you want to delete <strong style={{ color: '#00364A', opacity: 1 }}>"{source?.name}"</strong>?
+                      </p>
+
+                      {deps && (deps.mappings.length > 0 || deps.tasks.length > 0) && (
+                        <div style={{
+                          backgroundColor: '#FFFBEB',
+                          border: '1px solid #FCD34D',
+                          borderRadius: '15px',
+                          padding: '20px',
+                          marginBottom: '30px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400E', fontWeight: '600', marginBottom: '10px' }}>
+                            <AlertTriangle size={16} />
+                            Warning: This will also delete:
+                          </div>
+                          <ul style={{ listStyle: 'disc', paddingLeft: '25px', margin: 0, color: '#92400E', fontSize: '14px' }}>
+                            {deps.mappings.length > 0 && <li>{deps.mappings.length} entity mapping(s)</li>}
+                            {deps.tasks.length > 0 && <li>{deps.tasks.length} task(s)</li>}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '15px' }}>
+                        <StyledButton 
+                          onClick={() => handleDelete(deleteConfirm, true)} 
+                          variant="danger"
+                          disabled={loading}
+                          style={{ flex: 1 }}
+                        >
+                          {loading ? 'Deleting...' : 'Delete Everything'}
+                        </StyledButton>
+                        <StyledButton 
+                          onClick={() => setDeleteConfirm(null)} 
+                          variant="secondary"
+                          style={{ flex: 1 }}
+                        >
+                          Cancel
+                        </StyledButton>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
+      
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .spin { animation: spin 1s linear infinite; }
+      `}</style>
     </div>
   );
 };
+
+// Helper Components
+
+const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled, style }) => {
+  const [hover, setHover] = useState(false);
+  
+  const styles = {
+    primary: {
+      bg: '#00364A', color: 'white', border: '2px solid #00364A',
+      hoverBg: 'white', hoverColor: '#00364A'
+    },
+    outline: {
+      bg: 'white', color: '#00364A', border: '2px solid #00364A',
+      hoverBg: '#00364A', hoverColor: 'white'
+    },
+    secondary: {
+      bg: 'white', color: '#00364A', border: '2px solid rgba(0, 54, 74, 0.2)',
+      hoverBg: '#F3F4F6', hoverColor: '#00364A'
+    },
+    danger: {
+      bg: '#EF4444', color: 'white', border: '2px solid #EF4444',
+      hoverBg: '#DC2626', hoverColor: 'white'
+    }
+  };
+
+  const currentStyle = styles[variant];
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        padding: '12px 24px',
+        borderRadius: '12px',
+        fontWeight: '600',
+        fontSize: '15px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.7 : 1,
+        transition: 'all 0.3s',
+        backgroundColor: hover && !disabled ? currentStyle.hoverBg : currentStyle.bg,
+        color: hover && !disabled ? currentStyle.hoverColor : currentStyle.color,
+        border: currentStyle.border,
+        boxShadow: hover && !disabled ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
+        transform: hover && !disabled ? 'translateY(-2px)' : 'none',
+        ...style
+      }}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+};
+
+const StyledInput = ({ label, icon, value, onChange, placeholder, type = "text" }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    {label && (
+      <label style={{
+        fontSize: '14px',
+        fontWeight: '600',
+        color: '#00364A',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        {icon && React.cloneElement(icon, { color: '#49A3C4' })}
+        {label}
+      </label>
+    )}
+    <input
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      style={{
+        padding: '14px 20px',
+        borderRadius: '12px',
+        border: 'none',
+        backgroundColor: 'rgba(73, 163, 196, 0.15)',
+        color: '#00364A',
+        fontSize: '15px',
+        outline: 'none',
+        transition: 'all 0.3s',
+        width: '100%',
+        boxSizing: 'border-box'
+      }}
+      onFocus={(e) => {
+        e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
+        e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
+      }}
+      onBlur={(e) => {
+        e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
+        e.target.style.boxShadow = 'none';
+      }}
+    />
+  </div>
+);
+
+const StyledSelect = ({ value, onChange, children }) => (
+  <select
+    value={value}
+    onChange={onChange}
+    style={{
+      padding: '14px 20px',
+      borderRadius: '12px',
+      border: 'none',
+      backgroundColor: 'rgba(73, 163, 196, 0.15)',
+      color: '#00364A',
+      fontSize: '15px',
+      outline: 'none',
+      width: '100%',
+      cursor: 'pointer',
+      appearance: 'none',
+      backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2300364A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`,
+      backgroundRepeat: 'no-repeat',
+      backgroundPosition: 'right 20px top 50%',
+      backgroundSize: '12px auto'
+    }}
+  >
+    {children}
+  </select>
+);
+
+const DynamicField = ({ label, placeholder, type = "text", value, onChange }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+    <label style={{ fontSize: '13px', fontWeight: '600', color: '#00364A', opacity: 0.8 }}>{label}</label>
+    <input
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      style={{
+        padding: '12px 16px',
+        borderRadius: '10px',
+        border: '1px solid rgba(0, 54, 74, 0.1)',
+        backgroundColor: 'white',
+        color: '#00364A',
+        fontSize: '14px',
+        outline: 'none',
+        transition: 'all 0.3s'
+      }}
+      onFocus={(e) => {
+        e.target.style.borderColor = '#49A3C4';
+        e.target.style.boxShadow = '0 0 0 2px rgba(73, 163, 196, 0.1)';
+      }}
+      onBlur={(e) => {
+        e.target.style.borderColor = 'rgba(0, 54, 74, 0.1)';
+        e.target.style.boxShadow = 'none';
+      }}
+    />
+  </div>
+);
+
+const StatCard = ({ title, value, color }) => (
+  <div style={{
+    backgroundColor: 'white',
+    borderRadius: '15px',
+    padding: '25px',
+    border: '2px solid rgba(0, 54, 74, 0.05)',
+    textAlign: 'center',
+    boxShadow: '0 4px 15px rgba(0, 54, 74, 0.03)'
+  }}>
+    <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', opacity: 0.6, marginBottom: '5px' }}>{title}</h4>
+    <p style={{ fontSize: '32px', fontWeight: '800', color: color, margin: 0 }}>{value}</p>
+  </div>
+);
+
+const InfoItem = ({ icon, label, children }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#00364A' }}>
+    <span style={{ color: '#49A3C4' }}>{icon}</span>
+    <span style={{ fontWeight: '600', opacity: 0.9 }}>{label}:</span>
+    <span style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{children}</span>
+  </div>
+);
+
+const IconButton = ({ onClick, icon, color }) => {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: '36px',
+        height: '36px',
+        borderRadius: '10px',
+        border: 'none',
+        backgroundColor: hover ? `${color}15` : 'transparent',
+        color: color,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.2s'
+      }}
+    >
+      {icon}
+    </button>
+  );
+};
+
+const DependencySection = ({ title, count, icon, items }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {icon}
+      <span style={{ fontWeight: '600', fontSize: '14px', color: '#00364A' }}>{title}</span>
+      <span style={{
+        backgroundColor: 'rgba(73, 163, 196, 0.15)',
+        color: '#00364A',
+        padding: '2px 8px',
+        borderRadius: '10px',
+        fontSize: '12px',
+        fontWeight: '700'
+      }}>{count}</span>
+    </div>
+    <div style={{ paddingLeft: '24px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+      {items.map(item => (
+        <div key={item.id} style={{ fontSize: '14px', color: '#00364A', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#49A3C4' }} />
+          <span>{item.primary}</span>
+          {item.secondary && <span style={{ opacity: 0.6 }}>{item.secondary}</span>}
+        </div>
+      ))}
+      {items.length === 0 && <span style={{ fontSize: '13px', color: '#00364A', opacity: 0.4 }}>No items found</span>}
+    </div>
+  </div>
+);
 
 export default SourceManagement;

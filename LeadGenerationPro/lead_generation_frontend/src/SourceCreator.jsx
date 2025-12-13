@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Database, ExternalLink, Layers, Save, X, Plus, AlertTriangle, Lock } from "lucide-react";
+import { Database, ExternalLink, Layers, Save, X, AlertTriangle, Lock } from "lucide-react";
 import API_BASE from "./api_base";
 
 export default function SourceCreator() {
@@ -90,224 +90,363 @@ export default function SourceCreator() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center mb-4 md:mb-0">
-                <div className="bg-white/20 p-3 rounded-xl mr-4">
-                  <Database size={28} />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold">Add New Source</h1>
-                  <p className="text-teal-100">Define the source URL and its pagination configuration</p>
-                </div>
-              </div>
-              <button
-                onClick={resetForm}
-                className="flex items-center px-4 py-2.5 bg-white/20 text-black rounded-xl hover:bg-white/30 transition-colors duration-200 font-medium"
-              >
-                <X size={18} className="mr-2" />
-                Reset Form
-              </button>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#C7D8ED',
+      color: '#00364A',
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      padding: '40px 20px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '900px',
+        backgroundColor: 'white',
+        borderRadius: '25px',
+        boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+        overflow: 'hidden'
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '40px 50px',
+          borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              backgroundColor: '#49A3C4',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white'
+            }}>
+              <Database size={28} />
+            </div>
+            <div>
+              <h1 style={{
+                fontSize: '32px',
+                fontWeight: '800',
+                color: '#00364A',
+                margin: 0,
+                lineHeight: '1.2'
+              }}>Add New Source</h1>
+              <p style={{
+                fontSize: '16px',
+                color: '#00364A',
+                opacity: 0.7,
+                margin: '5px 0 0 0'
+              }}>Define the source URL and configuration</p>
             </div>
           </div>
+          
+          <button
+            onClick={resetForm}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'transparent',
+              color: '#00364A',
+              border: '2px solid rgba(0, 54, 74, 0.2)',
+              borderRadius: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.borderColor = '#00364A';
+              e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
+              e.target.style.backgroundColor = 'transparent';
+            }}
+          >
+            <X size={18} />
+            Reset Form
+          </button>
+        </div>
 
-          <div className="p-6">
-            {/* Response Messages */}
-            {response && (
-              <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${response.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                {response.type === 'success' ? 
-                  <div className="bg-green-100 p-2 rounded-lg">
-                    <Save size={16} className="text-green-600" />
-                  </div> : 
-                  <div className="bg-red-100 p-2 rounded-lg">
-                    <AlertTriangle size={16} className="text-red-600" />
-                  </div>
-                }
-                <span>{response.message}</span>
-                <button 
-                  onClick={() => setResponse(null)}
-                  className="ml-auto text-gray-500 hover:text-gray-700"
-                >
-                  <X size={16} />
-                </button>
+        <div style={{ padding: '50px' }}>
+          {/* Response Messages */}
+          {response && (
+            <div style={{
+              marginBottom: '30px',
+              padding: '20px 25px',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '15px',
+              backgroundColor: response.type === 'success' ? '#E0F2FE' : '#FEF2F2',
+              border: `2px solid ${response.type === 'success' ? '#49A3C4' : '#EF4444'}`,
+              color: '#00364A'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: response.type === 'success' ? '#49A3C4' : '#EF4444'
+              }}>
+                {response.type === 'success' ? <Save size={20} /> : <AlertTriangle size={20} />}
+              </div>
+              <span style={{ fontWeight: '500', flex: 1 }}>{response.message}</span>
+              <button 
+                onClick={() => setResponse(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#00364A',
+                  opacity: 0.5
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+            
+            {/* Source Name */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#00364A',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <Database size={18} color="#49A3C4" />
+                Source Name *
+              </label>
+              <StyledInput
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter source name"
+                required
+              />
+            </div>
+
+            {/* URL */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#00364A',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <ExternalLink size={18} color="#49A3C4" />
+                Source URL *
+              </label>
+              <StyledInput
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com"
+                required
+              />
+            </div>
+
+            {/* Pagination Type */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#00364A',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <Layers size={18} color="#49A3C4" />
+                Pagination Type
+              </label>
+              <StyledSelect
+                value={paginationType}
+                onChange={(e) => {
+                  setPaginationType(e.target.value);
+                  setPaginationConfig({});
+                }}
+              >
+                <option value="">Select pagination type</option>
+                {paginationTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  </option>
+                ))}
+              </StyledSelect>
+            </div>
+
+            {/* Dynamic Pagination Fields */}
+            {paginationType && (
+              <div style={{
+                backgroundColor: '#E0EFFF',
+                padding: '30px',
+                borderRadius: '20px',
+                border: '2px solid rgba(73, 163, 196, 0.3)'
+              }}>
+                <h3 style={{
+                  fontSize: '18px',
+                  fontWeight: '700',
+                  color: '#00364A',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  <Layers size={20} color="#49A3C4" />
+                  Pagination Configuration
+                </h3>
+                <div style={{ display: 'grid', gap: '20px' }}>
+                  {paginationType === "query_param" && (
+                    <>
+                      <DynamicField
+                        label="Param Name"
+                        placeholder="page"
+                        onChange={(v) => handlePaginationChange("param_name", v)}
+                      />
+                      <DynamicField
+                        label="Start Page"
+                        placeholder="1"
+                        type="number"
+                        onChange={(v) => handlePaginationChange("start_page", Number(v))}
+                      />
+                    </>
+                  )}
+
+                  {paginationType === "offset" && (
+                    <>
+                      <DynamicField
+                        label="Param Name"
+                        placeholder="e.g. offset"
+                        onChange={(v) => handlePaginationChange("param_name", v)}
+                      />
+                      <DynamicField
+                        label="Start Page"
+                        placeholder="1"
+                        type="number"
+                        onChange={(v) => handlePaginationChange("start_page", Number(v))}
+                      />
+                      <DynamicField
+                        label="Page Size"
+                        placeholder="10"
+                        type="number"
+                        onChange={(v) => handlePaginationChange("page_size", Number(v))}
+                      />
+                      <DynamicField
+                        label="Max Pages"
+                        placeholder="Optional"
+                        type="number"
+                        onChange={(v) => handlePaginationChange("max_pages", Number(v))}
+                      />
+                    </>
+                  )}
+
+                  {paginationType === "path" && (
+                    <DynamicField
+                      label="Path Pattern (to be appended to base URL)"
+                      placeholder="e.g. /page/{page}"
+                      onChange={(v) => handlePaginationChange("path_pattern", v)}
+                    />
+                  )}
+
+                  {(paginationType === "button_click" ||
+                    paginationType === "ajax_click") && (
+                    <>
+                      <DynamicField
+                        label="Button Selector"
+                        placeholder=".next-button"
+                        onChange={(v) => handlePaginationChange("button_selector", v)}
+                      />
+                      <DynamicField
+                        label="Wait Selector"
+                        placeholder=".results-loaded"
+                        onChange={(v) => handlePaginationChange("wait_selector", v)}
+                      />
+                    </>
+                  )}
+
+                  {paginationType === "scroll" && (
+                    <DynamicField
+                      label="Scroll Steps"
+                      placeholder="5"
+                      type="number"
+                      onChange={(v) =>
+                        handlePaginationChange("scroll_steps", Number(v))
+                      }
+                    />
+                  )}
+                </div>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Source Name */}
-              <div className="bg-gray-50/70 border border-gray-200 rounded-xl p-5">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                    <Database size={16} className="text-teal-500" />
-                    Source Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Enter source name"
-                    required
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
-                  />
-                </div>
-              </div>
+            {/* CAPTCHA Checkbox */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '15px',
+              padding: '20px',
+              backgroundColor: 'white',
+              border: '2px solid rgba(0, 54, 74, 0.1)',
+              borderRadius: '15px'
+            }}>
+              <input
+                type="checkbox"
+                checked={isCaptchaProtected}
+                onChange={(e) => setIsCaptchaProtected(e.target.checked)}
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  accentColor: '#49A3C4',
+                  cursor: 'pointer'
+                }}
+              />
+              <label style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#00364A',
+                cursor: 'pointer'
+              }}
+              onClick={() => setIsCaptchaProtected(!isCaptchaProtected)}>
+                Is Captcha Protected?
+              </label>
+            </div>
 
-              {/* URL */}
-              <div className="bg-gray-50/70 border border-gray-200 rounded-xl p-5">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                    <ExternalLink size={16} className="text-teal-500" />
-                    Source URL *
-                  </label>
-                  <input
-                    type="url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://example.com"
-                    required
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* Pagination Type */}
-              <div className="bg-gray-50/70 border border-gray-200 rounded-xl p-5">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                    <Layers size={16} className="text-teal-500" />
-                    Pagination Type
-                  </label>
-                  <select
-                    value={paginationType}
-                    onChange={(e) => {
-                      setPaginationType(e.target.value);
-                      setPaginationConfig({});
-                    }}
-                    className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
-                  >
-                    <option value="">Select pagination type</option>
-                    {paginationTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Dynamic fields */}
-              {paginationType && (
-                <div className="bg-blue-50/50 border border-blue-200 rounded-xl p-5">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Layers size={18} className="text-blue-500" />
-                    Pagination Configuration
-                  </h3>
-                  <div className="space-y-4">
-                    {paginationType === "query_param" && (
-                      <>
-                        <DynamicField
-                          label="Param Name"
-                          placeholder="page"
-                          onChange={(v) => handlePaginationChange("param_name", v)}
-                        />
-                        <DynamicField
-                          label="Start Page"
-                          placeholder="1"
-                          type="number"
-                          onChange={(v) => handlePaginationChange("start_page", Number(v))}
-                        />
-                      </>
-                    )}
-
-                    {paginationType === "offset" && (
-                      <>
-                        <DynamicField
-                          label="Param Name"
-                          placeholder="e.g. offset"
-                          onChange={(v) => handlePaginationChange("param_name", v)}
-                        />
-                        <DynamicField
-                          label="Start Page"
-                          placeholder="1"
-                          type="number"
-                          onChange={(v) => handlePaginationChange("start_page", Number(v))}
-                        />
-                        <DynamicField
-                          label="Page Size"
-                          placeholder="10"
-                          type="number"
-                          onChange={(v) => handlePaginationChange("page_size", Number(v))}
-                        />
-                        <DynamicField
-                          label="Max Pages"
-                          placeholder="Optional"
-                          type="number"
-                          onChange={(v) => handlePaginationChange("max_pages", Number(v))}
-                        />
-                      </>
-                    )}
-
-                    {paginationType === "path" && (
-                      <DynamicField
-                        label="Path Pattern (to be appended to base URL)"
-                        placeholder="e.g. /page/{page}"
-                        onChange={(v) => handlePaginationChange("path_pattern", v)}
-                      />
-                    )}
-
-                    {(paginationType === "button_click" ||
-                      paginationType === "ajax_click") && (
-                      <>
-                        <DynamicField
-                          label="Button Selector"
-                          placeholder=".next-button"
-                          onChange={(v) => handlePaginationChange("button_selector", v)}
-                        />
-                        <DynamicField
-                          label="Wait Selector"
-                          placeholder=".results-loaded"
-                          onChange={(v) => handlePaginationChange("wait_selector", v)}
-                        />
-                      </>
-                    )}
-
-                    {paginationType === "scroll" && (
-                      <DynamicField
-                        label="Scroll Steps"
-                        placeholder="5"
-                        type="number"
-                        onChange={(v) =>
-                          handlePaginationChange("scroll_steps", Number(v))
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-              )}
-              {/* CAPTCHA Checkbox */}
-              <div className="bg-gray-50/70 border border-gray-200 rounded-xl px-7 py-5 flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={isCaptchaProtected}
-                  onChange={(e) => setIsCaptchaProtected(e.target.checked)}
-                  className="h-5 w-5 text-teal-600 border-gray-300 rounded"
-                />
-                <label className="text-gray-700 font-medium">Is Captcha Protected?</label>
-              </div>
-
-              {/* CAPTCHA Params */}
-              {isCaptchaProtected && (
-                <div className="bg-blue-50/50 border border-blue-200 rounded-xl p-5">
-                  <div className="space-y-1">
-                  <label className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
-                    <Lock size={18} className="text-blue-500" />
-                    Captcha Parameters
-                  </label>
-
+            {/* CAPTCHA Params */}
+            {isCaptchaProtected && (
+              <div style={{
+                backgroundColor: '#E0EFFF',
+                padding: '30px',
+                borderRadius: '20px',
+                border: '2px solid rgba(73, 163, 196, 0.3)'
+              }}>
+                <h3 style={{
+                  fontSize: '18px',
+                  fontWeight: '700',
+                  color: '#00364A',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  <Lock size={20} color="#49A3C4" />
+                  Captcha Parameters
+                </h3>
+                
+                <div style={{ display: 'grid', gap: '20px' }}>
                   <DynamicField
                     label="API Key"
                     placeholder="Your CapSolver API key"
@@ -318,18 +457,23 @@ export default function SourceCreator() {
                     placeholder="URL where captcha appears"
                     onChange={(v) => handleCaptchaChange("site_url", v)}
                   />
-                 
                   <DynamicField
                     label="Site Key"
                     placeholder="Captcha site key"
                     onChange={(v) => handleCaptchaChange("site_key", v)}
                   />
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Captcha Type</label>
-                    <select
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#00364A',
+                      opacity: 0.8
+                    }}>Captcha Type</label>
+                    <StyledSelect
                       value={captchaParams.captcha_type}
                       onChange={(e) => handleCaptchaChange("captcha_type", e.target.value)}
-                      className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                      style={{ backgroundColor: 'white' }}
                     >
                       <option value="">Select Captcha Type</option>
                       <option value="recaptcha_v2">reCAPTCHA v2</option>
@@ -337,53 +481,215 @@ export default function SourceCreator() {
                       <option value="turnstile">Turnstile</option>
                       <option value="cloudflare_challenge">Cloudflare Challenge</option>
                       <option value="aws_waf">AWS WAF</option>
-                    </select>
+                    </StyledSelect>
                   </div>
                 </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex justify-end items-center gap-3 pt-4">
-                <button
-                  type="submit"
-                  disabled={loading || !name || !url}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 font-medium text-white bg-gradient-to-b from-teal-600 to-teal-700 rounded-xl hover:from-teal-700 hover:to-teal-800 disabled:bg-gray-400 disabled:from-gray-400 disabled:to-gray-400 transition-all duration-200 shadow-sm hover:shadow-md"
-                >
-                  {loading ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  ) : (
-                    <Save size={18} />
-                  )}
-                  Save Source
-                </button>
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 font-medium text-gray-700 bg-gradient-to-b from-gray-200 to-gray-300 rounded-xl hover:from-gray-300 hover:to-gray-400 transition-all duration-200 shadow-sm hover:shadow-md"
-                >
-                  <X size={18} />
-                  Cancel
-                </button>
               </div>
-            </form>
-          </div>
+            )}
+
+            {/* Action Buttons */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '15px',
+              marginTop: '20px',
+              paddingTop: '30px',
+              borderTop: '1px solid rgba(0, 54, 74, 0.1)'
+            }}>
+              <button
+                type="button"
+                onClick={resetForm}
+                style={{
+                  padding: '16px 36px',
+                  backgroundColor: 'white',
+                  color: '#00364A',
+                  border: '2px solid #00364A',
+                  borderRadius: '12px',
+                  fontWeight: '600',
+                  fontSize: '16px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  transition: 'all 0.3s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#f0f0f0';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'white';
+                }}
+              >
+                <X size={18} />
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={loading || !name || !url}
+                style={{
+                  padding: '16px 36px',
+                  backgroundColor: '#00364A',
+                  color: 'white',
+                  border: '2px solid #00364A',
+                  borderRadius: '12px',
+                  fontWeight: '600',
+                  fontSize: '16px',
+                  cursor: loading || !name || !url ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  opacity: loading || !name || !url ? 0.7 : 1,
+                  transition: 'all 0.3s'
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading && name && url) {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#00364A';
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow = '0 6px 20px rgba(0, 54, 74, 0.3)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading && name && url) {
+                    e.target.style.backgroundColor = '#00364A';
+                    e.target.style.color = 'white';
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = 'none';
+                  }
+                }}
+              >
+                {loading ? (
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTop: '2px solid white',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                ) : (
+                  <Save size={18} />
+                )}
+                Save Source
+              </button>
+            </div>
+          </form>
         </div>
       </div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
 
-/** Helper component for repeated input fields */
+function StyledInput({ type = "text", value, onChange, placeholder, required }) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      required={required}
+      style={{
+        width: '100%',
+        padding: '16px 24px',
+        border: 'none',
+        borderRadius: '12px',
+        fontSize: '16px',
+        backgroundColor: 'rgba(73, 163, 196, 0.15)',
+        color: '#00364A',
+        outline: 'none',
+        transition: 'all 0.3s',
+        boxSizing: 'border-box'
+      }}
+      onFocus={(e) => {
+        e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
+        e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
+      }}
+      onBlur={(e) => {
+        e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
+        e.target.style.boxShadow = 'none';
+      }}
+    />
+  );
+}
+
+function StyledSelect({ value, onChange, children, style }) {
+  return (
+    <select
+      value={value}
+      onChange={onChange}
+      style={{
+        width: '100%',
+        padding: '16px 24px',
+        border: 'none',
+        borderRadius: '12px',
+        fontSize: '16px',
+        backgroundColor: 'rgba(73, 163, 196, 0.15)',
+        color: '#00364A',
+        outline: 'none',
+        transition: 'all 0.3s',
+        cursor: 'pointer',
+        appearance: 'none',
+        backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2300364A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 20px top 50%',
+        backgroundSize: '12px auto',
+        boxSizing: 'border-box',
+        ...style
+      }}
+      onFocus={(e) => {
+        e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
+        e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
+      }}
+      onBlur={(e) => {
+        e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
+        e.target.style.boxShadow = 'none';
+      }}
+    >
+      {children}
+    </select>
+  );
+}
+
 function DynamicField({ label, placeholder, type = "text", onChange }) {
   return (
-    <div className="space-y-1">
-      <label className="text-sm font-medium text-gray-700">{label}</label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <label style={{
+        fontSize: '14px',
+        fontWeight: '600',
+        color: '#00364A',
+        opacity: 0.8
+      }}>{label}</label>
       <input
         type={type}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
+        style={{
+          width: '100%',
+          padding: '14px 20px',
+          border: '1px solid transparent',
+          borderRadius: '10px',
+          fontSize: '15px',
+          backgroundColor: 'white',
+          color: '#00364A',
+          outline: 'none',
+          transition: 'all 0.3s',
+          boxSizing: 'border-box'
+        }}
+        onFocus={(e) => {
+          e.target.style.borderColor = '#49A3C4';
+          e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.1)';
+        }}
+        onBlur={(e) => {
+          e.target.style.borderColor = 'transparent';
+          e.target.style.boxShadow = 'none';
+        }}
       />
     </div>
   );
