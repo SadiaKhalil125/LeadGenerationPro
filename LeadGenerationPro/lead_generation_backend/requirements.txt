@@ -21,4 +21,4 @@ kafka-python
 capsolver
 nest-asyncio 
 fake-useragent
-
+email-validator
