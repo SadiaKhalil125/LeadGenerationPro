@@ -22,5 +22,5 @@ capsolver
 nest-asyncio 
 fake-useragent
 email-validator
-jose
+python-jose[cryptography]
 passlib

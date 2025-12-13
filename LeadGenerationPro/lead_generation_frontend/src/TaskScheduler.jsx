@@ -16,8 +16,10 @@ import {
     Maximize,
     RotateCw,
     Edit3,
-    Check
+    Check,
+    ArrowLeft
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import API_BASE from "./api_base";
 
 const TaskScheduler = () => {
@@ -39,7 +41,7 @@ const TaskScheduler = () => {
     const [activeTab, setActiveTab] = useState('create');
     const [repeat, setRepeat] = useState('once');
     const [maxItems, setMaxItems] = useState(30);
-
+    const navigate = useNavigate();
     // State for the mapping search input
     const [mappingSearch, setMappingSearch] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -302,7 +304,25 @@ const TaskScheduler = () => {
                             }}>Schedule and manage your data integration tasks</p>
                         </div>
                     </div>
-                    
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                    }}>
+                    <StyledButton 
+                        onClick={()=>navigate('/dashboard')} 
+                        variant="outline"
+                        icon={<ArrowLeft size={18} />}
+                    >
+                        Dashboard
+                    </StyledButton>
+                    <StyledButton 
+                        onClick={()=>navigate('/taskexecutor')} 
+                        variant="outline"
+                        icon={<Clock size={18} />}
+                    >
+                        Tasks Executor
+                    </StyledButton>
                     <StyledButton 
                         onClick={fetchTasks} 
                         variant="outline"
@@ -310,6 +330,7 @@ const TaskScheduler = () => {
                     >
                         Refresh Tasks
                     </StyledButton>
+                    </div>
                 </div>
 
                 <div style={{ padding: '50px' }}>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
+import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle, List, ArrowLeft } from "lucide-react";
 import API_BASE from "./api_base";
+
 const EntityDataScreen = () => {
   const [searchParams] = useSearchParams();
   const [entities, setEntities] = useState([]);
@@ -76,30 +77,135 @@ const EntityDataScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6 flex items-center gap-3">
-            <div className="bg-white/20 p-3 rounded-xl">
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#C7D8ED',
+      color: '#00364A',
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      padding: '40px 20px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '1200px',
+        backgroundColor: 'white',
+        borderRadius: '25px',
+        boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+        overflow: 'hidden'
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '40px 50px',
+          borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              backgroundColor: '#49A3C4',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white'
+            }}>
               <Database size={28} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Entity Data Viewer</h1>
-              <p className="text-teal-100">Browse and inspect your database entities</p>
+              <h1 style={{
+                fontSize: '32px',
+                fontWeight: '800',
+                color: '#00364A',
+                margin: 0,
+                lineHeight: '1.2'
+              }}>Entity Data Viewer</h1>
+              <p style={{
+                fontSize: '16px',
+                color: '#00364A',
+                opacity: 0.7,
+                margin: '5px 0 0 0'
+              }}>Browse and inspect your database entities</p>
             </div>
+            
           </div>
+           <div
+          style={{
+          padding: '10px 10px',
+          display: 'flex',
+          justifyContent: 'right',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}>
+          <button
+             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 24px',
+              backgroundColor: 'white',
+              color: '#00364A',
+              borderRadius: '12px',
+              border: '2px solid #00364A',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#00364A';
+              e.target.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'white';
+              e.target.style.color = '#00364A';
+            }}
+            onClick={() => navigate('/dashboard')}
+          >
+          <ArrowLeft size={18} />
+            Dashboard
+            </button>
+            </div>
+        </div>
 
-          <div className="p-6">
-            {/* Entity Selector */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Entity</label>
+        <div style={{ padding: '50px' }}>
+          {/* Entity Selector */}
+          <div style={{ marginBottom: '30px', maxWidth: '400px' }}>
+            <label style={{
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#00364A',
+              marginBottom: '8px',
+              display: 'block'
+            }}>Select Entity</label>
+            <div style={{ position: 'relative' }}>
               <select
-                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500"
                 value={selectedEntity || ""}
                 onChange={(e) => {
                   setSelectedEntity(e.target.value);
                   setPage(1);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px 20px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                  color: '#00364A',
+                  fontSize: '15px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  appearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2300364A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 20px top 50%',
+                  backgroundSize: '12px auto'
                 }}
               >
                 <option value="">-- Choose an entity --</option>
@@ -110,95 +216,184 @@ const EntityDataScreen = () => {
                 ))}
               </select>
             </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 text-red-800 border border-red-200 rounded-xl flex items-center gap-2">
-                <AlertTriangle size={18} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {/* Loading */}
-            {loading && (
-              <div className="flex justify-center items-center py-10">
-                <Loader2 className="animate-spin text-teal-600 mr-2" size={24} />
-                <span className="text-gray-600">Loading data...</span>
-              </div>
-            )}
-
-            {/* No Data */}
-            {!loading && data && data.rows && data.rows.length === 0 && (
-              <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                <Database size={48} className="mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-700">No Data Found</h3>
-                <p className="text-gray-500 mt-1">This table has no records to display.</p>
-              </div>
-            )}
-
-            {/* Data Table */}
-            {!loading && data && data.rows && data.rows.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                  <thead className="bg-gray-100 text-gray-700">
-                    <tr>
-                      {data.columns.map((col, idx) => (
-                        <th key={idx} className="px-4 py-2 text-left text-sm font-semibold border-b border-gray-200">
-                          {col}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {data.rows.map((row, ridx) => (
-                      <tr key={ridx} className="hover:bg-gray-50">
-                        {row.map((cell, cidx) => {
-                          const colName = data.columns[cidx]; // get column name
-
-                          // format only for modified_at (or other timestamp columns)
-                          const displayValue =
-                            colName === 'modified_at' && cell
-                              ? new Date(cell).toLocaleString() //for friendlier display
-                              : cell;
-
-                          return (
-                            <td key={cidx} className="px-4 py-2 text-sm text-gray-700">
-                              {displayValue}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {data && data.rows && (
-              <div className="flex justify-between items-center mt-6">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition-colors"
-                >
-                  <ChevronLeft size={18} className="mr-1" /> Previous
-                </button>
-                <span className="text-gray-600 text-sm">Page {page}</span>
-                <button
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={data.rows.length < pageSize}
-                  className="flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition-colors"
-                >
-                  Next <ChevronRight size={18} className="ml-1" />
-                </button>
-              </div>
-            )}
-
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div style={{
+              marginBottom: '30px',
+              padding: '20px 25px',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '15px',
+              backgroundColor: '#FEF2F2',
+              border: '2px solid #EF4444',
+              color: '#00364A'
+            }}>
+              <AlertTriangle size={20} color="#EF4444" />
+              <span style={{ fontWeight: '500' }}>{error}</span>
+            </div>
+          )}
+
+          {/* Loading */}
+          {loading && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: '60px 0',
+              color: '#00364A'
+            }}>
+              <Loader2 size={32} className="spin" style={{ marginRight: '10px' }} />
+              <span style={{ fontSize: '18px', fontWeight: '600' }}>Loading data...</span>
+            </div>
+          )}
+
+          {/* No Data */}
+          {!loading && data && data.rows && data.rows.length === 0 && (
+            <div style={{
+              textAlign: 'center',
+              padding: '60px',
+              backgroundColor: '#F8FBFF',
+              borderRadius: '20px',
+              border: '2px dashed rgba(0, 54, 74, 0.1)'
+            }}>
+              <List size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#00364A', marginBottom: '5px' }}>No Data Found</h3>
+              <p style={{ color: '#00364A', opacity: 0.6 }}>This table has no records to display.</p>
+            </div>
+          )}
+
+          {/* Data Table */}
+          {!loading && data && data.rows && data.rows.length > 0 && (
+            <div style={{
+              overflowX: 'auto',
+              borderRadius: '15px',
+              border: '1px solid rgba(0, 54, 74, 0.1)',
+              boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)'
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white' }}>
+                <thead style={{ backgroundColor: '#F8FBFF' }}>
+                  <tr>
+                    {data.columns.map((col, idx) => (
+                      <th key={idx} style={{
+                        padding: '16px 20px',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        fontWeight: '700',
+                        color: '#00364A',
+                        borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map((row, ridx) => (
+                    <tr key={ridx} style={{ 
+                      backgroundColor: ridx % 2 === 0 ? 'white' : '#FAFAFA',
+                      transition: 'background-color 0.2s'
+                    }}>
+                      {row.map((cell, cidx) => {
+                        const colName = data.columns[cidx];
+                        const displayValue = colName === 'modified_at' && cell
+                            ? new Date(cell).toLocaleString()
+                            : cell;
+
+                        return (
+                          <td key={cidx} style={{
+                            padding: '16px 20px',
+                            fontSize: '14px',
+                            color: '#00364A',
+                            borderBottom: '1px solid rgba(0, 54, 74, 0.05)',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {displayValue}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {data && data.rows && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: '30px',
+              paddingTop: '20px',
+              borderTop: '1px solid rgba(0, 54, 74, 0.1)'
+            }}>
+              <StyledButton
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                icon={<ChevronLeft size={18} />}
+              >
+                Previous
+              </StyledButton>
+              
+              <span style={{ fontSize: '14px', fontWeight: '600', color: '#00364A' }}>
+                Page {page}
+              </span>
+              
+              <StyledButton
+                onClick={() => setPage((p) => p + 1)}
+                disabled={data.rows.length < pageSize}
+                icon={<ChevronRight size={18} />}
+                iconPos="right"
+              >
+                Next
+              </StyledButton>
+            </div>
+          )}
         </div>
       </div>
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
+      `}</style>
     </div>
+  );
+};
+
+// Helper Component for Buttons
+const StyledButton = ({ onClick, disabled, icon, children, iconPos = "left" }) => {
+  const [hover, setHover] = useState(false);
+  
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '10px 20px',
+        backgroundColor: hover && !disabled ? '#E0EFFF' : 'white',
+        color: disabled ? '#A0AEC0' : '#00364A',
+        border: `2px solid ${disabled ? '#E2E8F0' : '#00364A'}`,
+        borderRadius: '10px',
+        fontWeight: '600',
+        fontSize: '14px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'all 0.3s',
+        flexDirection: iconPos === 'right' ? 'row-reverse' : 'row'
+      }}
+    >
+      {icon}
+      {children}
+    </button>
   );
 };
 
