@@ -23,4 +23,6 @@ nest-asyncio
 fake-useragent
 email-validator
 python-jose[cryptography]
-passlib
+bcrypt==4.1.2
+passlib==1.7.4
+google-generativeai

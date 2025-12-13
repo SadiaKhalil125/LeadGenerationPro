@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Locate } from 'lucide-react';
 export default function LeadGeneratorPage() {
   const [businessType, setBusinessType] = useState('');
   const [location, setLocation] = useState('');
@@ -140,7 +141,7 @@ export default function LeadGeneratorPage() {
           width: '100%',
           maxWidth: '1600px'
         }}>
-          {/* Logo */}
+          {/* Logo - Left */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -149,8 +150,8 @@ export default function LeadGeneratorPage() {
             fontWeight: 'bold',
             color: '#00364A'
           }}>
-            <span style={{ fontSize: '24px' }}>⚡</span>
-            HUNTERS - Lead Generator
+            <Locate size={28} color="#49A3C4" />
+            SCOUT
           </div>
           
           {/* Navigation */}
@@ -223,8 +224,8 @@ export default function LeadGeneratorPage() {
 
       {/* Main Content */}
       <main style={{
-        maxWidth: '1600px',
-        margin: '40px auto',
+        maxWidth: '1450px',
+        margin: '20px auto',
         padding: '0 20px'
       }}>
         {/* Hero Section */}
@@ -238,20 +239,12 @@ export default function LeadGeneratorPage() {
           overflow: 'hidden'
         }}>
           {/* Background Pattern */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            width: '300px',
-            height: '300px',
-            background: 'linear-gradient(135deg, rgba(73, 163, 196, 0.1) 0%, rgba(73, 163, 196, 0) 70%)',
-            borderRadius: '0 25px 0 0'
-          }} />
+          
           
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: '50px',
+            gap: '30px',
             alignItems: 'center'
           }}>
             {/* Left Content */}
@@ -279,6 +272,7 @@ export default function LeadGeneratorPage() {
               {/* Stats */}
               <div style={{
                 display: 'flex',
+                justifyContent:'space-around',
                 gap: '30px',
                 marginTop: '40px'
               }}>
@@ -340,7 +334,7 @@ export default function LeadGeneratorPage() {
                     fontWeight: '600',
                     color: '#00364A'
                   }}>
-                    <span style={{ color: '#49A3C4', marginRight: '5px' }}>▸</span>
+                    
                     Business Type / Industry
                   </label>
                   <select
@@ -382,7 +376,7 @@ export default function LeadGeneratorPage() {
                     fontWeight: '600',
                     color: '#00364A'
                   }}>
-                    <span style={{ color: '#49A3C4', marginRight: '5px' }}>▸</span>
+                    
                     Location (City, State, or Country)
                   </label>
                   <input
@@ -420,7 +414,7 @@ export default function LeadGeneratorPage() {
                     fontWeight: '600',
                     color: '#00364A'
                   }}>
-                    <span style={{ color: '#49A3C4', marginRight: '5px' }}>▸</span>
+                    
                     Company Size
                   </label>
                   <select

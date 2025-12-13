@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Locate } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 export default function WebScraperLanding() {
   const [url, setUrl] = useState('');
@@ -95,10 +96,11 @@ export default function WebScraperLanding() {
             fontWeight: 'bold',
             color: '#00364A'
           }}>
-            <span style={{ fontSize: '24px' }}>⚡</span>
-            HUNTERS
+            <Locate size={28} color="#49A3C4" />
+            SCOUT
           </div>
-          
+
+
           {/* Navigation Links - Center */}
           <nav style={{
             display: 'flex',
@@ -293,7 +295,8 @@ export default function WebScraperLanding() {
             color: '#00364A',
             textAlign: 'left'
           }}>
-            POWERFUL WEB SCRAPER FOR REGULAR AND PROFESSIONAL USE
+            POWERFUL WEB SCRAPER FOR
+            LEAD GENERATION
           </h1>
           
           <p style={{
@@ -1223,14 +1226,14 @@ export default function WebScraperLanding() {
                 gap: '12px',
                 marginBottom: '30px'
               }}>
-                <span style={{ fontSize: '32px' }}>⚡</span>
+                <Locate size={28} color="#49A3C4" />
                 <h3 style={{
                   fontSize: '36px',
                   fontWeight: '800',
                   color: '#00364A',
                   margin: 0
                 }}>
-                  Hunter
+                  SCOUT
                 </h3>
               </div>
               <p style={{
