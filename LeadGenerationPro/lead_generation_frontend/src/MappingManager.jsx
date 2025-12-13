@@ -1,8 +1,22 @@
 import React, { useEffect, useState, useMemo } from "react";
-
+import { 
+  Database, 
+  Map as MapIcon, 
+  Edit3, 
+  Trash2, 
+  ChevronDown, 
+  ChevronRight, 
+  AlertCircle, 
+  CheckCircle,
+  ToggleLeft,
+  ToggleRight,
+  Columns,
+  RefreshCw,
+  Search,
+  ArrowLeft
+} from "lucide-react";
 import API_BASE from "./api_base";
-
-
+import { useNavigate } from "react-router-dom";
 function shortDate(ts) {
   if (!ts) return "-";
   try {
@@ -14,11 +28,9 @@ function shortDate(ts) {
 }
 
 function statusForMapping(m) {
-  // Check enabled status first
   if (m.enabled === false) {
     return { label: "Disabled", color: "bg-red-100 text-red-800" };
   }
-  // Then check if field mappings exist
   if (!m.field_mappings || Object.keys(m.field_mappings).length === 0) {
     return { label: "Broken", color: "bg-yellow-100 text-yellow-800" };
   }
@@ -36,7 +48,7 @@ const MappingManager = () => {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(null);
-
+  const navigate = useNavigate();
   useEffect(() => {
     fetchMappings();
   }, []);
@@ -143,9 +155,8 @@ const MappingManager = () => {
   };
 
   const onOpenEdit = (mapping) => {
-    // Convert field_mappings object to array of key-value pairs for easier editing
     const fieldMappingsArray = Object.entries(mapping.field_mappings || {}).map(([key, value]) => ({
-      id: Math.random().toString(36).substr(2, 9), // temporary ID for React keys
+      id: Math.random().toString(36).substr(2, 9),
       field_name: key,
       selector: value.selector || "",
       extract: value.extract || "text"
@@ -158,7 +169,7 @@ const MappingManager = () => {
         mapping_name: mapping.mapping_name,
         entity_name: mapping.entity_name,
         container_selector: mapping.container_selector ?? "",
-        enabled: mapping.enabled ?? true, // Add enabled status
+        enabled: mapping.enabled ?? true,
         source_id: mapping.source_id,
         source_name: mapping.source_name,
       },
@@ -200,7 +211,6 @@ const MappingManager = () => {
   const onSaveEdit = async () => {
     if (!editModal) return;
 
-    // Validate that all fields have names and selectors
     const invalidFields = editModal.fieldMappingsArray.filter(
       field => !field.field_name.trim() || !field.selector.trim()
     );
@@ -212,7 +222,6 @@ const MappingManager = () => {
 
     setSaving(true);
     try {
-      // Convert array back to object format expected by backend
       const fieldMappingsObject = {};
       editModal.fieldMappingsArray.forEach(field => {
         fieldMappingsObject[field.field_name] = {
@@ -226,7 +235,7 @@ const MappingManager = () => {
         container_selector: editModal.mapping.container_selector,
         field_mappings: fieldMappingsObject,
         source_id: editModal.mapping.source_id,
-        enabled: editModal.mapping.enabled, // Include enabled status
+        enabled: editModal.mapping.enabled,
       };
 
       const res = await fetch(`${API_BASE}/mapping/edit-mapping/${encodeURIComponent(editModal.originalName)}`, {
@@ -242,7 +251,6 @@ const MappingManager = () => {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
 
-      // Update local list
       setMappings((prev) =>
         prev.map((m) =>
           m.mapping_name === editModal.originalName 
@@ -261,76 +269,149 @@ const MappingManager = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto mt-8">
-      {/* Header */}
-      <div className="rounded-lg overflow-hidden shadow">
-        <div className="bg-gradient-to-r from-teal-500 to-teal-600 text-white p-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Mapping Management</h1>
-            <p className="text-sm opacity-90 mt-1">
-              Review, edit, and manage all saved entity & source mappings
-            </p>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#C7D8ED',
+      color: '#00364A',
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      padding: '40px 20px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '1200px',
+        backgroundColor: 'white',
+        borderRadius: '25px',
+        boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+        overflow: 'hidden'
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '40px 50px',
+          borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              backgroundColor: '#49A3C4',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white'
+            }}>
+              <MapIcon size={28} />
+            </div>
+            <div>
+              <h1 style={{
+                fontSize: '32px',
+                fontWeight: '800',
+                color: '#00364A',
+                margin: 0,
+                lineHeight: '1.2'
+              }}>Mapping Management</h1>
+              <p style={{
+                fontSize: '16px',
+                color: '#00364A',
+                opacity: 0.7,
+                margin: '5px 0 0 0'
+              }}>Review and manage your entity mappings</p>
+            </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={fetchMappings}
-              className="bg-white text-teal-600 px-3 py-2 rounded shadow hover:opacity-90 flex items-center space-x-2"
-              title="Refresh"
+          <div style={{ display: 'flex', gap: '15px' }}>
+            <StyledButton 
+              onClick={()=>navigate('/dashboard')} 
+              variant="outline"
+              icon={<ArrowLeft size={18} />}
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M21 12a9 9 0 1 1-3-6.7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M21 3v6h-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span>Refresh</span>
-            </button>
-            <button 
-              onClick={() => window.location.href = '/entitymappingform'}
-              className="bg-gradient-to-b from-yellow-500 to-yellow-400 text-black px-3 py-2 rounded shadow hover:opacity-90"
+              Dashboard
+            </StyledButton>
+            <StyledButton 
+              onClick={fetchMappings} 
+              variant="outline"
+              icon={<RefreshCw size={18} />}
             >
-              + Create Mapping
-            </button>
+              Refresh
+            </StyledButton>
+            <StyledButton 
+              onClick={() => window.location.href = '/entitymappingform'} 
+              variant="primary"
+              icon={<Edit3 size={18} />}
+            >
+              Create Mapping
+            </StyledButton>
           </div>
         </div>
 
-        {/* Body */}
-        <div className="bg-white p-6">
-          {/* Top stat cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-            <div className="border rounded p-4">
-              <div className="text-sm text-gray-500">Total Mappings</div>
-              <div className="text-2xl font-bold mt-2">{stats.total}</div>
-            </div>
-            <div className="border rounded p-4">
-              <div className="text-sm text-gray-500">Active</div>
-              <div className="text-2xl font-bold text-green-600 mt-2">{stats.active}</div>
-            </div>
-            <div className="border rounded p-4">
-              <div className="text-sm text-gray-500">Disabled</div>
-              <div className="text-2xl font-bold text-red-600 mt-2">{stats.disabled}</div>
-            </div>
-            <div className="border rounded p-4">
-              <div className="text-sm text-gray-500">Broken</div>
-              <div className="text-2xl font-bold text-yellow-600 mt-2">{stats.broken}</div>
-            </div>
+        <div style={{ padding: '50px' }}>
+          {/* Stats Cards */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '20px',
+            marginBottom: '40px'
+          }}>
+            <StatCard title="Total Mappings" value={stats.total} color="#00364A" />
+            <StatCard title="Active" value={stats.active} color="#059669" />
+            <StatCard title="Disabled" value={stats.disabled} color="#DC2626" />
+            <StatCard title="Broken" value={stats.broken} color="#D97706" />
           </div>
 
-          {/* Search + filters */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <div className="flex items-center gap-3 w-full sm:w-1/2">
+          {/* Search and Filters */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
+            <div style={{ position: 'relative', width: '40%', minWidth: '300px' }}>
+              <div style={{ position: 'absolute', top: '50%', left: '15px', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                <Search size={18} color="#00364A" style={{ opacity: 0.5 }} />
+              </div>
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by mapping, entity or source..."
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring"
+                style={{
+                  width: '100%',
+                  padding: '14px 20px 14px 45px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                  color: '#00364A',
+                  fontSize: '15px',
+                  outline: 'none',
+                  transition: 'all 0.3s'
+                }}
+                onFocus={(e) => {
+                  e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
             </div>
 
-            <div className="flex items-center gap-3">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '17px', padding:'3px' }}>
               <select
                 value={filterSource}
                 onChange={(e) => setFilterSource(e.target.value)}
-                className="border rounded px-3 py-2"
+                style={{
+                  padding: '14px 10px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                  color: '#00364A',
+                  fontSize: '15px',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
               >
                 {sources.map((s) => (
                   <option key={s} value={s}>
@@ -338,99 +419,117 @@ const MappingManager = () => {
                   </option>
                 ))}
               </select>
-
-              <div className="text-sm text-gray-500">
-                {lastRefreshed ? `Last: ${shortDate(lastRefreshed)}` : ""}
-              </div>
+              {lastRefreshed && (
+                <div style={{ fontSize: '13px', color: '#00364A', opacity: 0.6 }}>
+                  Last: {shortDate(lastRefreshed)}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Error / empty states */}
+          {/* Mapping List */}
           {loading ? (
-            <div className="p-8 text-center text-gray-500">Loading mappings...</div>
+            <div style={{ textAlign: 'center', padding: '60px', color: '#00364A', opacity: 0.6 }}>Loading mappings...</div>
           ) : error ? (
-            <div className="p-4 rounded border border-red-200 bg-red-50 text-red-700">
-              ⚠️ {error}
+            <div style={{ padding: '20px', borderRadius: '15px', backgroundColor: '#FEF2F2', border: '2px solid #EF4444', color: '#991B1B', display: 'flex', gap: '10px' }}>
+              <AlertCircle size={20} /> {error}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 border rounded">
-              <div className="text-lg font-semibold">No mappings found</div>
-              <div className="mt-2">Create your first mapping to get started</div>
+            <div style={{ textAlign: 'center', padding: '60px', backgroundColor: '#F8FBFF', borderRadius: '20px', border: '2px dashed rgba(0, 54, 74, 0.1)' }}>
+              <MapIcon size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />
+              <p style={{ fontSize: '18px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>No mappings found</p>
+              <p style={{ color: '#00364A', opacity: 0.6 }}>Create your first mapping to get started</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {filtered.map((m) => {
                 const st = statusForMapping(m);
                 return (
-                  <div key={m.id} className={`border rounded shadow-sm p-4 transition-all ${
-                    m.enabled !== false ? 'bg-white' : 'bg-gray-50 opacity-75'
-                  }`}>
-                    <div className="flex justify-between items-start">
+                  <div key={m.id} style={{
+                    backgroundColor: m.enabled !== false ? 'white' : '#F3F4F6',
+                    border: '2px solid rgba(0, 54, 74, 0.08)',
+                    borderRadius: '20px',
+                    boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
+                    overflow: 'hidden',
+                    transition: 'all 0.3s',
+                    opacity: m.enabled !== false ? 1 : 0.8
+                  }}>
+                    <div style={{ padding: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
                       <div>
-                        <div className="flex items-center gap-3">
-                          <div>
-                            <h3 className="text-lg font-semibold">{m.mapping_name}</h3>
-                            <div className="text-sm text-gray-500">
-                              {m.source_name} • {m.entity_name}
-                            </div>
-                          </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                          <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', margin: 0 }}>{m.mapping_name}</h3>
+                          <div style={{ fontSize: '14px', color: '#00364A', opacity: 0.6 }}>{m.source_name} • {m.entity_name}</div>
                         </div>
-
-                        <div className="mt-3 text-sm text-gray-600">
-                          <div>Container: <span className="font-medium">{m.container_selector || "-"}</span></div>
-                          <div>Created: <span className="font-medium">{shortDate(m.created_at)}</span></div>
+                        <div style={{ marginTop: '10px', fontSize: '14px', color: '#00364A', opacity: 0.8, display: 'flex', gap: '20px' }}>
+                          <span>Container: <strong>{m.container_selector || "-"}</strong></span>
+                          <span>Created: <strong>{shortDate(m.created_at)}</strong></span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <div className={`px-2 py-1 rounded text-sm ${st.color}`}>{st.label}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          padding: '6px 12px',
+                          borderRadius: '20px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          backgroundColor: st.color.includes('bg-green') ? '#E0F2FE' : (st.color.includes('bg-red') ? '#FEE2E2' : '#FEF3C7'),
+                          color: st.color.includes('text-green') ? '#00364A' : (st.color.includes('text-red') ? '#991B1B' : '#92400E')
+                        }}>
+                          {st.label}
+                        </div>
 
-                        {/* Toggle Enable/Disable Button */}
-                        <button
+                        <IconButton 
                           onClick={() => toggleMappingStatus(m.mapping_name, m.enabled)}
-                          className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                            m.enabled !== false 
-                              ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                              : 'bg-red-100 text-red-800 hover:bg-red-200'
-                          }`}
-                          title={`Click to ${m.enabled !== false ? 'disable' : 'enable'} this mapping`}
-                        >
-                          {m.enabled !== false ? 'Disable' : 'Enable'}
-                        </button>
+                          icon={m.enabled !== false ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
+                          color={m.enabled !== false ? "#059669" : "#DC2626"}
+                          title={m.enabled !== false ? 'Disable' : 'Enable'}
+                        />
 
-                        <button
+                        <IconButton 
                           onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}
-                          className="px-3 py-1 border rounded text-sm"
-                        >
-                          {expandedId === m.id ? "Collapse" : "Details"}
-                        </button>
+                          icon={expandedId === m.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                          color="#49A3C4"
+                          title="Details"
+                        />
 
-                        <button
+                        <IconButton 
                           onClick={() => onOpenEdit(m)}
-                          className="px-3 py-1 bg-gradient-to-b from-yellow-500 to-yellow-400 text-white rounded text-sm"
-                        >
-                          Edit
-                        </button>
+                          icon={<Edit3 size={18} />}
+                          color="#D97706"
+                          title="Edit"
+                        />
 
-                        <button
+                        <IconButton 
                           onClick={() => onDelete(m.mapping_name)}
-                          className="px-3 py-1 bg-gradient-to-b from-red-500 to-red-400 text-white rounded text-sm"
+                          icon={<Trash2 size={18} />}
+                          color="#EF4444"
+                          title="Delete"
                           disabled={deleting}
-                        >
-                          Delete
-                        </button>
+                        />
                       </div>
                     </div>
 
                     {expandedId === m.id && (
-                      <div className="mt-4 bg-gray-50 p-3 rounded">
-                        <div className="text-sm text-gray-700 mb-2 font-medium">Field mappings</div>
-                        <div className="space-y-2">
+                      <div style={{
+                        borderTop: '1px solid rgba(0, 54, 74, 0.1)',
+                        padding: '25px',
+                        backgroundColor: '#F8FBFF'
+                      }}>
+                        <h4 style={{ fontSize: '15px', fontWeight: '700', color: '#00364A', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Columns size={16} /> Field Mappings
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
                           {Object.entries(m.field_mappings || {}).map(([key, value]) => (
-                            <div key={key} className="bg-white p-2 rounded border text-sm">
-                              <div className="font-medium text-gray-800">{key}</div>
-                              <div className="text-gray-600">Selector: {value.selector}</div>
-                              <div className="text-gray-600">Extract: {value.extract}</div>
+                            <div key={key} style={{
+                              backgroundColor: 'white',
+                              padding: '15px',
+                              borderRadius: '12px',
+                              border: '1px solid rgba(0, 54, 74, 0.1)',
+                              boxShadow: '0 2px 8px rgba(0, 54, 74, 0.03)'
+                            }}>
+                              <div style={{ fontWeight: '700', color: '#00364A', marginBottom: '5px' }}>{key}</div>
+                              <div style={{ fontSize: '13px', color: '#00364A', opacity: 0.7 }}>Selector: {value.selector}</div>
+                              <div style={{ fontSize: '13px', color: '#00364A', opacity: 0.7 }}>Extract: {value.extract}</div>
                             </div>
                           ))}
                         </div>
@@ -446,163 +545,124 @@ const MappingManager = () => {
 
       {/* Edit Modal */}
       {editModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
-          <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded shadow p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Edit Mapping</h2>
-              <button onClick={() => setEditModal(null)} className="text-gray-600 text-2xl">✕</button>
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 54, 74, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 50,
+          backdropFilter: 'blur(3px)'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            width: '100%',
+            maxWidth: '800px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            borderRadius: '25px',
+            padding: '40px',
+            boxShadow: '0 20px 60px rgba(0, 54, 74, 0.3)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#00364A', margin: 0 }}>Edit Mapping</h2>
+              <button onClick={() => setEditModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00364A', opacity: 0.5 }}>
+                <Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /> {/* Using Trash icon as close for now, ideally use X icon */}
+              </button>
             </div>
 
-            <div className="space-y-4">
-              {/* Basic Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="block">
-                  <div className="text-sm text-gray-600 mb-1">Mapping Name</div>
-                  <input
-                    value={editModal.mapping.mapping_name}
-                    onChange={(e) => setEditModal({
-                      ...editModal,
-                      mapping: { ...editModal.mapping, mapping_name: e.target.value }
-                    })}
-                    className="w-full border p-2 rounded"
-                  />
-                </label>
-
-                <label className="block">
-                  <div className="text-sm text-gray-600 mb-1">Source</div>
-                  <input
-                    value={editModal.mapping.source_name || ""}
-                    readOnly
-                    className="w-full border p-2 rounded bg-gray-50"
-                  />
-                </label>
-
-                {/* Enable/Disable Toggle */}
-                <label className="block">
-                  <div className="text-sm text-gray-600 mb-1">Status</div>
-                  <div className="flex items-center space-x-3">
-                    <button
-                      type="button"
-                      onClick={() => setEditModal({
-                        ...editModal,
-                        mapping: { ...editModal.mapping, enabled: !editModal.mapping.enabled }
-                      })}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                        editModal.mapping.enabled
-                          ? 'bg-green-100 text-green-800 border border-green-300'
-                          : 'bg-red-100 text-red-800 border border-red-300'
-                      }`}
-                    >
-                      {editModal.mapping.enabled ? 'Enabled' : 'Disabled'}
-                    </button>
-                    <span className="text-sm text-gray-500">
-                      {editModal.mapping.enabled ? 'Mapping is active and will be processed' : 'Mapping is disabled and will be ignored'}
-                    </span>
-                  </div>
-                </label>
-
-                <label className="block md:col-span-2">
-                  <div className="text-sm text-gray-600 mb-1">Container Selector</div>
-                  <input
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <StyledInput 
+                  label="Mapping Name" 
+                  value={editModal.mapping.mapping_name}
+                  onChange={(e) => setEditModal({ ...editModal, mapping: { ...editModal.mapping, mapping_name: e.target.value } })}
+                />
+                <StyledInput 
+                  label="Source" 
+                  value={editModal.mapping.source_name || ""}
+                  disabled={true}
+                />
+                <div style={{ gridColumn: 'span 2' }}>
+                  <StyledInput 
+                    label="Container Selector" 
                     value={editModal.mapping.container_selector}
-                    onChange={(e) => setEditModal({
-                      ...editModal,
-                      mapping: { ...editModal.mapping, container_selector: e.target.value }
-                    })}
-                    className="w-full border p-2 rounded"
-                    placeholder="e.g., .item, .product, .listing"
+                    onChange={(e) => setEditModal({ ...editModal, mapping: { ...editModal.mapping, container_selector: e.target.value } })}
+                    placeholder="e.g., .item, .product"
                   />
-                </label>
+                </div>
               </div>
 
-              {/* Field Mappings */}
               <div>
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="text-lg font-semibold">Field Mappings</h3>
-                  <button
-                    onClick={addFieldMapping}
-                    className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                  >
-                    + Add Field
-                  </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', margin: 0 }}>Field Mappings</h3>
+                  <StyledButton onClick={addFieldMapping} icon={<Edit3 size={16} />} variant="success">+ Add Field</StyledButton>
                 </div>
 
-                <div className="space-y-3">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   {editModal.fieldMappingsArray.map((field) => (
-                    <div key={field.id} className="border rounded p-3 bg-gray-50">
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                        <div>
-                          <label className="text-sm text-gray-600 mb-1 block">Field Name</label>
-                          <input
-                            value={field.field_name}
-                            onChange={(e) => updateFieldMapping(field.id, 'field_name', e.target.value)}
-                            className="w-full border p-2 rounded"
-                            placeholder="e.g., company_name"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="text-sm text-gray-600 mb-1 block">CSS Selector</label>
-                          <input
-                            value={field.selector}
-                            onChange={(e) => updateFieldMapping(field.id, 'selector', e.target.value)}
-                            className="w-full border p-2 rounded"
-                            placeholder="e.g., h3.title a"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="text-sm text-gray-600 mb-1 block">Extract</label>
-                          <select
-                            value={field.extract}
-                            onChange={(e) => updateFieldMapping(field.id, 'extract', e.target.value)}
-                            className="w-full border p-2 rounded"
-                          >
-                            <option value="text">Text</option>
-                            <option value="href">Href</option>
-                            <option value="src">Src</option>
-                            <option value="value">Value</option>
-                            <option value="title">Title</option>
-                            <option value="alt">Alt</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <button
-                            onClick={() => removeFieldMapping(field.id)}
-                            className="w-full px-3 py-2 bg-red-500 text-white rounded text-sm hover:bg-red-600"
-                          >
-                            Remove
-                          </button>
-                        </div>
+                    <div key={field.id} style={{
+                      padding: '20px',
+                      backgroundColor: '#F8FBFF',
+                      borderRadius: '15px',
+                      border: '1px solid rgba(0, 54, 74, 0.1)',
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr 0.8fr 0.5fr',
+                      gap: '15px',
+                      alignItems: 'end'
+                    }}>
+                      <StyledInput 
+                        label="Field Name" 
+                        value={field.field_name}
+                        onChange={(e) => updateFieldMapping(field.id, 'field_name', e.target.value)}
+                      />
+                      <StyledInput 
+                        label="CSS Selector" 
+                        value={field.selector}
+                        onChange={(e) => updateFieldMapping(field.id, 'selector', e.target.value)}
+                      />
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '6px' }}>Extract</label>
+                        <select
+                          value={field.extract}
+                          onChange={(e) => updateFieldMapping(field.id, 'extract', e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(0, 54, 74, 0.15)',
+                            backgroundColor: 'white',
+                            color: '#00364A',
+                            fontSize: '14px',
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="text">Text</option>
+                          <option value="href">Href</option>
+                          <option value="src">Src</option>
+                          <option value="value">Value</option>
+                          <option value="title">Title</option>
+                          <option value="alt">Alt</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: '2px' }}>
+                        <IconButton 
+                          onClick={() => removeFieldMapping(field.id)}
+                          icon={<Trash2 size={18} />}
+                          color="#EF4444"
+                          title="Remove Field"
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
-
-                {editModal.fieldMappingsArray.length === 0 && (
-                  <div className="text-center py-8 text-gray-500 border-2 border-dashed rounded">
-                    No field mappings defined. Click "Add Field" to get started.
-                  </div>
-                )}
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setEditModal(null)}
-                className="px-4 py-2 border rounded"
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onSaveEdit}
-                className="px-4 py-2 bg-gradient-to-b from-green-500 to-green-400 text-white rounded"
-                disabled={saving}
-              >
-                {saving ? "Saving..." : "Save Changes"}
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', marginTop: '20px' }}>
+                <StyledButton onClick={() => setEditModal(null)} variant="secondary">Cancel</StyledButton>
+                <StyledButton onClick={onSaveEdit} disabled={saving}>{saving ? "Saving..." : "Save Changes"}</StyledButton>
+              </div>
             </div>
           </div>
         </div>
@@ -610,5 +670,159 @@ const MappingManager = () => {
     </div>
   );
 };
+
+// Helper Components
+
+const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled }) => {
+  const [hover, setHover] = useState(false);
+  
+  const styles = {
+    primary: {
+      bg: '#00364A', color: 'white', border: '2px solid #00364A',
+      hoverBg: 'white', hoverColor: '#00364A'
+    },
+    outline: {
+      bg: 'white', color: '#00364A', border: '2px solid #00364A',
+      hoverBg: '#00364A', hoverColor: 'white'
+    },
+    secondary: {
+      bg: 'white', color: '#00364A', border: '2px solid rgba(0, 54, 74, 0.2)',
+      hoverBg: '#F3F4F6', hoverColor: '#00364A'
+    },
+    success: {
+      bg: '#059669', color: 'white', border: '2px solid #059669',
+      hoverBg: '#047857', hoverColor: 'white'
+    }
+  };
+
+  const currentStyle = styles[variant];
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        padding: '10px 20px',
+        borderRadius: '10px',
+        fontWeight: '600',
+        fontSize: '14px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.7 : 1,
+        transition: 'all 0.3s',
+        backgroundColor: hover && !disabled ? currentStyle.hoverBg : currentStyle.bg,
+        color: hover && !disabled ? currentStyle.hoverColor : currentStyle.color,
+        border: currentStyle.border,
+        boxShadow: hover && !disabled ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
+        transform: hover && !disabled ? 'translateY(-2px)' : 'none'
+      }}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+};
+
+const StatCard = ({ title, value, color }) => (
+  <div style={{
+    backgroundColor: 'white',
+    borderRadius: '15px',
+    padding: '25px',
+    border: '2px solid rgba(0, 54, 74, 0.05)',
+    textAlign: 'center',
+    boxShadow: '0 4px 15px rgba(0, 54, 74, 0.03)'
+  }}>
+    <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', opacity: 0.6, marginBottom: '5px' }}>{title}</h4>
+    <p style={{ fontSize: '32px', fontWeight: '800', color: color, margin: 0 }}>{value}</p>
+  </div>
+);
+
+const IconButton = ({ onClick, icon, color, disabled, title }) => {
+  const [hover, setHover] = useState(false);
+  
+  // Use a hex code to ensure background opacity logic works
+  const effectiveColor = disabled ? '#cccccc' : color;
+  
+  const getBgColor = () => {
+    if (disabled) return '#f5f5f5';
+    // If hovering, add transparency to hex color, or fallback to gray
+    if (hover) {
+        if (effectiveColor.startsWith('#')) return `${effectiveColor}15`; 
+        return '#f0f0f0';
+    }
+    return '#F8FBFF';
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: '40px',
+        minWidth: '40px',
+        height: '40px',
+        borderRadius: '10px',
+        border: `1px solid ${disabled ? '#eee' : 'rgba(0,54,74,0.1)'}`,
+        backgroundColor: getBgColor(),
+        color: effectiveColor, // This text color is inherited by the Icon via currentColor
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.2s',
+        flexShrink: 0,
+        padding: 0
+      }}
+    >
+      {/* Icon renders here, inheriting text color */}
+      {icon}
+    </button>
+  );
+};
+
+const StyledInput = ({ label, value, onChange, placeholder, disabled }) => (
+  <div>
+    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '6px' }}>{label}</label>
+    <input
+      type="text"
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      style={{
+        width: '100%',
+        padding: '12px 16px',
+        borderRadius: '10px',
+        border: '1px solid rgba(0, 54, 74, 0.15)',
+        backgroundColor: disabled ? '#F3F4F6' : 'white',
+        color: '#00364A',
+        fontSize: '14px',
+        outline: 'none',
+        transition: 'all 0.3s',
+        boxSizing: 'border-box'
+      }}
+      onFocus={(e) => {
+        if (!disabled) {
+          e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
+          e.target.style.borderColor = '#49A3C4';
+        }
+      }}
+      onBlur={(e) => {
+        if (!disabled) {
+          e.target.style.backgroundColor = 'white';
+          e.target.style.borderColor = 'rgba(0, 54, 74, 0.15)';
+        }
+      }}
+    />
+  </div>
+);
 
 export default MappingManager;

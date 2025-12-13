@@ -14,7 +14,9 @@ import {
   List, 
   FileText,
   Clock,
-  RotateCw
+  RotateCw,
+  Plus,
+  ArrowLeft
 } from 'lucide-react';
 
 import API_BASE from "./api_base";
@@ -30,7 +32,7 @@ const TaskExecution = () => {
   const [activeCategory, setActiveCategory] = useState('all');
   const [taskExecutions, setTaskExecutions] = useState({});
   const [currentExecutions, setCurrentExecutions] = useState({});
-
+  
   useEffect(() => {
     fetchTasks();
   }, []);
@@ -308,7 +310,21 @@ const TaskExecution = () => {
               }}>Execute tasks and view outcomes</p>
             </div>
           </div>
-          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+          <StyledButton 
+            onClick={()=>navigate('/dashboard')} 
+            variant="outline"
+            icon={<ArrowLeft size={18} />}
+          >
+            Dashboard
+          </StyledButton>
+          <StyledButton 
+            onClick={()=>navigate('/taskscheduler')} 
+            variant="outline"
+            icon={<Plus size={18} />}
+          >
+            Create Task
+          </StyledButton>
           <StyledButton 
             onClick={fetchTasks} 
             variant="outline"
@@ -316,6 +332,7 @@ const TaskExecution = () => {
           >
             Refresh
           </StyledButton>
+          </div>
         </div>
 
         <div style={{ padding: '50px' }}>

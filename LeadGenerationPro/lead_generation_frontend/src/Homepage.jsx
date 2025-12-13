@@ -334,6 +334,7 @@ export default function WebScraperLanding() {
               cursor: 'pointer',
               transition: 'all 0.3s'
             }}
+            onClick = {() => navigate('/quick-extract')}
             onMouseEnter={(e) => {
               e.target.style.backgroundColor = 'white';
               e.target.style.color = '#00364A';

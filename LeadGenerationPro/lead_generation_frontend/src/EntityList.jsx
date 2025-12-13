@@ -7,19 +7,20 @@ import {
   Save, 
   X, 
   ChevronDown, 
-  ChevronRight,
-  AlertCircle,
-  CheckCircle,
-  Undo,
-  Columns,
-  List,
-  Search,
-  RefreshCw,
-  Shield,
-  Type
+  ChevronRight, 
+  AlertCircle, 
+  CheckCircle, 
+  Undo, 
+  Columns, 
+  List, 
+  Search, 
+  RefreshCw, 
+  Shield, 
+  Type,
+  ArrowLeft
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import API_BASE from "./api_base";
-
 const EntityList = () => {
   const [entities, setEntities] = useState([]);
   const [expandedEntity, setExpandedEntity] = useState(null);
@@ -28,7 +29,7 @@ const EntityList = () => {
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-
+  const navigate = useNavigate();
   useEffect(() => {
     fetchEntities();
   }, []);
@@ -49,7 +50,6 @@ const EntityList = () => {
       const data = await response.json();
       
       if (data.entities) {
-        // Fetch detailed info for each entity to get column types and row counts
         const entitiesWithDetails = await Promise.all(
           data.entities.map(async (entity) => {
             const detailResponse = await fetchEntityInfo(entity.name);
@@ -60,7 +60,6 @@ const EntityList = () => {
                 row_count: detailResponse.row_count
               };
             } else {
-              // Fallback if detailed info fails
               return {
                 name: entity.name,
                 columns: entity.columns.map(col => ({ name: col, type: "unknown", nullable: "YES" })),
@@ -111,15 +110,14 @@ const EntityList = () => {
 
   const startEditing = (entity) => {
     setEditingEntity(entity.name);
-    // Filter out id column and prepare for editing
     const editableAttrs = entity.columns
       .filter(col => col.name !== "id")
       .map(col => ({
         name: col.name,
-        originalName: col.name, // Keep track of original name for renames
+        originalName: col.name,
         datatype: mapSqlTypeToFormType(col.type),
         nullable: col.nullable === 'NO' ? 'required' : 'optional',
-        action: 'keep' // 'keep', 'add', 'remove', 'rename'
+        action: 'keep'
       }));
     setEditAttributes(editableAttrs);
   };
@@ -147,7 +145,6 @@ const EntityList = () => {
     const updated = [...editAttributes];
     updated[index][field] = value;
     
-    // Track if this is a rename operation
     if (field === 'name' && updated[index].originalName && updated[index].originalName !== value) {
       updated[index].action = 'rename';
     } else if (field === 'name' && updated[index].originalName && updated[index].originalName === value) {
@@ -160,13 +157,11 @@ const EntityList = () => {
   const removeAttribute = (index) => {
     const attr = editAttributes[index];
     
-    // If it's an existing column, mark for deletion instead of removing from array
     if (attr.originalName) {
       const updated = [...editAttributes];
       updated[index].action = 'remove';
       setEditAttributes(updated);
     } else {
-      // If it's a new attribute, remove from array
       setEditAttributes(editAttributes.filter((_, i) => i !== index));
     }
   };
@@ -181,7 +176,6 @@ const EntityList = () => {
     if (!editingEntity) return;
 
     try {
-      // Separate different types of operations
       const toAdd = editAttributes.filter(attr => attr.action === 'add' && attr.name.trim());
       const toRename = editAttributes.filter(attr => attr.action === 'rename' && attr.name.trim());
       const toRemove = editAttributes.filter(attr => attr.action === 'remove');
@@ -189,7 +183,6 @@ const EntityList = () => {
       let allSuccessful = true;
       let operations = [];
 
-      // 1. Add new columns
       if (toAdd.length > 0) {
         const addPayload = {
           name: editingEntity,
@@ -213,7 +206,6 @@ const EntityList = () => {
         }
       }
 
-      // 2. Remove columns
       for (const attr of toRemove) {
         const removeResponse = await fetch(`${API_BASE}/entity/delete-column/${editingEntity}/${attr.originalName}`, {
           method: "DELETE",
@@ -230,7 +222,6 @@ const EntityList = () => {
         }
       }
 
-      // 3. Rename columns
       for (const attr of toRename) {
         const renameResponse = await fetch(`${API_BASE}/entity/rename-column/${editingEntity}/${attr.originalName}/${attr.name}`, {
           method: "PUT",
@@ -266,7 +257,7 @@ const EntityList = () => {
       }
 
       setEditingEntity(null);
-      fetchEntities(); // Refresh the list
+      fetchEntities();
 
     } catch (error) {
       console.error("Error saving changes:", error);
@@ -294,7 +285,7 @@ const EntityList = () => {
         setResponse({ type: "success", message: data.message });
         setExpandedEntity(null);
         setEditingEntity(null);
-        fetchEntities(); // Refresh the list
+        fetchEntities();
       } else {
         setResponse({ type: "error", message: "Failed to delete entity" });
       }
@@ -318,289 +309,581 @@ const EntityList = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <div className="flex flex-col items-center justify-center">
-            <RefreshCw className="animate-spin text-teal-600 mb-4" size={40} />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Loading Entities</h1>
-            <p className="text-gray-600">Please wait while we fetch your data...</p>
-          </div>
-        </div>
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#C7D8ED',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: '20px'
+      }}>
+        <div style={{
+           width: '40px',
+           height: '40px',
+           border: '4px solid #49A3C4',
+           borderTop: '4px solid transparent',
+           borderRadius: '50%',
+           animation: 'spin 1s linear infinite'
+        }} />
+        <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Entities...</h1>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center mb-4 md:mb-0">
-                <div className="bg-white/20 p-3 rounded-xl mr-4">
-                  <Database size={28} />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold">Entity Manager</h1>
-                  <p className="text-teal-100">View and manage your database entities</p>
-                </div>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#C7D8ED',
+      color: '#00364A',
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      padding: '40px 20px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '1200px',
+        backgroundColor: 'white',
+        borderRadius: '25px',
+        boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+        overflow: 'hidden'
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '40px 50px',
+          borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              backgroundColor: '#49A3C4',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white'
+            }}>
+              <Database size={28} />
+            </div>
+            <div>
+              <h1 style={{
+                fontSize: '32px',
+                fontWeight: '800',
+                color: '#00364A',
+                margin: 0,
+                lineHeight: '1.2'
+              }}>Entity Manager</h1>
+              <p style={{
+                fontSize: '16px',
+                color: '#00364A',
+                opacity: 0.7,
+                margin: '5px 0 0 0'
+              }}>View and manage your database entities</p>
+            </div>
+          </div>
+          <div
+          style={{
+          padding: '10px 10px',
+          display: 'flex',
+          justifyContent: 'right',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}>
+          <button
+             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 24px',
+              backgroundColor: 'white',
+              color: '#00364A',
+              borderRadius: '12px',
+              border: '2px solid #00364A',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#00364A';
+              e.target.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'white';
+              e.target.style.color = '#00364A';
+            }}
+            onClick={() => navigate('/dashboard')}
+          >
+          <ArrowLeft size={18} />
+            Dashboard
+            </button>
+          <button 
+            onClick={fetchEntities}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 24px',
+              backgroundColor: 'white',
+              color: '#00364A',
+              borderRadius: '12px',
+              border: '2px solid #00364A',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#00364A';
+              e.target.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'white';
+              e.target.style.color = '#00364A';
+            }}
+          >
+        
+            <RefreshCw size={18} />
+            Refresh
+          </button>
+        </div>
+        </div>
+
+        <div style={{ padding: '50px' }}>
+          {/* Search and Stats */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+            <div style={{ position: 'relative', width: '40%' }}>
+              <div style={{ position: 'absolute', top: '50%', left: '15px', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                <Search size={18} color="#00364A" style={{ opacity: 0.5 }} />
               </div>
-              <button 
-                onClick={fetchEntities}
-                className="flex items-center px-4 py-2.5 bg-gradient-to-b from-white/20 to-transparent text-black rounded-xl hover:bg-white/30 transition-all duration-200 backdrop-blur-sm"
-              >
-                <RefreshCw size={18} className="mr-2" />
-                Refresh
-              </button>
+              <input
+                type="text"
+                placeholder="Search entities or columns..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '14px 20px 14px 45px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                  color: '#00364A',
+                  fontSize: '15px',
+                  outline: 'none',
+                  transition: 'all 0.3s'
+                }}
+                onFocus={(e) => {
+                  e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
+                  e.target.style.boxShadow = 'none';
+                }}
+              />
+            </div>
+            <div style={{
+              backgroundColor: 'rgba(73, 163, 196, 0.1)',
+              color: '#00364A',
+              padding: '10px 20px',
+              borderRadius: '20px',
+              fontWeight: '600',
+              fontSize: '14px'
+            }}>
+              <span>{filteredEntities.length}</span> entities found
             </div>
           </div>
 
-          <div className="p-6">
-            {/* Search and Stats */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-              <div className="relative mb-4 md:mb-0 md:w-1/3">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search size={18} className="text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search entities or columns..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2.5 w-full border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200"
-                />
+          {response && (
+            <div style={{
+              marginBottom: '30px',
+              padding: '20px 25px',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '15px',
+              backgroundColor: response.type === "success" ? '#E0F2FE' : '#FEF2F2',
+              border: `2px solid ${response.type === "success" ? '#49A3C4' : '#EF4444'}`,
+              color: '#00364A'
+            }}>
+              <div style={{ color: response.type === "success" ? '#49A3C4' : '#EF4444' }}>
+                {response.type === "success" ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
               </div>
-              <div className="bg-teal-50 text-teal-700 px-4 py-2 rounded-xl font-medium">
-                <span>{filteredEntities.length}</span> entities found
-              </div>
+              <span style={{ fontWeight: '500' }}>{response.message}</span>
             </div>
+          )}
 
-            {response && (
-              <div className={`mb-6 p-4 rounded-xl ${
-                response.type === "success" 
-                  ? 'bg-green-50 text-green-800 border border-green-200' 
-                  : 'bg-red-50 text-red-800 border border-red-200'
-              }`}>
-                <div className="flex items-center">
-                  {response.type === "success" 
-                    ? <CheckCircle size={20} className="mr-2" /> 
-                    : <AlertCircle size={20} className="mr-2" />
-                  }
-                  {response.message}
-                </div>
-              </div>
-            )}
-
-            {filteredEntities.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                <List size={48} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-600">No entities found</p>
-                <p className="text-gray-500 text-sm mt-2">Create your first entity to get started</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredEntities.map((entity) => (
-                  <div key={entity.name} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md">
-                    <div className="p-5 flex justify-between items-center">
-                      <div className="flex items-center">
-                        <button 
-                          onClick={() => toggleExpand(entity.name)}
-                          className="mr-4 text-gray-500 hover:text-teal-600 transition-colors"
-                        >
-                          {expandedEntity === entity.name ? 
-                            <ChevronDown size={20} /> : 
-                            <ChevronRight size={20} />
-                          }
-                        </button>
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{entity.name}</h3>
-                          <div className="flex items-center text-sm text-gray-600 mt-1">
-                            <Columns size={14} className="mr-1" />
-                            <span className="mr-4">{entity.columns?.length || 0} columns</span>
-                            <span>{entity.row_count || 0} rows</span>
-                          </div>
+          {filteredEntities.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '60px',
+              backgroundColor: '#F8FBFF',
+              borderRadius: '20px',
+              border: '2px dashed rgba(0, 54, 74, 0.1)'
+            }}>
+              <List size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />
+              <p style={{ fontSize: '18px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>No entities found</p>
+              <p style={{ color: '#00364A', opacity: 0.6 }}>Create your first entity to get started</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {filteredEntities.map((entity) => (
+                <div key={entity.name} style={{
+                  backgroundColor: 'white',
+                  border: '2px solid rgba(0, 54, 74, 0.08)',
+                  borderRadius: '20px',
+                  boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
+                  overflow: 'hidden',
+                  transition: 'all 0.3s'
+                }}>
+                  {/* Entity Card Header */}
+                  <div style={{
+                    padding: '25px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '20px',
+                    flexWrap: 'wrap'
+                  }}>
+                    {/* Left: Entity Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', flex: '1 1 300px', minWidth: 0 }}>
+                      <button 
+                        onClick={() => toggleExpand(entity.name)}
+                        style={{
+                          marginRight: '15px',
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          color: '#00364A',
+                          opacity: 0.5,
+                          transition: 'opacity 0.2s',
+                          padding: '5px',
+                          flexShrink: 0
+                        }}
+                        onMouseEnter={(e) => e.target.style.opacity = '1'}
+                        onMouseLeave={(e) => e.target.style.opacity = '0.5'}
+                      >
+                        {expandedEntity === entity.name ? <ChevronDown size={24} /> : <ChevronRight size={24} />}
+                      </button>
+                      <div style={{ minWidth: 0 }}>
+                        <h3 style={{ 
+                          fontSize: '18px', 
+                          fontWeight: '700', 
+                          color: '#00364A', 
+                          margin: 0,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {entity.name}
+                        </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#00364A', opacity: 0.6, marginTop: '5px' }}>
+                          <Columns size={14} style={{ marginRight: '5px', flexShrink: 0 }} />
+                          <span style={{ marginRight: '15px', whiteSpace: 'nowrap' }}>{entity.columns?.length || 0} columns</span>
+                          <span style={{ whiteSpace: 'nowrap' }}>{entity.row_count || 0} rows</span>
                         </div>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button 
-                          className="p-2.5 bg-gradient-to-b from-teal-500 to-teal-400 text-white hover:bg-teal-600 rounded-xl transition-all duration-200"
-                          onClick={() => startEditing(entity)}
-                          title="Edit entity"
-                        >
-                          <Edit3 size={18} />
-                        </button>
-                        <button 
-                          className="p-2.5 bg-gradient-to-b from-red-500 to-red-400 text-white hover:bg-red-600 rounded-xl transition-all duration-200"
-                          onClick={() => deleteEntity(entity.name)}
-                          title="Delete entity"
-                        >
-                          <Trash2 size={18} />
-                        </button>
                       </div>
                     </div>
 
-                    {expandedEntity === entity.name && (
-                      <div className="border-t border-gray-100 p-5 bg-gray-50">
-                        <h4 className="text-md font-medium text-gray-900 mb-4 flex items-center">
-                          <div className="bg-teal-50 p-2 rounded-lg mr-3">
-                            <Columns size={18} className="text-teal-600" />
-                          </div>
-                          Attributes
-                        </h4>
-                        
-                        {editingEntity === entity.name ? (
-                          <div className="space-y-4">
-                            {editAttributes.map((attr, index) => (
-                              <div key={index} className={`p-4 rounded-xl ${
-                                attr.action === 'remove' 
-                                  ? 'bg-red-50 border border-red-200' 
-                                  : 'bg-white border border-gray-200'
-                              }`}>
-                                {attr.action === 'remove' ? (
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-red-800 font-medium">
-                                      Column '{attr.originalName}' will be deleted
-                                    </span>
-                                    <button
-                                      className="flex items-center text-sm text-red-600 hover:text-red-800 px-3 py-1.5 bg-red-100 rounded-lg"
-                                      onClick={() => undoRemove(index)}
+                    {/* Right: Actions */}
+                    <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+                      <IconButton 
+                        onClick={() => startEditing(entity)} 
+                        icon={<Edit3 size={18} />} 
+                        color="#49A3C4" 
+                        title="Edit Entity"
+                      />
+                      <IconButton 
+                        onClick={() => deleteEntity(entity.name)} 
+                        icon={<Trash2 size={18} />} 
+                        color="#EF4444" 
+                        title="Delete Entity"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Expanded Content (Attributes) */}
+                  {expandedEntity === entity.name && (
+                    <div style={{
+                      borderTop: '1px solid rgba(0, 54, 74, 0.1)',
+                      padding: '25px',
+                      backgroundColor: '#F8FBFF'
+                    }}>
+                      <h4 style={{
+                        fontSize: '16px',
+                        fontWeight: '700',
+                        color: '#00364A',
+                        marginBottom: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                      }}>
+                        <div style={{
+                          padding: '6px',
+                          backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                          borderRadius: '8px',
+                          display: 'flex'
+                        }}>
+                          <Columns size={16} color="#49A3C4" />
+                        </div>
+                        Attributes
+                      </h4>
+                      
+                      {editingEntity === entity.name ? (
+                        /* Editing Mode */
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                          {editAttributes.map((attr, index) => (
+                            <div key={index} style={{
+                              padding: '20px',
+                              borderRadius: '15px',
+                              backgroundColor: attr.action === 'remove' ? '#FEF2F2' : 'white',
+                              border: `1px solid ${attr.action === 'remove' ? '#FCA5A5' : 'rgba(0, 54, 74, 0.1)'}`
+                            }}>
+                              {attr.action === 'remove' ? (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ color: '#991B1B', fontWeight: '600' }}>
+                                    Column '{attr.originalName}' will be deleted
+                                  </span>
+                                  <button
+                                    onClick={() => undoRemove(index)}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      padding: '8px 16px',
+                                      backgroundColor: '#FECACA',
+                                      color: '#991B1B',
+                                      border: 'none',
+                                      borderRadius: '10px',
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <Undo size={14} /> Undo
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 0.5fr', gap: '20px', alignItems: 'start' }}>
+                                  <div>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Name</label>
+                                    <input
+                                      type="text"
+                                      value={attr.name}
+                                      onChange={(e) => updateAttribute(index, "name", e.target.value)}
+                                      style={inputStyle}
+                                    />
+                                    {attr.action === 'rename' && <p style={{ fontSize: '11px', color: '#49A3C4', marginTop: '4px' }}>Renaming from '{attr.originalName}'</p>}
+                                    {attr.action === 'add' && <p style={{ fontSize: '11px', color: '#059669', marginTop: '4px' }}>New column</p>}
+                                  </div>
+                                  <div>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Type</label>
+                                    <select
+                                      value={attr.datatype}
+                                      onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
+                                      style={inputStyle}
                                     >
-                                      <Undo size={14} className="mr-1" />
-                                      Undo
-                                    </button>
+                                      <option value="text">String</option>
+                                      <option value="int">Integer</option>
+                                      <option value="bool">Boolean</option>
+                                      <option value="float">Float</option>
+                                      <option value="datetime">Date/Time</option>
+                                    </select>
                                   </div>
-                                ) : (
-                                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
-                                    <div className="md:col-span-5">
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                                      <input
-                                        type="text"
-                                        placeholder="Attribute name"
-                                        value={attr.name}
-                                        onChange={(e) => updateAttribute(index, "name", e.target.value)}
-                                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200"
-                                      />
-                                      {attr.action === 'rename' && (
-                                        <p className="text-xs text-teal-600 mt-1">
-                                          Renaming from '{attr.originalName}'
-                                        </p>
-                                      )}
-                                      {attr.action === 'add' && (
-                                        <p className="text-xs text-green-600 mt-1">New column</p>
-                                      )}
-                                    </div>
-                                    <div className="md:col-span-3">
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                                      <select
-                                        value={attr.datatype}
-                                        onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
-                                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200"
-                                      >
-                                        <option value="text">String</option>
-                                        <option value="int">Integer</option>
-                                        <option value="bool">Boolean</option>
-                                        <option value="float">Float</option>
-                                        <option value="datetime">Date/Time</option>
-                                      </select>
-                                    </div>
-                                    <div className="md:col-span-2">
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">Constraint</label>
-                                      <select
-                                        value={attr.nullable}
-                                        onChange={(e) => updateAttribute(index, "nullable", e.target.value)}
-                                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200"
-                                      >
-                                        <option value="optional">Optional</option>
-                                        <option value="required">Required</option>
-                                      </select>
-                                    </div>
-                                    <div className="md:col-span-2 flex justify-end items-end">
-                                      <button
-                                        className="p-2.5 bg-gradient-to-b from-red-500 to-red-400 text-white hover:bg-red-600 rounded-lg transition-all duration-200 mt-6"
-                                        onClick={() => removeAttribute(index)}
-                                        title="Remove attribute"
-                                      >
-                                        <Trash2 size={16} />
-                                      </button>
-                                    </div>
+                                  <div>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Constraint</label>
+                                    <select
+                                      value={attr.nullable}
+                                      onChange={(e) => updateAttribute(index, "nullable", e.target.value)}
+                                      style={inputStyle}
+                                    >
+                                      <option value="optional">Optional</option>
+                                      <option value="required">Required</option>
+                                    </select>
                                   </div>
-                                )}
+                                  <div style={{ display: 'flex', alignItems: 'end', height: '100%', paddingBottom: '2px' }}>
+                                    <IconButton 
+                                      onClick={() => removeAttribute(index)} 
+                                      icon={<Trash2 size={16} />} 
+                                      color="#EF4444" 
+                                      title="Remove"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
+                            <StyledButton onClick={addAttribute} icon={<Plus size={16} />}>Add Attribute</StyledButton>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                              <StyledButton onClick={saveChanges} variant="success" icon={<Save size={16} />}>Save Changes</StyledButton>
+                              <StyledButton onClick={cancelEditing} variant="secondary" icon={<X size={16} />}>Cancel</StyledButton>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* View Mode */
+                        <div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                            {entity.columns?.map((column) => (
+                              <div key={column.name} style={{
+                                backgroundColor: 'white',
+                                padding: '15px',
+                                borderRadius: '12px',
+                                border: '1px solid rgba(0, 54, 74, 0.1)',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}>
+                                <div>
+                                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                                    <Type size={14} color="#49A3C4" style={{ marginRight: '8px' }} />
+                                    <span style={{ fontWeight: '600', color: '#00364A' }}>{column.name}</span>
+                                  </div>
+                                  <span style={{ fontSize: '12px', color: '#00364A', opacity: 0.6, marginLeft: '22px' }}>{column.type}</span>
+                                </div>
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: '700',
+                                  padding: '4px 10px',
+                                  borderRadius: '10px',
+                                  backgroundColor: column.nullable === 'NO' ? '#FEE2E2' : '#ECFDF5',
+                                  color: column.nullable === 'NO' ? '#991B1B' : '#065F46',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  <Shield size={10} />
+                                  {column.nullable === 'NO' ? 'Required' : 'Optional'}
+                                </span>
                               </div>
                             ))}
-                            
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-4 gap-3">
-                              <button 
-                                className="flex items-center px-4 py-2.5 bg-gradient-to-b from-teal-500 to-teal-400 text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium"
-                                onClick={addAttribute}
-                              >
-                                <Plus size={16} className="mr-1" />
-                                Add Attribute
-                              </button>
-                              <div className="flex space-x-2">
-                                <button 
-                                  className="flex items-center px-4 py-2.5 bg-gradient-to-b from-green-500 to-green-400 text-white rounded-xl hover:bg-green-600 transition-all duration-200 font-medium"
-                                  onClick={saveChanges}
-                                >
-                                  <Save size={16} className="mr-1" />
-                                  Save Changes
-                                </button>
-                                <button 
-                                  className="flex items-center px-4 py-2.5 bg-gradient-to-b from-gray-200 to-gray-300 text-gray-700 rounded-xl hover:bg-gray-400 transition-all duration-200 font-medium"
-                                  onClick={cancelEditing}
-                                >
-                                  <X size={16} className="mr-1" />
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
                           </div>
-                        ) : (
-                          <div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {entity.columns?.map((column) => (
-                                <div key={column.name} className="bg-white p-4 border border-gray-200 rounded-xl flex justify-between items-center">
-                                  <div>
-                                    <div className="flex items-center">
-                                      <Type size={16} className="text-teal-500 mr-2" />
-                                      <span className="font-medium text-gray-900">{column.name}</span>
-                                    </div>
-                                    <div className="text-sm text-gray-600 ml-6">{column.type}</div>
-                                  </div>
-                                  <span className={`text-xs px-2.5 py-1.5 rounded-full flex items-center ${
-                                    column.nullable === 'NO' 
-                                      ? 'bg-red-100 text-red-800' 
-                                      : 'bg-green-100 text-green-800'
-                                  }`}>
-                                    <Shield size={12} className="mr-1" />
-                                    {column.nullable === 'NO' ? 'Required' : 'Optional'}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                            
-                            <div className="mt-6">
-                              <button 
-                                className="flex items-center px-4 py-2.5 bg-gradient-to-b from-teal-500 to-teal-400 text-white rounded-xl hover:bg-teal-600 transition-all duration-200 font-medium"
-                                onClick={() => startEditing(entity)}
-                              >
-                                <Edit3 size={16} className="mr-1" />
-                                Edit Entity
-                              </button>
-                            </div>
+                          
+                          <div style={{ marginTop: '25px' }}>
+                            <StyledButton onClick={() => startEditing(entity)} icon={<Edit3 size={16} />}>Edit Entity</StyledButton>
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
+};
+
+// Helper Components
+
+const IconButton = ({ onClick, icon, color, disabled, title }) => {
+  const [hover, setHover] = useState(false);
+  
+  // Use a hex code to ensure background opacity logic works
+  const effectiveColor = disabled ? '#cccccc' : color;
+  
+  const getBgColor = () => {
+    if (disabled) return '#f5f5f5';
+    // If hovering, add transparency to hex color, or fallback to gray
+    if (hover) {
+        if (effectiveColor.startsWith('#')) return `${effectiveColor}15`; 
+        return '#f0f0f0';
+    }
+    return '#F8FBFF';
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: '40px',
+        minWidth: '40px',
+        height: '40px',
+        borderRadius: '10px',
+        border: `1px solid ${disabled ? '#eee' : 'rgba(0,54,74,0.1)'}`,
+        backgroundColor: getBgColor(),
+        color: effectiveColor, // This text color is inherited by the Icon via currentColor
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.2s',
+        flexShrink: 0,
+        padding: 0
+      }}
+    >
+      {/* Icon renders here, inheriting text color */}
+      {icon}
+    </button>
+  );
+};
+const StyledButton = ({ onClick, icon, children, variant = 'primary' }) => {
+  const [hover, setHover] = useState(false);
+  
+  let bg = '#00364A';
+  let color = 'white';
+  let border = 'none';
+
+  if (variant === 'secondary') {
+    bg = 'white';
+    color = '#00364A';
+    border = '1px solid rgba(0, 54, 74, 0.2)';
+  } else if (variant === 'success') {
+    bg = '#059669';
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '10px 20px',
+        backgroundColor: hover ? (variant === 'secondary' ? '#F3F4F6' : (variant === 'success' ? '#047857' : '#004e66')) : bg,
+        color: color,
+        border: border,
+        borderRadius: '10px',
+        fontWeight: '600',
+        fontSize: '14px',
+        cursor: 'pointer',
+        transition: 'all 0.3s'
+      }}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+};
+
+const inputStyle = {
+  width: '100%',
+  padding: '10px 14px',
+  borderRadius: '8px',
+  border: '1px solid rgba(0, 54, 74, 0.15)',
+  backgroundColor: 'white',
+  color: '#00364A',
+  fontSize: '14px',
+  outline: 'none',
+  boxSizing: 'border-box'
 };
 
 export default EntityList;
