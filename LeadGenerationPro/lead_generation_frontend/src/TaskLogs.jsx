@@ -9,7 +9,9 @@ import {
   AlertCircle,
   CheckCircle,
   FileText,
-  Database
+  Database,
+  Info,
+  ChevronUp
 } from 'lucide-react';
 import API_BASE from './api_base';
 
@@ -27,20 +29,16 @@ const TaskLogs = () => {
     fetchTaskDetails();
   }, [taskId]);
 
-  // Polling effect: Poll logs and executions when there's a current execution
   useEffect(() => {
     if (!taskExecutions) return;
 
-    // Check if there's any current/running execution
     const hasCurrentExecution = taskExecutions.executions?.some(exec => exec.is_current);
 
     if (hasCurrentExecution) {
-      // Poll every 2 seconds when task is running
       const interval = setInterval(() => {
-        // Only refresh logs and executions, not task info (which doesn't change)
         fetchTaskLogs(selectedExecutionId);
         fetchTaskExecutions();
-      }, 2000); // Poll every 2 seconds
+      }, 2000);
 
       return () => clearInterval(interval);
     }
@@ -51,7 +49,6 @@ const TaskLogs = () => {
       setLoading(true);
       setError(null);
       
-      // Fetch task info
       const tasksRes = await fetch(`${API_BASE}/task/tasks`, {
         method: 'GET',
         headers: { "ngrok-skip-browser-warning": "true" }
@@ -63,7 +60,6 @@ const TaskLogs = () => {
         setTaskInfo(task);
       }
 
-      // Fetch execution logs and summary in parallel
       await Promise.all([
         fetchTaskLogs(),
         fetchTaskExecutions()
@@ -116,10 +112,7 @@ const TaskLogs = () => {
     await fetchTaskLogs(executionId);
   };
 
-  // Check if there's any completed execution
   const hasCompletedExecution = taskExecutions?.executions?.some(exec => exec.final_status === 'completed');
-  
-  // Check if there's a current/running execution (for polling indicator)
   const hasCurrentExecution = taskExecutions?.executions?.some(exec => exec.is_current);
   
   const getEntityDataPageUrl = () => {
@@ -131,316 +124,432 @@ const TaskLogs = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="flex flex-col items-center">
-          <Loader2 className="animate-spin text-teal-600 mb-4" size={40} />
-          <h1 className="text-2xl font-bold text-gray-900">Loading Task Logs...</h1>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-        <div className="max-w-6xl mx-auto">
-          <button
-            onClick={() => navigate('/taskexecutor')}
-            className="flex items-center gap-2 px-4 py-2 text-teal-600 hover:text-teal-700 font-medium mb-6"
-          >
-            <ArrowLeft size={20} /> Back to Tasks
-          </button>
-          <div className="bg-white rounded-2xl shadow-xl p-8">
-            <div className="flex items-start gap-4 text-red-600">
-              <AlertCircle size={24} className="mt-1 shrink-0" />
-              <div>
-                <h2 className="text-xl font-bold mb-2">Error Loading Logs</h2>
-                <p className="text-gray-700">{error}</p>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#C7D8ED',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: '20px'
+      }}>
+        <div style={{
+           width: '40px',
+           height: '40px',
+           border: '4px solid #49A3C4',
+           borderTop: '4px solid transparent',
+           borderRadius: '50%',
+           animation: 'spin 1s linear infinite'
+        }} />
+        <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Task Logs...</h1>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <button
-            onClick={() => navigate('/taskexecutor')}
-            className="flex items-center gap-2 px-4 py-2 text-teal-600 hover:text-teal-700 font-medium mb-4 transition-colors"
-          >
-            <ArrowLeft size={20} /> Back to Tasks
-          </button>
-
-          <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-            <div className="bg-gradient-to-r from-teal-600 to-teal-500 text-white p-6">
-              <div className="flex items-start gap-4">
-                <div className="bg-white/20 p-3 rounded-xl">
-                  <FileText size={28} />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold">Task Execution Logs</h1>
-                  <p className="text-teal-100 mt-2">
-                    {taskInfo?.task_name || `Task #${taskId}`}
-                  </p>
-                  {taskInfo && (
-                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-teal-100">Source</p>
-                        <p className="font-medium">{taskInfo.source_name}</p>
-                      </div>
-                      <div>
-                        <p className="text-teal-100">Entity</p>
-                        <p className="font-medium">{taskInfo.entity_name}</p>
-                      </div>
-                      <div>
-                        <p className="text-teal-100">Mapping</p>
-                        <p className="font-medium">{taskInfo.mapping_name}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#C7D8ED',
+      color: '#00364A',
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      padding: '40px 20px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '1200px',
+        backgroundColor: 'white',
+        borderRadius: '25px',
+        boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+        overflow: 'hidden'
+      }}>
+        {/* Header Section */}
+        <div style={{
+          padding: '40px 50px',
+          borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              backgroundColor: '#49A3C4',
+              borderRadius: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white'
+            }}>
+              <FileText size={28} />
+            </div>
+            <div>
+              <h1 style={{ fontSize: '32px', fontWeight: '800', color: '#00364A', margin: 0 }}>Task Execution Logs</h1>
+              <p style={{ fontSize: '18px', color: '#49A3C4', fontWeight: '600', margin: '5px 0' }}>
+                {taskInfo?.task_name || `Task #${taskId}`}
+              </p>
             </div>
           </div>
+          <button
+            onClick={() => navigate('/taskexecutor')}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'white',
+              color: '#00364A',
+              border: '2px solid #00364A',
+              borderRadius: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              transition: 'all 0.3s'
+            }}
+          >
+            <ArrowLeft size={18} /> Back to Tasks
+          </button>
         </div>
 
-        {/* Main Content */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="p-6">
-            {/* Execution History */}
-            {taskExecutions && taskExecutions.executions.length > 0 && (
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold mb-4 text-gray-900">Execution History</h2>
-                <div className="space-y-2">
-                  {(() => {
-                    const execs = taskExecutions.executions.slice();
-                    execs.sort((a, b) => {
-                      if (a.is_current && !b.is_current) return -1;
-                      if (!a.is_current && b.is_current) return 1;
-                      const aTime = a.start_time ? new Date(a.start_time) : 0;
-                      const bTime = b.start_time ? new Date(b.start_time) : 0;
-                      return bTime - aTime;
-                    });
-                    return execs.map((exec) => (
-                      <button
-                        key={exec.execution_id}
-                        onClick={() => filterByExecution(exec.execution_id)}
-                        className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                          selectedExecutionId === exec.execution_id
-                            ? 'bg-teal-50 border-teal-400 shadow-md'
-                            : 'bg-gray-50 border-gray-200 hover:border-teal-300 hover:shadow-sm'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3 flex-1">
-                            <Clock size={18} className="text-gray-500 shrink-0" />
-                            <div className="flex-1">
-                              <p className="font-semibold text-gray-900">
-                                {exec.start_time ? formatDateTime(exec.start_time) : 'Unknown time'}
-                              </p>
-                              <div className="flex items-center gap-3 mt-2 text-sm text-gray-600">
-                                {exec.is_current && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                                    CURRENT
-                                  </span>
-                                )}
-                                <span>{exec.log_count} logs</span>
-                                <span>•</span>
-                                <span>{exec.error_count} errors</span>
-                                {exec.duration_ms && (
-                                  <>
-                                    <span>•</span>
-                                    <span>{(exec.duration_ms / 1000).toFixed(2)}s</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                              exec.final_status === 'completed' ? 'bg-green-100 text-green-800' :
-                              exec.final_status === 'failed' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {exec.final_status || 'unknown'}
-                            </span>
-                            {selectedExecutionId === exec.execution_id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                          </div>
-                        </div>
-                      </button>
-                    ));
-                  })()}
-                </div>
-              </div>
-            )}
+        {/* Task Summary Info */}
+        {taskInfo && (
+          <div style={{
+            padding: '20px 50px',
+            backgroundColor: '#F8FBFF',
+            display: 'flex',
+            gap: '40px',
+            borderBottom: '1px solid rgba(0, 54, 74, 0.05)'
+          }}>
+            <SummaryItem label="Source" value={taskInfo.source_name} />
+            <SummaryItem label="Entity" value={taskInfo.entity_name} />
+            <SummaryItem label="Mapping" value={taskInfo.mapping_name} />
+          </div>
+        )}
 
-            {/* Logs */}
-            {taskLogs && (
+        <div style={{ padding: '50px' }}>
+          {/* Error State */}
+          {error && (
+            <div style={{
+              padding: '25px',
+              backgroundColor: '#FEF2F2',
+              border: '2px solid #EF4444',
+              borderRadius: '15px',
+              display: 'flex',
+              gap: '15px',
+              color: '#991B1B'
+            }}>
+              <AlertCircle size={24} />
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      Execution Logs
-                      {selectedExecutionId && taskLogs?.logs && (
-                        <span className="text-lg font-normal text-gray-600 ml-2">({taskLogs.logs.length} entries)</span>
-                      )}
-                    </h2>
-                    {hasCurrentExecution && (
-                      <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                        </span>
-                        <span className="text-xs font-semibold text-blue-700">Live</span>
+                <h3 style={{ margin: '0 0 5px 0', fontWeight: '700' }}>Error Loading Logs</h3>
+                <p style={{ margin: 0 }}>{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Execution History Cards */}
+          <div style={{ marginBottom: '50px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: '800', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Clock size={24} color="#49A3C4" /> Execution History
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {taskExecutions?.executions?.sort((a,b) => (b.start_time || "").localeCompare(a.start_time || "")).map((exec) => (
+                <button
+                  key={exec.execution_id}
+                  onClick={() => filterByExecution(exec.execution_id)}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '20px 25px',
+                    borderRadius: '15px',
+                    border: '2px solid',
+                    borderColor: selectedExecutionId === exec.execution_id ? '#49A3C4' : 'rgba(0, 54, 74, 0.08)',
+                    backgroundColor: selectedExecutionId === exec.execution_id ? '#F0F9FF' : 'white',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                    <div style={{
+                      padding: '10px',
+                      backgroundColor: 'rgba(73, 163, 196, 0.1)',
+                      borderRadius: '10px',
+                      color: '#49A3C4'
+                    }}>
+                      <Clock size={20} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '16px', fontWeight: '700', color: '#00364A', margin: 0 }}>
+                        {exec.start_time ? formatDateTime(exec.start_time) : 'Unknown time'}
+                      </p>
+                      <div style={{ display: 'flex', gap: '15px', marginTop: '5px', fontSize: '13px', color: '#00364A', opacity: 0.6 }}>
+                        {exec.is_current && <span style={{ color: '#49A3C4', fontWeight: '800' }}>● LATEST</span>}
+                        <span>{exec.log_count} logs</span>
+                        <span>{exec.error_count} errors</span>
+                        {exec.duration_ms && <span>{(exec.duration_ms / 1000).toFixed(2)}s duration</span>}
                       </div>
-                    )}
+                    </div>
                   </div>
-                  {selectedExecutionId && (
-                    <button
-                      onClick={() => filterByExecution(null)}
-                      className="text-sm px-3 py-1.5 bg-teal-100 text-teal-700 hover:bg-teal-200 rounded-lg font-medium transition-colors"
-                    >
-                      Show All Logs
-                    </button>
-                  )}
-                </div>
-
-                {taskLogs.logs && taskLogs.logs.length === 0 ? (
-                  <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-                    <AlertCircle size={40} className="mx-auto text-gray-400 mb-3" />
-                    <p className="text-gray-600 font-medium">No logs available for this task yet.</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                    <StatusBadge status={exec.final_status} />
+                    {selectedExecutionId === exec.execution_id ? <ChevronDown size={24} /> : <ChevronRight size={24} />}
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {taskLogs.logs && taskLogs.logs.map((log) => (
-                      <div
-                        key={log.id}
-                        className={`p-5 rounded-lg border-l-4 transition-all ${
-                          log.log_level === 'error' ? 'bg-red-50 border-red-500 shadow-sm' :
-                          log.log_level === 'warning' ? 'bg-yellow-50 border-yellow-500 shadow-sm' :
-                          log.status === 'completed' ? 'bg-green-50 border-green-500 shadow-sm' :
-                          'bg-gray-50 border-gray-300 shadow-sm'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <span className={`px-2.5 py-1 rounded text-xs font-medium ${
-                                log.log_level === 'error' ? 'bg-red-200 text-red-800' :
-                                log.log_level === 'warning' ? 'bg-yellow-200 text-yellow-800' :
-                                log.log_level === 'debug' ? 'bg-blue-200 text-blue-800' :
-                                'bg-gray-200 text-gray-800'
-                              }`}>
-                                {log.log_level.toUpperCase()}
-                              </span>
-                              <span className={`px-2.5 py-1 rounded text-xs font-medium ${
-                                log.status === 'completed' ? 'bg-green-200 text-green-800' :
-                                log.status === 'failed' ? 'bg-red-200 text-red-800' :
-                                log.status === 'processing' ? 'bg-blue-200 text-blue-800' :
-                                'bg-gray-200 text-gray-800'
-                              }`}>
-                                {log.status}
-                              </span>
-                              {log.execution_duration_ms && (
-                                <span className="text-xs text-gray-600 font-mono">
-                                  {log.execution_duration_ms}ms
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm font-medium text-gray-900 mb-2">{log.message}</p>
-                            {log.created_at && (
-                              <p className="text-xs text-gray-500 mb-3">
-                                {formatDateTime(log.created_at)}
-                              </p>
-                            )}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                            {/* Details Table */}
-                            {log.details && Object.keys(log.details).length > 0 && (
-                              <details className="mt-3 group">
-                                <summary className="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 transition-colors text-xs font-medium text-gray-700 select-none">
-                                  <span>View Details</span>
-                                  <span className="group-open:rotate-180 transition-transform">▼</span>
-                                </summary>
-                                
-                                <div className="mt-3 overflow-x-auto border border-gray-300 rounded-lg shadow-sm">
-                                  <table className="w-full text-xs bg-white">
-                                    <thead className="bg-gradient-to-r from-teal-50 to-teal-100 border-b-2 border-teal-300">
-                                      <tr>
-                                        <th className="px-4 py-3 text-left font-semibold text-teal-900 border-r border-teal-200 w-1/3">
-                                          Key
-                                        </th>
-                                        <th className="px-4 py-3 text-left font-semibold text-teal-900">
-                                          Value
-                                        </th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-200">
-                                      {Object.entries(log.details).map(([key, value], idx) => (
-                                        <tr key={key} className={`transition-colors ${idx % 2 === 0 ? 'bg-white hover:bg-teal-50' : 'bg-gray-50 hover:bg-teal-50'}`}>
-                                          <td className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-200 break-words max-w-xs">
-                                            {key}
-                                          </td>
-                                          <td className="px-4 py-3 text-gray-700 break-words">
-                                            {typeof value === 'object' && value !== null 
-                                              ? <code className="bg-gray-100 px-2 py-1 rounded text-xs text-gray-800">{JSON.stringify(value)}</code>
-                                              : String(value)}
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </details>
-                            )}
-
-                            {/* Error Traceback */}
-                            {log.error_traceback && (
-                              <details className="mt-3 group">
-                                <summary className="cursor-pointer inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-100 hover:bg-red-200 transition-colors text-xs font-medium text-red-800 select-none">
-                                  <span>View Error Traceback</span>
-                                  <span className="group-open:rotate-180 transition-transform">▼</span>
-                                </summary>
-                                <pre className="mt-3 p-4 bg-gray-900 text-red-200 rounded-lg text-xs overflow-x-auto font-mono border border-red-300 shadow-sm">
-                                  {log.error_traceback}
-                                </pre>
-                              </details>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+          {/* Logs Terminal Section */}
+          <div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '25px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <h2 style={{ fontSize: '24px', fontWeight: '800', margin: 0 }}>Execution Logs</h2>
+                {hasCurrentExecution && (
+                  <div style={{
+                    padding: '6px 15px',
+                    backgroundColor: '#E0EFFF',
+                    borderRadius: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    color: '#49A3C4'
+                  }}>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      backgroundColor: '#49A3C4',
+                      borderRadius: '50%',
+                      animation: 'blink 1s infinite'
+                    }} />
+                    LIVE POLLING
                   </div>
                 )}
               </div>
-            )}
+              {selectedExecutionId && (
+                <button 
+                  onClick={() => filterByExecution(null)}
+                  style={{ color: '#49A3C4', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
 
-            {/* Success Banner with Entity Data Link */}
-            {hasCompletedExecution && taskInfo && (
-              <div className="mt-8 p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl shadow-md">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-green-900 mb-2">Task Completed Successfully!</h3>
-                    <p className="text-green-800 mb-4">The data has been scraped and stored in the <strong>{taskInfo.entity_name}</strong> table.</p>
-                    <a
-                      href={getEntityDataPageUrl()}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 !text-white font-medium rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg no-underline"
-                    >
-                      <Database size={18} />
-                      View Entity Data
-                    </a>
-                  </div>
-                </div>
+            {taskLogs?.logs?.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '60px',
+                backgroundColor: '#F8FBFF',
+                borderRadius: '20px',
+                border: '2px dashed rgba(0, 54, 74, 0.1)'
+              }}>
+                <AlertCircle size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />
+                <p style={{ fontSize: '18px', color: '#00364A', fontWeight: '600' }}>No logs available for this task.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {taskLogs?.logs?.map((log) => (
+                  <LogCard key={log.id} log={log} formatDateTime={formatDateTime} />
+                ))}
               </div>
             )}
           </div>
+
+          {/* Success CTA */}
+          {hasCompletedExecution && taskInfo && (
+            <div style={{
+              marginTop: '50px',
+              padding: '40px',
+              backgroundColor: '#00364A',
+              borderRadius: '25px',
+              color: 'white',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: '0 20px 40px rgba(0, 54, 74, 0.3)'
+            }}>
+              <div>
+                <h3 style={{ fontSize: '24px', fontWeight: '800', margin: '0 0 10px 0' }}>Task Completed Successfully!</h3>
+                <p style={{ fontSize: '16px', opacity: 0.8, margin: 0 }}>
+                  Data has been stored in <strong>{taskInfo.entity_name}</strong>. You can view the scraped results now.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate(getEntityDataPageUrl())}
+                style={{
+                  padding: '16px 32px',
+                  backgroundColor: '#49A3C4',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontWeight: '700',
+                  fontSize: '16px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  transition: 'all 0.3s'
+                }}
+              >
+                <Database size={20} /> View Entity Data
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+      `}</style>
+    </div>
+  );
+};
+
+const SummaryItem = ({ label, value }) => (
+  <div>
+    <p style={{ fontSize: '12px', fontWeight: '800', color: '#49A3C4', margin: '0 0 4px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</p>
+    <p style={{ fontSize: '15px', fontWeight: '700', color: '#00364A', margin: 0 }}>{value}</p>
+  </div>
+);
+
+const StatusBadge = ({ status }) => {
+  const getColors = () => {
+    switch(status) {
+      case 'completed': return { bg: '#E0F2FE', text: '#0369A1' };
+      case 'failed': return { bg: '#FEE2E2', text: '#991B1B' };
+      default: return { bg: '#F3F4F6', text: '#374151' };
+    }
+  };
+  const colors = getColors();
+  return (
+    <span style={{
+      padding: '8px 16px',
+      borderRadius: '10px',
+      fontSize: '12px',
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      backgroundColor: colors.bg,
+      color: colors.text
+    }}>
+      {status || 'pending'}
+    </span>
+  );
+};
+
+const LogCard = ({ log, formatDateTime }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const isError = log.log_level === 'error';
+
+  return (
+    <div style={{
+      backgroundColor: 'white',
+      borderRadius: '15px',
+      border: `2px solid ${isError ? '#FECACA' : 'rgba(0, 54, 74, 0.08)'}`,
+      padding: '25px',
+      boxShadow: '0 4px 15px rgba(0, 54, 74, 0.03)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
+        <div style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '8px',
+          backgroundColor: isError ? '#FEF2F2' : '#F8FBFF',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: isError ? '#EF4444' : '#49A3C4'
+        }}>
+          {isError ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
+        </div>
+        
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+            <span style={{
+              fontSize: '10px',
+              fontWeight: '900',
+              padding: '2px 8px',
+              borderRadius: '5px',
+              backgroundColor: isError ? '#EF4444' : '#00364A',
+              color: 'white'
+            }}>{log.log_level.toUpperCase()}</span>
+            <span style={{ fontSize: '12px', color: '#00364A', opacity: 0.5 }}>{formatDateTime(log.created_at)}</span>
+          </div>
+          
+          <p style={{ fontSize: '15px', fontWeight: '600', color: '#00364A', margin: '0 0 15px 0' }}>{log.message}</p>
+          
+          <div style={{ display: 'flex', gap: '15px' }}>
+            {log.details && Object.keys(log.details).length > 0 && (
+              <button 
+                onClick={() => setIsOpen(!isOpen)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#49A3C4',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+              >
+                {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />} 
+                {isOpen ? 'Hide Details' : 'View Data Results'}
+              </button>
+            )}
+          </div>
+
+          {isOpen && (
+            <div style={{
+              marginTop: '20px',
+              padding: '20px',
+              backgroundColor: '#F8FBFF',
+              borderRadius: '12px',
+              border: '1px solid rgba(0, 54, 74, 0.05)'
+            }}>
+              <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+                <tbody>
+                  {Object.entries(log.details).map(([key, value]) => (
+                    <tr key={key}>
+                      <td style={{ padding: '8px 0', fontWeight: '700', color: '#00364A', width: '30%', verticalAlign: 'top' }}>{key}</td>
+                      <td style={{ padding: '8px 0', color: '#00364A', opacity: 0.8 }}>
+                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {log.error_traceback && (
+            <pre style={{
+              marginTop: '15px',
+              padding: '15px',
+              backgroundColor: '#1E293B',
+              color: '#FCA5A5',
+              borderRadius: '10px',
+              fontSize: '12px',
+              overflowX: 'auto',
+              fontFamily: 'monospace'
+            }}>
+              {log.error_traceback}
+            </pre>
+          )}
         </div>
       </div>
     </div>
