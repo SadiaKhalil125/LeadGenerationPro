@@ -4,6 +4,7 @@ from playwright.async_api import async_playwright, Page
 from datetime import datetime
 import re
 from models import ScrapeRequest, ScrapeResponse
+import random
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -193,7 +194,7 @@ async def scrape_google_maps(request: ScrapeRequest) -> ScrapeResponse:
                 while scroll_attempts < max_scroll_attempts:
                     # Scroll the results panel
                     await scrollable_element.evaluate('el => el.scrollBy(0, el.scrollHeight)')
-                    await page.wait_for_timeout(3000)  # Increased wait time for loading
+                    await page.wait_for_timeout(random.uniform(3000, 4000))  # Increased wait time for loading
                     
                     found = await page.locator('//a[contains(@href, "https://www.google.com/maps/place")]').count()
                     logger.info(f"Scroll attempt {scroll_attempts + 1}: Found {found} places (target: {max_items})")
@@ -234,7 +235,7 @@ async def scrape_google_maps(request: ScrapeRequest) -> ScrapeResponse:
                             '//div[@class="TIHn2 "]//h1[@class="DUwDvf lfPIob"]',
                             timeout=100000000
                         )
-                        await page.wait_for_timeout(1500)
+                        await page.wait_for_timeout(random.uniform(1500, 2000))
                         
                         # Extract place data based on field mappings
                         place_data = await extract_google_maps_place(page, request.field_mappings)

@@ -234,6 +234,7 @@ class BeautifulSoupHTMLParser(HTMLParser, DetectsXMLParsedAsHTML):
         # HTMLParser. (http://bugs.python.org/issue13633) The bug has
         # been fixed, but removing this code still makes some
         # Beautiful Soup tests fail. This needs investigation.
+        real_name:int
         if name.startswith("x"):
             real_name = int(name.lstrip("x"), 16)
         elif name.startswith("X"):
@@ -241,26 +242,9 @@ class BeautifulSoupHTMLParser(HTMLParser, DetectsXMLParsedAsHTML):
         else:
             real_name = int(name)
 
-        data = None
-        if real_name < 256:
-            # HTML numeric entities are supposed to reference Unicode
-            # code points, but sometimes they reference code points in
-            # some other encoding (ahem, Windows-1252). E.g. &#147;
-            # instead of &#201; for LEFT DOUBLE QUOTATION MARK. This
-            # code tries to detect this situation and compensate.
-            for encoding in (self.soup.original_encoding, "windows-1252"):
-                if not encoding:
-                    continue
-                try:
-                    data = bytearray([real_name]).decode(encoding)
-                except UnicodeDecodeError:
-                    pass
-        if not data:
-            try:
-                data = chr(real_name)
-            except (ValueError, OverflowError):
-                pass
-        data = data or "\N{REPLACEMENT CHARACTER}"
+        data, replacement_added = UnicodeDammit.numeric_character_reference(real_name)
+        if replacement_added:
+            self.soup.contains_replacement_characters = True
         self.handle_data(data)
 
     def handle_entityref(self, name: str) -> None:
@@ -446,7 +430,11 @@ class HTMLParserTreeBuilder(HTMLTreeBuilder):
                 dammit.contains_replacement_characters,
             )
 
-    def feed(self, markup: _RawMarkup) -> None:
+    def feed(self, markup: _RawMarkup, _parser_class:type[BeautifulSoupHTMLParser] =BeautifulSoupHTMLParser) -> None:
+        """
+        :param markup: The markup to feed into the parser.
+        :param _parser_class: An HTMLParser subclass to use. This is only intended for use in unit tests.
+        """
         args, kwargs = self.parser_args
 
         # HTMLParser.feed will only handle str, but
@@ -461,7 +449,7 @@ class HTMLParserTreeBuilder(HTMLTreeBuilder):
         # before calling feed(), so we can assume self.soup
         # is set.
         assert self.soup is not None
-        parser = BeautifulSoupHTMLParser(self.soup, *args, **kwargs)
+        parser = _parser_class(self.soup, *args, **kwargs)
 
         try:
             parser.feed(markup)

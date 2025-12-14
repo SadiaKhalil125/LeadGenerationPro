@@ -1192,7 +1192,9 @@ class UnicodeDammit:
     }
 
     #: A map used when removing rogue Windows-1252/ISO-8859-1
-    #: characters in otherwise UTF-8 documents.
+    #: characters in otherwise UTF-8 documents. Also used when a
+    #: numeric character entity has been incorrectly encoded using the
+    #: character's Windows-1252 encoding.
     #:
     #: Note that \\x81, \\x8d, \\x8f, \\x90, and \\x9d are undefined in
     #: Windows-1252.
@@ -1321,7 +1323,37 @@ class UnicodeDammit:
         0xFC: b"\xc3\xbc",  # ü
         0xFD: b"\xc3\xbd",  # ý
         0xFE: b"\xc3\xbe",  # þ
+        0xFF: b"\xc3\xbf",  # ÿ
     }
+
+    #: :meta private
+    # Note that this isn't all Unicode noncharacters, just the noncontiguous ones that need to be listed.
+    #
+    # "A noncharacter is a code point that is in the range
+    # U+FDD0 to U+FDEF, inclusive, or U+FFFE, U+FFFF, U+1FFFE,
+    # U+1FFFF, U+2FFFE, U+2FFFF, U+3FFFE, U+3FFFF, U+4FFFE,
+    # U+4FFFF, U+5FFFE, U+5FFFF, U+6FFFE, U+6FFFF, U+7FFFE,
+    # U+7FFFF, U+8FFFE, U+8FFFF, U+9FFFE, U+9FFFF, U+AFFFE,
+    # U+AFFFF, U+BFFFE, U+BFFFF, U+CFFFE, U+CFFFF, U+DFFFE,
+    # U+DFFFF, U+EFFFE, U+EFFFF, U+FFFFE, U+FFFFF, U+10FFFE,
+    # or U+10FFFF."
+    ENUMERATED_NONCHARACTERS: Set[int] = set([0xfffe, 0xffff,
+                                              0x1fffe, 0x1ffff,
+                                              0x2fffe, 0x2ffff,
+                                              0x3fffe, 0x3ffff,
+                                              0x4fffe, 0x4ffff,
+                                              0x5fffe, 0x5ffff,
+                                              0x6fffe, 0x6ffff,
+                                              0x7fffe, 0x7ffff,
+                                              0x8fffe, 0x8ffff,
+                                              0x9fffe, 0x9ffff,
+                                              0xafffe, 0xaffff,
+                                              0xbfffe, 0xbffff,
+                                              0xcfffe, 0xcffff,
+                                              0xdfffe, 0xdffff,
+                                              0xefffe, 0xeffff,
+                                              0xffffe, 0xfffff,
+                                              0x10fffe, 0x10ffff])
 
     #: :meta private:
     MULTIBYTE_MARKERS_AND_SIZES: List[Tuple[int, int, int]] = [
@@ -1335,6 +1367,82 @@ class UnicodeDammit:
 
     #: :meta private:
     LAST_MULTIBYTE_MARKER: int = MULTIBYTE_MARKERS_AND_SIZES[-1][1]
+
+    @classmethod
+    def numeric_character_reference(cls, numeric:int) -> Tuple[str, bool]:
+        """This (mostly) implements the algorithm described in "Numeric character
+        reference end state" from the HTML spec:
+        https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-end-state
+
+        The algorithm is designed to convert numeric character references like "&#9731;"
+        to Unicode characters like "☃".
+
+        :return: A 2-tuple (character, replaced). `character` is the Unicode
+        character corresponding to the numeric reference and `replaced` is
+        whether or not an unresolvable character was replaced with REPLACEMENT
+        CHARACTER.
+        """
+        replacement = "\ufffd"
+
+        if numeric == 0x00:
+            # "If the number is 0x00, then this is a
+            # null-character-reference parse error. Set the character
+            # reference code to 0xFFFD."
+            return replacement, True
+
+        if numeric > 0x10ffff:
+            # "If the number is greater than 0x10FFFF, then this is a
+            # character-reference-outside-unicode-range parse
+            # error. Set the character reference code to 0xFFFD."
+            return replacement, True
+
+        if numeric >= 0xd800 and numeric <= 0xdfff:
+            # "If the number is a surrogate, then this is a
+            # surrogate-character-reference parse error. Set the
+            # character reference code to 0xFFFD."
+            return replacement, True
+
+        if (numeric >= 0xfdd0 and numeric <= 0xfdef) or numeric in cls.ENUMERATED_NONCHARACTERS:
+            # "If the number is a noncharacter, then this is a
+            # noncharacter-character-reference parse error."
+            #
+            # "The parser resolves such character references as-is."
+            #
+            # I'm not sure what "as-is" means but I think it means that we act
+            # like there was no error condition.
+            return chr(numeric), False
+
+        # "If the number is 0x0D, or a control that's not ASCII whitespace,
+        # then this is a control-character-reference parse error."
+        #
+        # "A control is a C0 control or a code point in the range
+        # U+007F DELETE to U+009F APPLICATION PROGRAM COMMAND,
+        # inclusive."
+        #
+        # "A C0 control is a code point in the range U+0000 NULL to U+001F INFORMATION SEPARATOR ONE, inclusive."
+        #
+        # "The parser resolves such character references as-is except C1 control references that are replaced."
+
+        # First, let's replace the control references that can be replaced.
+        if numeric >= 0x80 and numeric <= 0x9f and numeric in cls.WINDOWS_1252_TO_UTF8:
+            # "If the number is one of the numbers in the first column of the
+            # following table, then find the row with that number in the first
+            # column, and set the character reference code to the number in the
+            # second column of that row."
+            #
+            # This is an attempt to catch characters that were encoded to numeric
+            # entities using their Windows-1252 encodings rather than their UTF-8
+            # encodings.
+            return cls.WINDOWS_1252_TO_UTF8[numeric].decode("utf8"), False
+
+        # Now all that's left are references that should be resolved as-is. This
+        # is also the default path for non-weird character references.
+        try:
+            return chr(numeric), False
+        except (ValueError, OverflowError):
+            # This shouldn't happen, since these cases should have been handled
+            # above, but if it does, return REPLACEMENT CHARACTER
+            return replacement, True
 
     @classmethod
     def detwingle(

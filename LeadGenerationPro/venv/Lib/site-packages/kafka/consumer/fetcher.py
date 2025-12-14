@@ -508,7 +508,7 @@ class Fetcher(six.Iterator):
         return dict(timestamps_by_node)
 
     def _send_list_offsets_request(self, node_id, timestamps_and_epochs):
-        version = self._client.api_version(ListOffsetsRequest, max_version=4)
+        version = self._client.api_version(ListOffsetsRequest, max_version=5)
         if self.config['isolation_level'] == 'read_committed' and version < 2:
             raise Errors.UnsupportedVersionError('read_committed isolation level requires ListOffsetsRequest >= v2')
         by_topic = collections.defaultdict(list)
@@ -521,14 +521,14 @@ class Fetcher(six.Iterator):
                 data = (tp.partition, timestamp, 1)
             by_topic[tp.topic].append(data)
 
-        if version <= 1:
+        if version >= 2:
             request = ListOffsetsRequest[version](
                     -1,
+                    self._isolation_level,
                     list(six.iteritems(by_topic)))
         else:
             request = ListOffsetsRequest[version](
                     -1,
-                    self._isolation_level,
                     list(six.iteritems(by_topic)))
 
         # Client returns a future that only fails on network issues
@@ -588,7 +588,9 @@ class Fetcher(six.Iterator):
                               " message format version is before 0.10.0", partition)
                 elif error_type in (Errors.NotLeaderForPartitionError,
                                     Errors.ReplicaNotAvailableError,
-                                    Errors.KafkaStorageError):
+                                    Errors.KafkaStorageError,
+                                    Errors.OffsetNotAvailableError,
+                                    Errors.LeaderNotAvailableError):
                     log.debug("Attempt to fetch offsets for partition %s failed due"
                               " to %s, retrying.", error_type.__name__, partition)
                     partitions_to_retry.add(partition)
@@ -659,7 +661,8 @@ class Fetcher(six.Iterator):
             elif not self._client.ready(node_id):
                 # Until we support send request queues, any attempt to send to a not-ready node will be
                 # immediately failed with NodeNotReadyError.
-                log.debug("Skipping fetch for partition %s because connection to leader node is not ready yet")
+                log.debug("Skipping fetch for partition %s because connection to leader node is not ready yet",
+                        partition)
 
             elif node_id in self._nodes_with_pending_fetch_requests:
                 log.debug("Skipping fetch for partition %s because there is a pending fetch request to node %s",

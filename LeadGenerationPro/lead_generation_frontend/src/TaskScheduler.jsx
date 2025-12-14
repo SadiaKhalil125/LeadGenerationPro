@@ -6,6 +6,7 @@ import {
     Trash2,
     Database,
     Map,
+    X,
     List,
     CheckCircle,
     AlertCircle,

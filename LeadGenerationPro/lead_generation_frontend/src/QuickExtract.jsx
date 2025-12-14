@@ -20,7 +20,9 @@ import {
   Trash2,
   ArrowRightCircle,
   FileText,
-  Search // Added Search icon
+  Search,
+  ChevronLeft,
+  ChevronRight 
 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -46,9 +48,10 @@ const GOOGLE_MAPS_FIELDS = {
 
 /* --- Helper Components Styled --- */
 
-const PreviewModal = ({ data, onClose }) => {
+const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoading = false }) => {
   if (!data) return null;
   const headers = data.data && data.data.length > 0 ? Object.keys(data.data[0]) : [];
+  const isFirstStep = currentStep <= 1;
 
   return (
     <div
@@ -59,74 +62,126 @@ const PreviewModal = ({ data, onClose }) => {
         className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col border border-gray-100"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center p-6 border-b border-gray-100">
-          <div>
+        {/* Header - Keeps QuickExtract styling */}
+        <div className="flex justify-between items-center px-6 py-3 border-b border-gray-100">
+          <div className="flex justify-between horizontal gap-4 items-center">
             <h2 className="text-2xl font-bold text-[#00364A]">Data Preview</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm text-gray-500">Quick Extract</span>
-            </div>
+            <span className="text-xs bg-[#49A3C4]/10 text-[#49A3C4] px-2 py-1 rounded-full">
+                Step {currentStep}
+            </span>
+         
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+            disabled={isLoading}
+            className={`p-2 rounded-full transition-colors ${isLoading ? 'cursor-not-allowed' : 'hover:bg-red-50 text-gray-500 hover:text-red-500'}`}
           >
-            <X size={24} />
+            <X size={20} className={isLoading ? 'text-gray-300' : ''} />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto bg-gray-50/50 flex-grow">
-          <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-100 flex items-start gap-3">
-            <CheckCircle className="text-[#49A3C4] mt-1 shrink-0" size={20} />
-            <div>
-              <p className="font-semibold text-[#00364A]">{data.message}</p>
-              <p className="text-sm text-[#49A3C4]">
-                Showing {data.data?.length || 0} of {data.total_items} total items found.
-              </p>
-            </div>
-          </div>
-
-          {data.data && data.data.length > 0 ? (
-            <div className="overflow-hidden border border-gray-200 rounded-xl shadow-sm bg-white">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-600">
-                  <thead className="bg-[#00364A] text-white text-xs uppercase tracking-wider">
-                    <tr>
-                      {headers.map(header => (
-                        <th key={header} className="px-6 py-4 font-medium whitespace-nowrap">
-                          {header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {data.data.map((item, index) => (
-                      <tr key={index} className="hover:bg-blue-50/50 transition-colors">
-                        {headers.map(header => (
-                          <td key={`${index}-${header}`} className="px-6 py-4 whitespace-nowrap">
-                            {String(item[header])}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+        {/* Content */}
+        <div className="px-6 py-3 overflow-y-auto bg-gray-50/50 flex-grow">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#49A3C4]"></div>
+              <p className="mt-4 text-gray-600 font-medium">Loading next preview data...</p>
+              <p className="text-sm text-gray-500 mt-1">Step {currentStep+1}</p>
             </div>
           ) : (
-            <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-              <Database className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-              <p className="text-gray-500">No data returned for this preview.</p>
-            </div>
+            <>
+              {/* Success Message - QuickExtract styling */}
+              <div className="mb-3 p-4 rounded-xl bg-blue-50 border border-blue-100 flex items-start gap-3">
+                <CheckCircle className="text-[#49A3C4] mt-1 shrink-0" size={20} />
+                <div>
+                  <p className="font-semibold text-[#00364A]">{data.message}</p>
+                  <p className="text-sm text-[#49A3C4]">
+                    Showing {data.data?.length || 0} of {data.total_items} total items found.
+                    
+                  </p>
+                </div>
+              </div>
+
+              {/* Table - Keeps QuickExtract styling */}
+              {data.data && data.data.length > 0 ? (
+                <div className="overflow-hidden border border-gray-200 rounded-xl shadow-sm bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-600">
+                      <thead className="bg-[#00364A] text-white text-xs uppercase tracking-wider">
+                        <tr>
+                          {headers.map(header => (
+                            <th key={header} className="px-6 py-4 font-medium whitespace-nowrap">
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {data.data.map((item, index) => (
+                          <tr key={index} className="text-gray-900 hover:bg-blue-50/50 transition-colors">
+                            {headers.map(header => (
+                              <td key={`${index}-${header}`} className="px-6 py-4 whitespace-nowrap">
+                                {String(item[header])}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
+                  <Database className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+                  <p className="text-gray-500">No data returned for this preview.</p>
+                </div>
+              )}
+            </>
           )}
         </div>
         
-        <div className="flex justify-end p-5 border-t border-gray-100 bg-white rounded-b-2xl">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors mr-2"
-          >
-            Close Preview
-          </button>
+        {/* Footer - Added Next/Previous buttons with QuickExtract styling */}
+        <div className="flex justify-between items-center px-7 py-3 border-t border-gray-100 bg-white rounded-b-2xl">
+          <div>
+            {currentStep > 1 && (
+              <span className="text-sm text-gray-600">Page {currentStep}</span>
+            )}
+          </div>
+          
+          <div className="flex gap-3">
+            {/* Previous Button */}
+            {onPrevious && (
+              <button
+                onClick={onPrevious}
+                disabled={isFirstStep || isLoading}
+                className={`px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors ${
+                  isFirstStep || isLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-black hover:bg-[#00364A]/20'
+                }`}
+              >
+                <ChevronLeft size={18} />
+                Prev
+              </button>
+            )}
+            
+           
+            {/* Next Button */}
+            {onNext && (
+              <button
+                onClick={onNext}
+                disabled={isLoading}
+                className={`px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors ${
+                  isLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-black hover:bg-[#00364A]/90'
+                }`}
+              >
+                Next
+                <ChevronRight size={18} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -257,8 +312,10 @@ export default function QuickExtract() {
   const [fields, setFields] = useState([]); // Dynamic field list
   const [containerSelector, setContainerSelector] = useState("");
   const [previewData, setPreviewData] = useState(null);
+  const [previewCache, setPreviewCache] = useState({}); // Cache by step
+  const [currentPreviewStep, setCurrentPreviewStep] = useState(1);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewNextLoading, setPreviewNextLoading] = useState(false);
+  const [isSubPreviewLoading, setIsSubPreviewLoading] = useState(false);
   const [extractingAsTask, setExtractingAsTask] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
   const [taskExecutionId, setTaskExecutionId] = useState(null);
@@ -359,7 +416,145 @@ export default function QuickExtract() {
   }, [selectedEntity, createNewEntity, storeInDatabase]);
 
   // --- LOGIC ---
+// In your QuickExtract component:
 
+
+  const handlePreview = async (step = 1) => {
+    // Convert step to number to be safe
+    const stepNumber = Number(step) || 1;
+
+    console.log("Previewing at step:", stepNumber);
+
+    if (!url.trim()) {
+      alert("URL is required!");
+      return;
+    }
+
+    // Check cache for this step
+    if (previewCache[stepNumber]) {
+      console.log("Using cached preview data for step", stepNumber);
+      setPreviewData(previewCache[stepNumber]);
+      setCurrentPreviewStep(stepNumber);
+      return;
+    }
+
+    const field_mappings = {};
+    let hasValidMappings = false;
+
+    fields.forEach((f) => {
+      if (!f.attribute.trim()) return;
+      if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
+        field_mappings[f.attribute] = { 
+          selector: f.selector || "", 
+          extract: f.metadata || "text" 
+        };
+        hasValidMappings = true;
+      } else if (f.selector.trim()) {
+        field_mappings[f.attribute] = { 
+          selector: f.selector, 
+          extract: f.metadata || "text" 
+        };
+        hasValidMappings = true;
+      }
+    });
+
+    if (!hasValidMappings) {
+      alert("Add at least one field mapping with attribute name and selector!");
+      return;
+    }
+
+    // If step > 1 but no pagination config, show alert
+    if (stepNumber > 1 && !paginationType) {
+      alert("Pagination configuration is required for Preview Next. Please configure pagination in Advanced Options.");
+      return;
+    }
+
+    setPreviewLoading(true);
+
+    try {
+      // Only include pagination config for steps > 1
+      const paginationPayload = stepNumber > 1 ? buildPaginationPayload() : null;
+
+      // Build the request body
+      const requestBody = {
+        url,
+        container_selector: containerSelector || null,
+        field_mappings,
+        timeout: 15
+      };
+
+      // Add pagination config only if it exists
+      if (paginationPayload) {
+        requestBody.pagination_config = paginationPayload;
+      }
+
+      console.log("Sending request for step:", stepNumber);
+      console.log("Request body:", requestBody);
+
+      const res = await fetch(`${API_BASE}/quick-extract/paginated-preview?preview_step=${stepNumber}`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json", 
+          "ngrok-skip-browser-warning": "true" 
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      // Check if response is OK
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Server error:", errorText);
+        throw new Error(`HTTP ${res.status}: ${errorText}`);
+      }
+
+      const data = await res.json();
+      console.log("Response data:", data);
+
+      if (data.success) {
+        // Cache the result with step info
+        const cachedData = { 
+          ...data, 
+          entity_name: "Quick Extract",
+          preview_step: stepNumber,
+          current_step: stepNumber
+        };
+
+        console.log("Caching preview data for step", stepNumber);
+        setPreviewCache(prev => ({
+          ...prev,
+          [stepNumber]: cachedData
+        }));
+        setPreviewData(cachedData);
+        setCurrentPreviewStep(stepNumber);
+      } else {
+        alert(`Preview failed: ${data.message}`);
+      }
+    } catch (err) {
+      console.error("Preview error:", err);
+      alert(`Preview error: ${err.message}`);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+  // Next/Previous handlers
+  const handleNextPreviewStep = async () => {
+    setIsSubPreviewLoading(true);
+    await handlePreview(currentPreviewStep + 1);
+    setIsSubPreviewLoading(false);
+  };
+
+  const handlePreviousPreviewStep = async () => {
+    setIsSubPreviewLoading(true);
+    await handlePreview(currentPreviewStep - 1);
+    setIsSubPreviewLoading(false);
+  };
+
+  // Clear cache when modal closes
+  const handleModalClose = () => {
+    setPreviewCache({});
+    setPreviewData(null);
+    setCurrentPreviewStep(1);
+  };
   // --- NEW FUNCTION: Fetch Child Selectors ---
   const handleScanSelectors = async () => {
     if (!url) {
@@ -434,112 +629,6 @@ export default function QuickExtract() {
   const buildPaginationPayload = () => {
     if (!paginationType) return null;
     return { type: paginationType, ...paginationConfig };
-  };
-
-  const handlePreview = async () => {
-    if (!url.trim()) {
-      alert("URL is required!");
-      return;
-    }
-    const field_mappings = {};
-    let hasValidMappings = false;
-    
-    fields.forEach((f) => {
-      if (!f.attribute.trim()) return;
-      if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
-        field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
-        hasValidMappings = true;
-      } else if (f.selector.trim()) {
-        field_mappings[f.attribute] = { selector: f.selector, extract: f.metadata || "text" };
-        hasValidMappings = true;
-      }
-    });
-    
-    if (!hasValidMappings) {
-      alert("Add at least one field mapping with attribute name and selector!");
-      return;
-    }
-    
-    setPreviewLoading(true);
-    try {
-      const paginationPayload = buildPaginationPayload();
-      const res = await fetch(`${API_BASE}/quick-extract/preview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-        body: JSON.stringify({
-          url,
-          container_selector: containerSelector || null,
-          field_mappings,
-          pagination_config: paginationPayload,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPreviewData({ ...data, entity_name: "Quick Extract" });
-      } else {
-        alert(`Preview failed: ${data.message}`);
-      }
-    } catch (err) {
-      alert(`Preview error: ${err.message}`);
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const handleNextPreview = async () => {
-    if (!url.trim()) {
-      alert("URL is required!");
-      return;
-    }
-    
-    if (!paginationType) {
-      alert("Pagination configuration is required for Preview Next. Please configure pagination in Advanced Options.");
-      return;
-    }
-    
-    const field_mappings = {};
-    let hasValidMappings = false;
-    
-    fields.forEach((f) => {
-      if (!f.attribute.trim()) return;
-      if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
-        field_mappings[f.attribute] = { selector: f.selector || "", extract: f.metadata || "text" };
-        hasValidMappings = true;
-      } else if (f.selector.trim()) {
-        field_mappings[f.attribute] = { selector: f.selector, extract: f.metadata || "text" };
-        hasValidMappings = true;
-      }
-    });
-    
-    if (!hasValidMappings) {
-      alert("Add at least one field mapping with attribute name and selector!");
-      return;
-    }
-    
-    setPreviewNextLoading(true);
-    try {
-      const paginationPayload = buildPaginationPayload();
-      const res = await fetch(`${API_BASE}/quick-extract/preview-next`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-        body: JSON.stringify({
-          url,
-          container_selector: containerSelector || null,
-          field_mappings,
-          pagination_config: paginationPayload,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPreviewData({ ...data, entity_name: "Quick Extract" });
-      } else {
-        alert(`Preview Next failed: ${data.message}`);
-      }
-    } catch (err) {
-      alert(`Preview Next error: ${err.message}`);
-    } finally {
-      setPreviewNextLoading(false);
-    }
   };
 
   const handleExtractAsTask = async () => {
@@ -883,22 +972,14 @@ export default function QuickExtract() {
                 <div className="flex gap-2">
                    {/* Actions Toolbar */}
                   <button
-                    onClick={handlePreview}
+                    onClick={() => handlePreview(1)}
                     disabled={previewLoading}
-                    className="flex items-center gap-2 px-5 py-2.5 text-[#00364A] bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-blue-50 hover:border-blue-200 hover:text-[#49A3C4] transition-all disabled:opacity-50 font-medium"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-b from-cyan-500 to-cyan-600 text-white rounded-lg shadow-sm hover:from-cyan-500 hover:to-cyan-500 transition-all disabled:opacity-50 font-medium"
                   >
                     {previewLoading ? <Loader2 size={18} className="animate-spin" /> : <Eye size={18} />}
                     Preview
                   </button>
-                  <button
-                    onClick={handleNextPreview}
-                    disabled={previewNextLoading || !paginationType}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-b from-cyan-500 to-cyan-600 text-white rounded-lg shadow-sm hover:bg-cyan-700 transition-all disabled:opacity-50 font-medium"
-                    title={!paginationType ? "Configure pagination in Advanced Options to enable Preview Next" : ""}
-                  >
-                    {previewNextLoading ? <Loader2 size={18} className="animate-spin" /> : <ArrowRightCircle size={18} />}
-                    Preview Next
-                  </button>
+                  
                   <button
                     onClick={handleExtractAsTask}
                     disabled={extractingAsTask}
@@ -1247,7 +1328,7 @@ export default function QuickExtract() {
                         Store Data in Entity (Optional)
                       </label>
                       <div className="space-y-3">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 px-1">
                           <input
                             type="checkbox"
                             id="storeInEntity"
@@ -1344,8 +1425,8 @@ export default function QuickExtract() {
                     
                     {/* CONTAINER SELECTOR with SCAN BUTTON */}
                     <div>
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-                        Container Selector (Optional)
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
+                        Container Selector
                       </label>
                       <div className="flex gap-2">
                         <input
@@ -1378,12 +1459,12 @@ export default function QuickExtract() {
                     </div>
                     
                     <div>
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
                         Max Items (Optional)
                       </label>
                       <input
                         type="number"
-                        placeholder="Leave empty for no limit (default: 40 for Google Maps)"
+                        placeholder="Leave empty for no limit (default: 40)"
                         value={maxItems}
                         onChange={(e) => setMaxItems(e.target.value)}
                         min="1"
@@ -1586,7 +1667,7 @@ export default function QuickExtract() {
                             <div className="flex justify-between items-center mb-3">
                               <input
                                 type="text"
-                                placeholder="Field Name (e.g. title, price)"
+                                placeholder="Enter Field Name (e.g. title, price)"
                                 value={field.attribute}
                                 onChange={(e) => handleFieldChange(field.id, "attribute", e.target.value)}
                                 className="font-mono text-sm font-semibold text-[#00364A] bg-transparent border-b-2 border-transparent focus:border-[#49A3C4] outline-none px-1"
@@ -1741,7 +1822,14 @@ export default function QuickExtract() {
         </div>
       </div>
 
-      {previewData && <PreviewModal data={previewData} onClose={() => setPreviewData(null)} />}
+      {previewData && <PreviewModal
+        data={previewData}
+        onClose={handleModalClose}
+        onNext={handleNextPreviewStep}
+        onPrevious={handlePreviousPreviewStep}
+        currentStep={currentPreviewStep}
+        isLoading={previewLoading || isSubPreviewLoading}
+      />}
     </div>
   );
 }

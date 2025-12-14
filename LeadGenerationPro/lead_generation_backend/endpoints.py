@@ -23,7 +23,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from crawl4Util import extract_website
 from scraping_router import route_scraping_request
-from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login
+from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login, leads_service
+
+from routers.leads_service import router as leads_service_router
 from routers.scheduler_config import scheduler, task_lifespan
 from routers.login import create_users_table
 from urllib.parse import urljoin
@@ -58,6 +60,7 @@ app.include_router(entity_mappings_crud.router, prefix="/mapping", tags=["Entity
 app.include_router(task_crud.router, prefix="/task", tags=["Task Management"])
 app.include_router(chat_crud.router, prefix="/chat", tags=["Chat Management"])
 app.include_router(login.router, prefix="/auth", tags=["Authentication"])
+app.include_router(leads_service_router, tags=["Leads Service"])
 
 
 # CORS middleware
@@ -433,6 +436,134 @@ async def quick_extract_preview_next(request: QuickExtractRequest):
         logger.error("Error during quick extract preview next", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Quick extract preview next error: {e}")
 
+@app.post("/quick-extract/paginated-preview", response_model=QuickExtractResponse)
+async def quick_extract_paginated_preview(request: QuickExtractRequest, preview_step: int = 1):
+    """
+    Unified paginated preview endpoint for QuickExtract.
+    - preview_step = 1 → first 5 items (cheap)
+    - preview_step >= 2 → progressive pagination preview (last 5 items)
+    """
+    try:
+        step = preview_step or 1
+
+        # STEP 1 → SIMPLE PREVIEW (First 5 items)
+        if step == 1:
+            # Use dummy entity_name for quick extract
+            scrape_request = ScrapeRequest(
+                entity_name="quick_extract_preview",
+                url=request.url,
+                container_selector=request.container_selector,
+                field_mappings=request.field_mappings,
+                max_items=5,  # Limit to 5 for first preview
+                timeout=request.timeout or 15,
+                pagination_config=None  # No pagination for first step
+            )
+            
+            scrape_response = await route_scraping_request(scrape_request)
+
+            if not scrape_response.success:
+                return QuickExtractResponse(
+                    url=str(request.url),
+                    scraped_at=datetime.now(),
+                    total_items=0,
+                    data=[],
+                    success=False,
+                    message=f"Preview failed: {scrape_response.message}"
+                )
+
+            preview_data = scrape_response.data[:5]
+            return QuickExtractResponse(
+                url=scrape_response.url,
+                scraped_at=scrape_response.scraped_at,
+                total_items=scrape_response.total_items,
+                data=preview_data,
+                success=True,
+                message=f"Preview successful - Page 1 (first 5 items)"
+            )
+
+        # STEP >= 2 → PAGINATED / NEXT PREVIEW
+        if not request.pagination_config:
+            return QuickExtractResponse(
+                url=str(request.url),
+                scraped_at=datetime.now(),
+                total_items=0,
+                data=[],
+                success=False,
+                message="Pagination configuration is required for step 2+ previews"
+            )
+
+        # Convert pagination config to dict
+        pagination_dict = request.pagination_config.model_dump() if hasattr(request.pagination_config, 'model_dump') else request.pagination_config.dict() if hasattr(request.pagination_config, 'dict') else dict(request.pagination_config)
+        
+        pagination_type = pagination_dict.get("type")
+        
+        if not pagination_type:
+            return QuickExtractResponse(
+                url=str(request.url),
+                scraped_at=datetime.now(),
+                total_items=0,
+                data=[],
+                success=False,
+                message="Pagination type is required for step 2+ previews"
+            )
+
+        # Adjust pagination depth based on step
+        if pagination_type not in ["button_click", "scroll", "ajax_click"]:
+            pagination_dict["max_pages"] = step  # For query_param, offset, path
+        elif pagination_type in ["button_click", "ajax_click"]:
+            pagination_dict["click_steps"] = step
+        else:  # scroll
+            pagination_dict["scroll_steps"] = step
+
+        # Build full scrape request for paginated preview
+        scrape_request = ScrapeRequest(
+            entity_name="quick_extract_paginated_preview",
+            url=request.url,
+            container_selector=request.container_selector,
+            field_mappings=request.field_mappings,
+            max_items=500,  # Must be > 5 to get last 5 items
+            timeout=request.timeout or 15,
+            pagination_config=PaginationConfig(**pagination_dict)
+        )
+        
+        scrape_response = await route_scraping_request(scrape_request)
+
+        if not scrape_response.success:
+            return QuickExtractResponse(
+                url=str(request.url),
+                scraped_at=scrape_response.scraped_at,
+                total_items=0,
+                data=[],
+                success=False,
+                message=f"Paginated preview failed: {scrape_response.message}"
+            )
+        
+        # Get last 5 items to ensure data from the current page/step
+        preview_data = scrape_response.data[-5:] if scrape_response.data else []
+        
+        if not preview_data:
+            return QuickExtractResponse(
+                url=str(request.url),
+                scraped_at=scrape_response.scraped_at,
+                total_items=scrape_response.total_items,
+                data=[],
+                success=False,
+                message=f"No items found for page {step}"
+            )
+
+        return QuickExtractResponse(
+            url=scrape_response.url,
+            scraped_at=scrape_response.scraped_at,
+            total_items=scrape_response.total_items,
+            data=preview_data,
+            success=True,
+            message=f"Preview successful - Page {step} (last 5 items)"
+        )
+
+    except Exception as e:
+        logger.error("Error during quick extract paginated preview", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Quick extract preview error: {e}")
+    
 @app.post("/quick-extract/execute-as-task")
 async def quick_extract_execute_as_task(request: QuickExtractRequest):
     """

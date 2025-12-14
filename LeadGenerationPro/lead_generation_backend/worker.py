@@ -72,15 +72,20 @@ print(f" Worker is now running and waiting for tasks on topic '{KAFKA_TOPIC}'...
 
 # Make the consumer loop resilient on Windows where kafka-python sometimes
 # raises ValueError: Invalid file descriptor: -1 from selectors.unregister
+
 def create_consumer():
     return KafkaConsumer(
         KAFKA_TOPIC,
         bootstrap_servers=BOOTSTRAP,
         auto_offset_reset='earliest',
-        enable_auto_commit=True,
+        enable_auto_commit=True,  # Keep this if you want auto-commit
         group_id='scraping-workers',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        max_poll_interval_ms=600000
+        max_poll_interval_ms=600000,  # Already good - 10 minutes
+        
+        # ADD JUST THESE 2 LINES:
+        session_timeout_ms=45000,      # 45 seconds (default is 10s)
+        heartbeat_interval_ms=15000    # 15 seconds (default is 3s)
     )
 
 while True:

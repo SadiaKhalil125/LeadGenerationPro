@@ -975,17 +975,39 @@ class TestMethods:
 
     @pytest.mark.parametrize("args", [
         (None,),
+        (None, None),
+        (None, None, -1),
         (0,),
+        (0, None),
+        (0, None, -1),
         (1,),
+        (1, None),
+        (1, None, -1),
         (3,),
+        (3, None),
         (5,),
+        (5, None),
+        (5, 5),
+        (5, 5, -1),
         (6,),  # test index past the end
+        (6, None),
+        (6, None, -1),
+        (6, 7),  # test start and stop index past the end
+        (4, 3),  # test start > stop index
         (-1,),
+        (-1, None),
+        (-1, None, -1),
         (-3,),
+        (-3, None),
         ([3, 4],),
+        ([3, 4], None),
         ([2, 4],),
         ([-3, 5],),
+        ([-3, 5], None),
+        ([-3, 5], None, -1),
         ([0, -5],),
+        ([0, -5], None),
+        ([0, -5], None, -1),
         (1, 4),
         (-3, 5),
         (None, -1),
@@ -995,8 +1017,16 @@ class TestMethods:
         (None, None, -1),
         ([0, 6], [-1, 0], [2, -1]),
     ])
-    def test_slice(self, args, dt):
-        buf = np.array(["hello", "world"], dtype=dt)
+    @pytest.mark.parametrize("buf", [
+        ["hello", "world"],
+        ['hello world', 'γεια σου κόσμε', '你好世界', '👋 🌍'],
+    ])
+    def test_slice(self, args, buf, dt):
+        if dt == "S" and "你好世界" in buf:
+            pytest.skip("Bytes dtype does not support non-ascii input")
+        if len(buf) == 4:
+            args = tuple(s * 2 if isinstance(s, list) else s for s in args)
+        buf = np.array(buf, dtype=dt)
         act = np.strings.slice(buf, *args)
         bcast_args = tuple(np.broadcast_to(arg, buf.shape) for arg in args)
         res = np.array([s[slice(*arg)]

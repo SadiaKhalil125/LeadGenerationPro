@@ -136,22 +136,22 @@ def bfs_edges(G, source, reverse=False, depth_limit=None, sort_neighbors=None):
 
     Examples
     --------
-    To get the edges in a breadth-first search::
+    To get the edges in a breadth-first search:
 
-        >>> G = nx.path_graph(3)
-        >>> list(nx.bfs_edges(G, 0))
-        [(0, 1), (1, 2)]
-        >>> list(nx.bfs_edges(G, source=0, depth_limit=1))
-        [(0, 1)]
+    >>> G = nx.path_graph(3)
+    >>> list(nx.bfs_edges(G, 0))
+    [(0, 1), (1, 2)]
+    >>> list(nx.bfs_edges(G, source=0, depth_limit=1))
+    [(0, 1)]
 
-    To get the nodes in a breadth-first search order::
+    To get the nodes in a breadth-first search order:
 
-        >>> G = nx.path_graph(3)
-        >>> root = 2
-        >>> edges = nx.bfs_edges(G, root)
-        >>> nodes = [root] + [v for u, v in edges]
-        >>> nodes
-        [2, 1, 0]
+    >>> G = nx.path_graph(3)
+    >>> root = 2
+    >>> edges = nx.bfs_edges(G, root)
+    >>> nodes = [root] + [v for u, v in edges]
+    >>> nodes
+    [2, 1, 0]
 
     Notes
     -----
@@ -513,7 +513,7 @@ def bfs_labeled_edges(G, sources):
     # directed case and level edges are reported on their first occurrence in
     # the undirected case.  Note our use of visited.discard -- this is built-in
     # thus somewhat faster than a python-defined def nop(x): pass
-    depth = dict.fromkeys(sources, 0)
+    depth = {s: 0 for s in sources}
     queue = deque(depth.items())
     push = queue.append
     pop = queue.popleft

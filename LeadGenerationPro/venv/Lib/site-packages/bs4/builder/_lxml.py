@@ -81,6 +81,12 @@ class LXMLTreeBuilderForXML(TreeBuilder):
 
     is_xml: bool = True
 
+    #: Set this to true (probably by passing huge_tree=True into the :
+    #: BeautifulSoup constructor) to enable the lxml feature "disable security
+    #: restrictions and support very deep trees and very long text
+    #: content".
+    huge_tree: bool
+
     processing_instruction_class: Type[ProcessingInstruction]
 
     NAME: str = "lxml-xml"
@@ -153,7 +159,7 @@ class LXMLTreeBuilderForXML(TreeBuilder):
         """
         if self._default_parser is not None:
             return self._default_parser
-        return self.DEFAULT_PARSER_CLASS(target=self, recover=True, encoding=encoding)
+        return self.DEFAULT_PARSER_CLASS(target=self, recover=True, huge_tree=self.huge_tree, encoding=encoding)
 
     def parser_for(self, encoding: Optional[_Encoding]) -> _LXMLParser:
         """Instantiate an appropriate parser for the given encoding.
@@ -166,14 +172,15 @@ class LXMLTreeBuilderForXML(TreeBuilder):
 
         if callable(parser):
             # Instantiate the parser with default arguments
-            parser = parser(target=self, recover=True, encoding=encoding)
+            parser = parser(target=self, recover=True, huge_tree=self.huge_tree, encoding=encoding)
         return parser
 
     def __init__(
-        self,
-        parser: Optional[etree.XMLParser] = None,
-        empty_element_tags: Optional[Set[str]] = None,
-        **kwargs: Any,
+            self,
+            parser: Optional[etree.XMLParser] = None,
+            empty_element_tags: Optional[Set[str]] = None,
+            huge_tree: bool = False,
+            **kwargs: Any,
     ):
         # TODO: Issue a warning if parser is present but not a
         # callable, since that means there's no way to create new
@@ -189,6 +196,8 @@ class LXMLTreeBuilderForXML(TreeBuilder):
 
         if "attribute_dict_class" not in kwargs:
             kwargs["attribute_dict_class"] = XMLAttributeDict
+        self.huge_tree = huge_tree
+
         super(LXMLTreeBuilderForXML, self).__init__(**kwargs)
 
     def _getNsTag(self, tag: str) -> Tuple[Optional[str], str]:
