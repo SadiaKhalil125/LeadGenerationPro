@@ -25,4 +25,6 @@ email-validator
 python-jose[cryptography]
 bcrypt==4.1.2
 passlib==1.7.4
+google
 google-generativeai
+

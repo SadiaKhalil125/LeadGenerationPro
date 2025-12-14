@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle, List, ArrowLeft } from "lucide-react";
 import API_BASE from "./api_base";
-
+import { useNavigate } from "react-router-dom";
 const EntityDataScreen = () => {
   const [searchParams] = useSearchParams();
   const [entities, setEntities] = useState([]);
@@ -12,7 +12,7 @@ const EntityDataScreen = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pageSize] = useState(10);  // or make it adjustable
-
+  const navigate = useNavigate();
   // Get entity from query parameter if provided
   const entityFromParam = searchParams.get('entity');
 

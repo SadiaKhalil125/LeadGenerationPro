@@ -525,7 +525,7 @@ const NavigationPage = () => {
                   </p>
                   <button
                     style={styles.actionButton("#2C5F6F")}
-                    onClick={() => navigate("/mappingmanager")}
+                    onClick={() => navigate("/entitymappingform")}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = "white";
                       e.currentTarget.style.color = "#2C5F6F";
@@ -537,7 +537,7 @@ const NavigationPage = () => {
                       e.currentTarget.style.border = "2px solid #2C5F6F";
                     }}
                   >
-                    View Mappings
+                    Create Mapping
                   </button>
                 </div>
 
