@@ -277,7 +277,7 @@ LeadGenerationPro/
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/SadiaKhalil125/LeadGenerationPro.git
    cd LeadGenerationPro/lead_generation_backend
    ```
 
