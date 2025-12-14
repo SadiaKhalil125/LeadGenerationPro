@@ -23,6 +23,7 @@ import Login from './Login'
 import Chatbot from './Chatbot'
 import QuickExtract from './QuickExtract'
 import LeadGeneratorPage from './UserLeadsDashboard';
+import LeadSyncTest from '../LeadsSyncPage';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useContext(AuthContext);
@@ -57,6 +58,7 @@ function App() {
         <Route path="/chatbot" element={<Chatbot />} />
         <Route path="/quick-extract" element={<QuickExtract />} />
         <Route path="/userleadsdashboard" element={<LeadGeneratorPage />} />
+        <Route path="/leadssync" element= {<LeadSyncTest />} />
       </Routes>
     </Router>
     </AuthProvider>

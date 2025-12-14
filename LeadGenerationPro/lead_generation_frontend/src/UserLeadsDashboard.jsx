@@ -1,6 +1,22 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Locate } from 'lucide-react';
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { Locate, Phone, Mail } from "lucide-react";
+import { FiFilter, FiStar, FiPhone, FiGlobe, FiDownload, FiArrowUp, FiArrowDown } from "react-icons/fi";
+import { BsSortDown, BsBuilding, BsSourceforge } from "react-icons/bs";
+import API_BASE from "./api_base"; // Your FastAPI backendS
+
+// Predefined options for dropdowns
+const businessTypes = [
+  "Software", "Healthcare", "Finance", "Retail", "Manufacturing",
+  "Education", "Real Estate", "Construction",
+  "Marketing", "Consulting", "Restaurant", "Entertainment", "Other"
+];
+
+const companySizes = [
+  "1-10 employees", "11-50 employees", "51-200 employees", 
+  "201-500 employees", "501-1000 employees", "1000+ employees"
+];
+
 export default function LeadGeneratorPage() {
   const [businessType, setBusinessType] = useState('');
   const [location, setLocation] = useState('');
@@ -8,60 +24,113 @@ export default function LeadGeneratorPage() {
   const [leads, setLeads] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchPerformed, setSearchPerformed] = useState(false);
+  const [searchInfo, setSearchInfo] = useState({ count: 0, filters: {} });
+  // Add these states near your other useState declarations
+  const [sortField, setSortField] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [filters, setFilters] = useState({
+    minRating: 0,
+    hasContact: false,
+    source: ''
+  });
+ 
+  // Filter and sort logic (add this before rendering the table)
+  const filteredAndSortedLeads = React.useMemo(() => {
+    let result = [...leads];
+    
+    // Apply filters
+    if (filters.minRating > 0) {
+      result = result.filter(lead => lead.rating && lead.rating >= filters.minRating);
+    }
+    
+    if (filters.hasContact) {
+      result = result.filter(lead => lead.phone || lead.email);
+    }
+    
+    if (filters.hasWebsite) {
+      result = result.filter(lead => lead.website);
+    }
+    
+    if (filters.industry) {
+      result = result.filter(lead => lead.category === filters.industry);
+    }
+    
+    if (filters.source) {
+      result = result.filter(lead => lead.source === filters.source);
+    }
+    
+    // Apply sorting
+    result.sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+      
+      // Handle null/undefined values
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+      
+      // Handle numeric sorting for ratings and review counts
+      if (sortField === 'rating' || sortField === 'reviews_count') {
+        aVal = parseFloat(aVal) || 0;
+        bVal = parseFloat(bVal) || 0;
+      }
+      
+      // Handle string sorting
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+      
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+    
+    return result;
+  }, [leads, filters, sortField, sortDirection]);
 
-  const businessTypes = [
-    'Technology & Software',
-    'Healthcare & Medical',
-    'Finance & Banking',
-    'Retail & E-commerce',
-    'Manufacturing',
-    'Real Estate',
-    'Education',
-    'Hospitality & Tourism',
-    'Marketing & Advertising',
-    'Construction',
-    'Transportation & Logistics',
-    'Energy & Utilities'
-  ];
-
-  const companySizes = [
-    '1-10 employees',
-    '11-50 employees',
-    '51-200 employees',
-    '201-500 employees',
-    '501-1000 employees',
-    '1000+ employees'
-  ];
-
-  const sampleLeads = [
-    { id: 1, company: 'TechFlow Solutions', industry: 'Technology & Software', location: 'San Francisco, CA', size: '201-500 employees', contact: 'Sarah Johnson', email: 'sarah@techflow.com', phone: '(415) 555-0123', website: 'techflow.com' },
-    { id: 2, company: 'HealthFirst Medical', industry: 'Healthcare & Medical', location: 'Boston, MA', size: '501-1000 employees', contact: 'Michael Chen', email: 'mchen@healthfirst.com', phone: '(617) 555-0145', website: 'healthfirst.com' },
-    { id: 3, company: 'FinSecure Bank', industry: 'Finance & Banking', location: 'New York, NY', size: '1000+ employees', contact: 'Robert Williams', email: 'rwilliams@finsecure.com', phone: '(212) 555-0189', website: 'finsecure.com' },
-    { id: 4, company: 'EcomExpress', industry: 'Retail & E-commerce', location: 'Seattle, WA', size: '51-200 employees', contact: 'Jennifer Lee', email: 'jlee@ecomespress.com', phone: '(206) 555-0167', website: 'ecomespress.com' },
-    { id: 5, company: 'BuildRight Constructors', industry: 'Construction', location: 'Chicago, IL', size: '201-500 employees', contact: 'David Miller', email: 'dmiller@buildright.com', phone: '(312) 555-0134', website: 'buildright.com' },
-    { id: 6, company: 'EduTech Academy', industry: 'Education', location: 'Austin, TX', size: '11-50 employees', contact: 'Amanda Rodriguez', email: 'arodriguez@edutech.com', phone: '(512) 555-0178', website: 'edutech.com' },
-  ];
-
-  const handleSearch = () => {
-    if (!businessType || !location || !companySize) {
-      alert('Please fill all fields to search for leads');
+  const handleSearch = async () => {
+    if (!businessType || !location) {
+      alert('Please fill both Business Type and Location fields to search for leads');
       return;
     }
 
     setIsLoading(true);
     setSearchPerformed(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      const filteredLeads = sampleLeads.filter(lead => 
-        lead.industry === businessType && 
-        lead.location.toLowerCase().includes(location.toLowerCase()) &&
-        lead.size === companySize
-      );
-      
-      setLeads(filteredLeads.length > 0 ? filteredLeads : sampleLeads.slice(0, 3));
+
+    try {
+      // Build query parameters matching the backend endpoint
+      const params = new URLSearchParams({
+        business_type: businessType,
+        location: location,
+        company_size: companySize || "", // Optional parameter
+        limit: "50", // Default from backend
+        offset: "0"
+      });
+
+      const res = await fetch(`${API_BASE}/leads/search?${params}`);
+      const data = await res.json();
+
+      if (!data.success) {
+        alert(`Search failed: ${data.detail || "Unknown error"}`);
+        setLeads([]);
+        setSearchInfo({ count: 0, filters: {} });
+      } else {
+        setLeads(data.data || []);
+        setSearchInfo({
+          count: data.count || 0,
+          filters: data.filters || {}
+        });
+      }
+    } catch (err) {
+      console.error("Search error:", err);
+      alert("Server error - check if backend is running");
+      setLeads([]);
+      setSearchInfo({ count: 0, filters: {} });
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleExportCSV = () => {
@@ -70,27 +139,37 @@ export default function LeadGeneratorPage() {
       return;
     }
     
-    const headers = ['Company', 'Industry', 'Location', 'Size', 'Contact', 'Email', 'Phone', 'Website'];
+    // Map backend fields to CSV columns
+    const headers = [
+      'Company', 'Industry', 'Location', 'Phone', 'Email', 
+      'Website', 'Rating', 'Reviews', 'Source', 'Date Added'
+    ];
+    
     const csvContent = [
       headers.join(','),
       ...leads.map(lead => [
-        `"${lead.company}"`,
-        `"${lead.industry}"`,
-        `"${lead.location}"`,
-        `"${lead.size}"`,
-        `"${lead.contact}"`,
-        `"${lead.email}"`,
-        `"${lead.phone}"`,
-        `"${lead.website}"`
+        `"${lead.name || ''}"`,
+        `"${lead.category || ''}"`,
+        `"${lead.address || ''}"`,
+        `"${lead.phone || ''}"`,
+        `"${lead.email || ''}"`,
+        `"${lead.website || ''}"`,
+        `"${lead.rating || ''}"`,
+        `"${lead.reviews_count || ''}"`,
+        `"${lead.source || ''}"`,
+        `"${new Date(lead.created_at).toLocaleDateString() || ''}"`
       ].join(','))
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `leads_${businessType}_${Date.now()}.csv`;
+    a.download = `leads_${businessType}_${location}_${Date.now()}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
     
     alert(`Exported ${leads.length} leads as CSV`);
   };
@@ -101,8 +180,8 @@ export default function LeadGeneratorPage() {
       return;
     }
     
-    // In a real implementation, you would use a library like SheetJS
-    alert(`Exported ${leads.length} leads as Excel file`);
+    // For now, we'll use CSV but you can integrate SheetJS for real Excel export
+    alert(`Excel export would be implemented with a library like SheetJS. ${leads.length} leads ready.`);
   };
 
   const handleReset = () => {
@@ -111,6 +190,27 @@ export default function LeadGeneratorPage() {
     setCompanySize('');
     setLeads([]);
     setSearchPerformed(false);
+    setSearchInfo({ count: 0, filters: {} });
+  };
+
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return 'N/A';
+    // Simple formatting - you can enhance this
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 10) {
+      return `(${cleaned.substring(0,3)}) ${cleaned.substring(3,6)}-${cleaned.substring(6)}`;
+    }
+    return phone;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   return (
@@ -121,7 +221,7 @@ export default function LeadGeneratorPage() {
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
       padding: '20px'
     }}>
-      {/* Header */}
+      {/* Header - Keep exactly as is */}
       <header style={{
         display: 'flex',
         justifyContent: 'center',
@@ -161,17 +261,17 @@ export default function LeadGeneratorPage() {
             gap: '30px'
           }}>
             <Link to="/chatbot" style={{
-    fontWeight: '500',
-    color: '#00364A',
-    textDecoration: 'none',
-    transition: 'all 0.3s',
-    padding: '8px 20px',
-    borderRadius: '10px'
-  }}
-  onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.1)'}
-  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
-    Chatbot
-  </Link>
+              fontWeight: '500',
+              color: '#00364A',
+              textDecoration: 'none',
+              transition: 'all 0.3s',
+              padding: '8px 20px',
+              borderRadius: '10px'
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.1)'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
+              Chatbot
+            </Link>
             <a href="#" style={{
               fontWeight: '500',
               color: '#00364A',
@@ -228,7 +328,7 @@ export default function LeadGeneratorPage() {
         margin: '20px auto',
         padding: '0 20px'
       }}>
-        {/* Hero Section */}
+        {/* Hero Section - Keep as is */}
         <section style={{
           backgroundColor: 'white',
           borderRadius: '25px',
@@ -238,9 +338,6 @@ export default function LeadGeneratorPage() {
           position: 'relative',
           overflow: 'hidden'
         }}>
-          {/* Background Pattern */}
-          
-          
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
@@ -324,7 +421,7 @@ export default function LeadGeneratorPage() {
                 Customize Your Search
               </h2>
 
-              {/* Form */}
+              {/* Form - Keep as is */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
                 {/* Business Type */}
                 <div>
@@ -334,7 +431,6 @@ export default function LeadGeneratorPage() {
                     fontWeight: '600',
                     color: '#00364A'
                   }}>
-                    
                     Business Type / Industry
                   </label>
                   <select
@@ -376,14 +472,13 @@ export default function LeadGeneratorPage() {
                     fontWeight: '600',
                     color: '#00364A'
                   }}>
-                    
                     Location (City, State, or Country)
                   </label>
                   <input
                     type="text"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    placeholder="e.g., San Francisco, CA or United States"
+                    placeholder="e.g. Lahore, United States"
                     style={{
                       width: '100%',
                       padding: '16px 20px',
@@ -414,7 +509,6 @@ export default function LeadGeneratorPage() {
                     fontWeight: '600',
                     color: '#00364A'
                   }}>
-                    
                     Company Size
                   </label>
                   <select
@@ -533,29 +627,11 @@ export default function LeadGeneratorPage() {
                   </button>
                 </div>
               </div>
-
-              {/* Quick Tips */}
-              <div style={{
-                marginTop: '30px',
-                padding: '20px',
-                backgroundColor: 'rgba(73, 163, 196, 0.1)',
-                borderRadius: '12px',
-                fontSize: '14px',
-                color: '#00364A',
-                opacity: 0.8
-              }}>
-                <div style={{ fontWeight: '600', marginBottom: '8px' }}>💡 Tips for better results:</div>
-                <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                  <li>Be specific with location for targeted leads</li>
-                  <li>Combine filters for precise matching</li>
-                  <li>Save successful searches for future use</li>
-                </ul>
-              </div>
             </div>
           </div>
         </section>
 
-        {/* Results Section */}
+        {/* Results Section - UPDATED for new API response */}
         {searchPerformed && (
           <section style={{
             backgroundColor: 'white',
@@ -580,10 +656,10 @@ export default function LeadGeneratorPage() {
                   color: '#00364A',
                   marginBottom: '10px'
                 }}>
-                  Found {leads.length} Leads
+                  Showing {filteredAndSortedLeads.length} of {leads.length} Leads
                 </h2>
                 <p style={{ color: '#49A3C4', fontWeight: '600' }}>
-                  {businessType} • {location || 'Anywhere'} • {companySize}
+                  {businessType} • {location || 'Anywhere'} • {companySize || 'Any size'}
                 </p>
               </div>
               
@@ -660,9 +736,285 @@ export default function LeadGeneratorPage() {
                 </button>
               </div>
             </div>
+           {leads.length > 0 && (
+  <>
+    {/* Floating Controls Bar - Line 1 */}
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '15px',
+      padding: '15px 20px',
+      backgroundColor: '#F8FBFF',
+      borderRadius: '10px',
+      border: '1px solid rgba(73, 163, 196, 0.2)',
+      flexWrap: 'wrap',
+      gap: '15px'
+    }}>
+      
+      {/* Left: Filter Controls */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '20px',
+        flexWrap: 'wrap'
+      }}>
+         <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontWeight: '600',
+    color: '#00364A',
+    fontSize: '13px'
+  }}>
+    <FiFilter size={14} />
+    Filter:
+  </div>
+        {/* Rating Filter */}
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            position: 'absolute',
+            left: '12px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#49A3C4',
+            zIndex: 1
+          }}>
+            <FiStar size={14} />
+          </div>
+          <select
+            value={filters.minRating}
+            onChange={(e) => setFilters({...filters, minRating: parseFloat(e.target.value)})}
+            style={{
+              padding: '10px 12px 10px 36px',
+              border: '1px solid rgba(0, 54, 74, 0.15)',
+              borderRadius: '6px',
+              fontSize: '13px',
+              backgroundColor: 'white',
+              color: '#00364A',
+              outline: 'none',
+              cursor: 'pointer',
+              minWidth: '140px',
+              appearance: 'none'
+            }}
+          >
+            <option value="0">All Ratings</option>
+            <option value="3.0">3.0+ Stars</option>
+            <option value="3.5">3.5+ Stars</option>
+            <option value="4.0">4.0+ Stars</option>
+            <option value="4.5">4.5+ Stars</option>
+          </select>
+        </div>
 
-            {/* Leads Table */}
-            {leads.length > 0 ? (
+        {/* Source Filter */}
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            position: 'absolute',
+            left: '12px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#49A3C4',
+            zIndex: 1
+          }}>
+            <BsSourceforge size={14} />
+          </div>
+          <select
+            value={filters.source}
+            onChange={(e) => setFilters({...filters, source: e.target.value})}
+            style={{
+              padding: '10px 12px 10px 36px',
+              border: '1px solid rgba(0, 54, 74, 0.15)',
+              borderRadius: '6px',
+              fontSize: '13px',
+              backgroundColor: 'white',
+              color: '#00364A',
+              outline: 'none',
+              cursor: 'pointer',
+              minWidth: '160px',
+              appearance: 'none'
+            }}
+          >
+            <option value="">All Sources</option>
+            {Array.from(new Set(leads.map(l => l.source).filter(Boolean))).map(source => (
+              <option key={source} value={source}>{source}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Contact Checkbox */}
+        <label style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          cursor: 'pointer',
+          fontWeight: '500',
+          color: '#00364A',
+          fontSize: '13px',
+          padding: '8px 12px',
+          backgroundColor: filters.hasContact ? 'rgba(73, 163, 196, 0.1)' : 'transparent',
+          borderRadius: '6px',
+          border: `1px solid ${filters.hasContact ? '#49A3C4' : 'rgba(0, 54, 74, 0.15)'}`,
+          transition: 'all 0.2s'
+        }}>
+          <input
+            type="checkbox"
+            checked={filters.hasContact}
+            onChange={(e) => setFilters({...filters, hasContact: e.target.checked})}
+            style={{
+              width: '14px',
+              height: '14px',
+              accentColor: '#49A3C4',
+              cursor: 'pointer'
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <FiPhone size={13} />
+            Has Contact
+          </div>
+        </label>
+      </div>
+
+      {/* Right: Clear Filters */}
+      <button
+        onClick={() => {
+          setFilters({ minRating: 0, hasContact: false, source: '' });
+          setSortField('rating');
+          setSortDirection('desc');
+        }}
+        style={{
+          padding: '8px 16px',
+          backgroundColor: 'transparent',
+          color: '#00364A',
+          border: '1px solid rgba(0, 54, 74, 0.2)',
+          borderRadius: '6px',
+          fontWeight: '500',
+          fontSize: '13px',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.backgroundColor = 'transparent';
+        }}
+      >
+        <FiFilter size={13} />
+        Clear Filters
+      </button>
+    </div>
+
+    {/* Sorting Bar - Line 2 */}
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '20px',
+      padding: '12px 20px',
+      backgroundColor: 'white',
+      borderRadius: '8px',
+      border: '1px solid rgba(0, 54, 74, 0.1)',
+      flexWrap: 'wrap',
+      gap: '10px'
+    }}>
+      
+      {/* Sort Label */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontWeight: '600',
+        color: '#00364A',
+        fontSize: '13px'
+      }}>
+        <BsSortDown size={14} />
+        Sort by:
+      </div>
+
+      {/* Sort Buttons */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        flexWrap: 'wrap'
+      }}>
+        {[
+          { field: 'rating', label: 'Rating', icon: FiStar },
+          { field: 'reviews_count', label: 'Reviews', icon: FiDownload },
+          { field: 'name', label: 'Company Name', icon: BsBuilding }
+        ].map(option => (
+          <button
+            key={option.field}
+            onClick={() => {
+              if (sortField === option.field) {
+                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+              } else {
+                setSortField(option.field);
+                setSortDirection('asc');
+              }
+            }}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: sortField === option.field ? '#49A3C4' : 'white',
+              color: sortField === option.field ? 'white' : '#00364A',
+              border: `1px solid ${sortField === option.field ? '#49A3C4' : 'rgba(0, 54, 74, 0.15)'}`,
+              borderRadius: '6px',
+              fontWeight: '500',
+              fontSize: '13px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              minWidth: 'auto'
+            }}
+            onMouseEnter={(e) => {
+              if (sortField !== option.field) {
+                e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.08)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (sortField !== option.field) {
+                e.target.style.backgroundColor = 'white';
+              }
+            }}
+          >
+            <option.icon size={12} />
+            {option.label}
+            {sortField === option.field && (
+              <span style={{ marginLeft: '4px', fontSize: '12px' }}>
+                {sortDirection === 'asc' ? <FiArrowUp /> : <FiArrowDown />}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Results Count */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontSize: '13px',
+        color: '#49A3C4',
+        fontWeight: '500',
+        backgroundColor: 'rgba(73, 163, 196, 0.1)',
+        padding: '6px 12px',
+        borderRadius: '6px',
+        marginLeft: 'auto'
+      }}>
+        <span>📊</span>
+        <span>
+          {filteredAndSortedLeads.length} of {leads.length} leads
+        </span>
+      </div>
+    </div>
+  </>
+)}
+            {/* Leads Table - UPDATED for new API fields */}
+            {filteredAndSortedLeads.length > 0 ? (
               <div style={{
                 overflowX: 'auto',
                 borderRadius: '15px',
@@ -671,17 +1023,17 @@ export default function LeadGeneratorPage() {
                 <table style={{
                   width: '100%',
                   borderCollapse: 'collapse',
-                  minWidth: '1000px'
+                  minWidth: '1200px'
                 }}>
                   <thead>
                     <tr style={{
                       backgroundColor: '#E0EFFF',
                       borderBottom: '2px solid rgba(0, 54, 74, 0.1)'
                     }}>
-                      {['Company', 'Industry', 'Location', 'Size', 'Contact', 'Email', 'Phone', 'Actions'].map((header) => (
+                      {['Company', 'Industry', 'Location', 'Contact Info', 'Rating', 'Source', 'Actions'].map((header) => (
                         <th key={header} style={{
                           padding: '20px 15px',
-                          textAlign: 'left',
+                          textAlign: 'center',
                           fontWeight: '700',
                           color: '#00364A',
                           fontSize: '15px'
@@ -692,7 +1044,7 @@ export default function LeadGeneratorPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {leads.map((lead, index) => (
+                    {filteredAndSortedLeads.map((lead, index) => (
                       <tr 
                         key={lead.id}
                         style={{
@@ -707,36 +1059,176 @@ export default function LeadGeneratorPage() {
                           e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'white' : '#F8FBFF';
                         }}
                       >
-                        <td style={{ padding: '18px 15px', fontWeight: '600', color: '#00364A' }}>
-                          {lead.company}
+                        {/* Company with tooltip for long names */}
+                        <td style={{
+                          padding: '18px 15px',
+                          fontWeight: '600',
+                          color: '#00364A',
+                          maxWidth: '250px',
+                          position: 'relative'  // For tooltip positioning
+                        }}>
+                          <div
+                            style={{
+                              maxWidth: '250px',
+                              cursor: (lead.name && lead.name.length > 30) ? 'help' : 'default',
+                              position: 'relative'
+                            }}
+                            title={lead.name && lead.name.length > 30 ? lead.name : ''}  // Native tooltip
+                          >
+                            <div style={{
+                              fontSize: '16px',
+                              marginBottom: '4px',
+                              wordBreak: 'break-word',
+                              overflowWrap: 'break-word',
+                              maxHeight: '3.2em',  // ~3 lines max
+                              lineHeight: '1.6em',
+                              overflow: 'hidden',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,  // Limit to 2 lines
+                              WebkitBoxOrient: 'vertical'
+                            }}>
+                              {lead.name || 'N/A'}
+                            </div>
+                            {lead.website && (
+                              <a
+                                href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  fontSize: '13px',
+                                  color: '#49A3C4',
+                                  textDecoration: 'none',
+                                  display: 'inline-block',
+                                  maxWidth: '100%',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.textDecoration = 'underline';
+                                  // Show full URL on hover
+                                  e.target.title = lead.website;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.textDecoration = 'none';
+                                  e.target.title = '';
+                                }}
+                              >
+                                Visit Website
+                              </a>
+                            )}
+                          </div>
                         </td>
+                        
+                        {/* Industry */}
                         <td style={{ padding: '18px 15px', color: '#00364A', opacity: 0.8 }}>
-                          {lead.industry}
-                        </td>
-                        <td style={{ padding: '18px 15px', color: '#00364A', opacity: 0.8 }}>
-                          {lead.location}
-                        </td>
-                        <td style={{ padding: '18px 15px' }}>
                           <span style={{
                             backgroundColor: 'rgba(73, 163, 196, 0.1)',
                             color: '#49A3C4',
                             padding: '6px 12px',
                             borderRadius: '20px',
                             fontSize: '13px',
-                            fontWeight: '600'
+                            fontWeight: '600',
+                            display: 'inline-block'
                           }}>
-                            {lead.size}
+                            {lead.category || 'N/A'}
                           </span>
                         </td>
+                        
+                        {/* Location */}
+                        <td style={{ padding: '18px 15px', color: '#00364A', opacity: 0.8 }}>
+                          {lead.address ? (
+                            <div style={{ maxWidth: '200px' }}>
+                              {lead.address.split(',').slice(0, 2).join(',')}
+                              {lead.address.split(',').length > 2 && '...'}
+                            </div>
+                          ) : 'N/A'}
+                        </td>
+
+                        {/* Contact Info Column - Updated */}
                         <td style={{ padding: '18px 15px', color: '#00364A' }}>
-                          {lead.contact}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {lead.phone && (
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '14px'
+                              }}>
+                                <Phone size={14} color="#49A3C4" />
+                                <span>{formatPhoneNumber(lead.phone)}</span>
+                              </div>
+                            )}
+                            {lead.email && (
+                              <a
+                                href={`mailto:${lead.email}`}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  fontSize: '14px',
+                                  color: '#49A3C4',
+                                  textDecoration: 'none'
+                                }}
+                                onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+                                onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
+                              >
+                                <Mail size={14} />
+                                <span style={{
+                                  wordBreak: 'break-all',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
+                                  {lead.email}
+                                </span>
+                              </a>
+                            )}
+                          </div>
                         </td>
-                        <td style={{ padding: '18px 15px', color: '#49A3C4', fontWeight: '500' }}>
-                          {lead.email}
+                        
+                        {/* Rating */}
+                        <td style={{ padding: '18px 15px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {lead.rating ? (
+                              <>
+                                <span style={{
+                                  backgroundColor: lead.rating >= 4 ? '#10B981' : 
+                                                   lead.rating >= 3 ? '#F59E0B' : '#EF4444',
+                                  color: 'white',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  fontWeight: '600'
+                                }}>
+                                  {lead.rating.toFixed(1)} ⭐
+                                </span>
+                                {lead.reviews_count && (
+                                  <span style={{ fontSize: '13px', color: '#6B7280' }}>
+                                    ({lead.reviews_count})
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span style={{ color: '#9CA3AF', fontSize: '14px' }}>No rating</span>
+                            )}
+                          </div>
                         </td>
-                        <td style={{ padding: '18px 15px', color: '#00364A' }}>
-                          {lead.phone}
+                        
+                        {/* Source */}
+                        <td style={{ padding: '18px 15px', color: '#00364A', opacity: 0.8 }}>
+                          <div>
+                            <div style={{ fontWeight: '500' }}>{lead.source || 'Unknown'}</div>
+                            {lead.source_entity && (
+                              <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                                {lead.source_entity}
+                              </div>
+                            )}
+                          </div>
                         </td>
+                        
+                        
+                        
+                        {/* Actions */}
                         <td style={{ padding: '18px 15px' }}>
                           <button style={{
                             padding: '8px 16px',
@@ -796,6 +1288,7 @@ export default function LeadGeneratorPage() {
                   margin: '0 auto 30px'
                 }}>
                   Try adjusting your filters or broaden your search criteria to find more leads.
+                  The database may not have {businessType} businesses in {location}.
                 </p>
                 <button
                   onClick={handleReset}
@@ -842,7 +1335,7 @@ export default function LeadGeneratorPage() {
                     Ready to take action?
                   </div>
                   <div style={{ color: '#00364A', opacity: 0.7, fontSize: '14px' }}>
-                    Export these leads or refine your search for better results
+                    Export these {leads.length} leads or refine your search for better results
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '15px' }}>
@@ -909,19 +1402,19 @@ export default function LeadGeneratorPage() {
             <FeatureCard 
               icon="🎯"
               title="Precision Targeting"
-              description="Filter by industry, location, company size, revenue, and more for laser-focused lead generation."
+              description="Filter by industry, location, and more for laser-focused lead generation from your database."
               color="#00364A"
             />
             <FeatureCard 
               icon="📈"
-              title="Fresh Data"
-              description="Our database is updated daily with verified company information and contact details."
+              title="Real Business Data"
+              description="Access verified company information, contact details, and ratings from unified leads."
               color="#49A3C4"
             />
             <FeatureCard 
-              icon="🛡️"
-              title="GDPR Compliant"
-              description="All data collection follows strict privacy regulations and business-to-business guidelines."
+              icon="🔄"
+              title="Synced Sources"
+              description="Data from multiple sources normalized into a single, searchable leads table."
               color="#7DBBE0"
             />
           </section>
@@ -937,9 +1430,9 @@ export default function LeadGeneratorPage() {
         fontSize: '14px',
         marginTop: '60px'
       }}>
-        <p>© 2024 HUNTERS Lead Generator. All rights reserved.</p>
+        <p>© 2025 SCOUT Lead Generator. All rights reserved.</p>
         <p style={{ marginTop: '10px', fontSize: '13px' }}>
-          Data is updated daily • 10M+ companies in database • Premium data sources
+          Data from synchronized sources • Real business information • Premium lead quality
         </p>
       </footer>
 
@@ -953,6 +1446,7 @@ export default function LeadGeneratorPage() {
   );
 }
 
+// FeatureCard component remains exactly the same
 function FeatureCard({ icon, title, description, color }) {
   const [isHovered, setIsHovered] = useState(false);
 

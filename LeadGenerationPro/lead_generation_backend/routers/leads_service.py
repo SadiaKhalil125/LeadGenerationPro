@@ -2,6 +2,22 @@
 from psycopg2 import sql
 from routers.get_db_connection import get_db_cursor
 
+# routers/leads_sync.py
+from fastapi import APIRouter, HTTPException, Query
+from typing import Optional, List
+
+# leads_normalization.py
+import hashlib
+
+from pydantic import BaseModel
+
+# Add this model
+class SyncRequest(BaseModel):
+    entity_tables: List[str]
+    batch_size: int = 500
+
+router = APIRouter()
+
 def ensure_leads_table():
     conn, cur = get_db_cursor()
 
@@ -36,8 +52,6 @@ def ensure_leads_table():
     cur.close()
 
 
-# leads_normalization.py
-import hashlib
 
 FIELD_MAPPINGS = {
     'name': ['name', 'businessname', 'placename', 'title', 'company_name'],
@@ -71,108 +85,208 @@ def compute_unique_hash(name, phone, email, address):
     return hashlib.sha256(raw.strip().lower().encode()).hexdigest()
 
 
-# routers/leads_sync.py
-from fastapi import APIRouter, HTTPException
-from typing import List
-
-router = APIRouter()
 
 @router.post("/leads/sync")
-async def sync_leads(
-    entity_tables: List[str],
-    batch_size: int = 500
-):
+async def sync_leads(request: SyncRequest):  # Change parameter
     """
     Normalize entity tables into unified leads table.
     Safe to re-run.
     """
-
+    # Extract from request
+    entity_tables = request.entity_tables
+    batch_size = request.batch_size
+    
     if not entity_tables:
         raise HTTPException(status_code=400, detail="entity_tables required")
 
-    ensure_leads_table()
+    print("[LEADS_SYNC] Starting leads sync")
+    print(f"[LEADS_SYNC] Tables: {entity_tables}")
+    print(f"[LEADS_SYNC] Batch size: {batch_size}")
+    try:
+        ensure_leads_table()
+        print("[LEADS_SYNC] Leads table ensured")
 
-    conn, cur = get_db_cursor()
-    total_processed = 0
-    total_upserted = 0
+        conn, cur = get_db_cursor()
+        total_processed = 0
+        total_upserted = 0
 
-    for table in entity_tables:
-        table = table.strip()
+        for table in entity_tables:
+            table = table.strip()
+            print(f"[LEADS_SYNC] Processing table: {table}")
 
-        # --- get columns ---
-        cur.execute("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name = %s
-        """, (table,))
-        columns = [c[0] for c in cur.fetchall()]
+            try:
+                # --- get columns ---
+                cur.execute("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = %s
+                """, (table,))
+                columns = [c[0] for c in cur.fetchall()]
 
-        if not columns:
-            continue
+                if not columns:
+                    print(f"[LEADS_SYNC] No columns found for table '{table}', skipping")
+                    continue
 
-        offset = 0
+                offset = 0
 
-        while True:
-            query = sql.SQL("""
-                SELECT *
-                FROM {table}
-                ORDER BY id
-                LIMIT %s OFFSET %s
-            """).format(table=sql.Identifier(table))
+                while True:
+                    query = sql.SQL("""
+                        SELECT *
+                        FROM {table}
+                        ORDER BY id
+                        LIMIT %s OFFSET %s
+                    """).format(table=sql.Identifier(table))
 
-            cur.execute(query, (batch_size, offset))
-            rows = cur.fetchall()
-            if not rows:
-                break
+                    cur.execute(query, (batch_size, offset))
+                    rows = cur.fetchall()
 
-            for row in rows:
-                row_dict = dict(zip(columns, row))
-                normalized = normalize_row(row_dict)
+                    if not rows:
+                        print(f"[LEADS_SYNC] No more rows in '{table}'")
+                        break
 
-                unique_hash = compute_unique_hash(
-                    normalized.get("name"),
-                    normalized.get("phone"),
-                    normalized.get("email"),
-                    normalized.get("address")
-                )
+                    print(f"[LEADS_SYNC] Fetched {len(rows)} rows from '{table}' (offset {offset})")
 
-                insert_stmt = sql.SQL("""
-                    INSERT INTO leads (
-                        name, address, phone, email, website,
-                        rating, reviews_count, category, hours, description,
-                        source, source_entity, source_entity_id,
-                        unique_hash, last_modified_at
-                    )
-                    VALUES (
-                        %(name)s, %(address)s, %(phone)s, %(email)s, %(website)s,
-                        %(rating)s, %(reviews_count)s, %(category)s, %(hours)s, %(description)s,
-                        %(source)s, %(source_entity)s, %(source_entity_id)s,
-                        %(unique_hash)s, CURRENT_TIMESTAMP
-                    )
-                    ON CONFLICT (unique_hash)
-                    DO UPDATE SET
-                        last_modified_at = CURRENT_TIMESTAMP
-                """)
+                    for row in rows:
+                        try:
+                            row_dict = dict(zip(columns, row))
+                            normalized = normalize_row(row_dict)
 
-                cur.execute(insert_stmt, {
-                    **normalized,
-                    "source": row_dict.get("source"),
-                    "source_entity": table,
-                    "source_entity_id": row_dict.get("id"),
-                    "unique_hash": unique_hash
-                })
+                            unique_hash = compute_unique_hash(
+                                normalized.get("name"),
+                                normalized.get("phone"),
+                                normalized.get("email"),
+                                normalized.get("address")
+                            )
 
-                total_upserted += 1
+                            insert_stmt = sql.SQL("""
+                                INSERT INTO leads (
+                                    name, address, phone, email, website,
+                                    rating, reviews_count, category, hours, description,
+                                    source, source_entity, source_entity_id,
+                                    unique_hash, last_modified_at
+                                )
+                                VALUES (
+                                    %(name)s, %(address)s, %(phone)s, %(email)s, %(website)s,
+                                    %(rating)s, %(reviews_count)s, %(category)s, %(hours)s, %(description)s,
+                                    %(source)s, %(source_entity)s, %(source_entity_id)s,
+                                    %(unique_hash)s, CURRENT_TIMESTAMP
+                                )
+                                ON CONFLICT (unique_hash)
+                                DO UPDATE SET
+                                    last_modified_at = CURRENT_TIMESTAMP
+                            """)
 
-            conn.commit()
-            total_processed += len(rows)
-            offset += batch_size
+                            cur.execute(insert_stmt, {
+                                **normalized,
+                                "source": row_dict.get("source"),
+                                "source_entity": table,
+                                "source_entity_id": row_dict.get("id"),
+                                "unique_hash": unique_hash
+                            })
 
-    cur.close()
+                            total_upserted += 1
 
-    return {
-        "success": True,
-        "tables_processed": entity_tables,
-        "rows_processed": total_processed,
-        "rows_upserted": total_upserted
-    }
+                        except Exception as row_err:
+                            print(f"[LEADS_SYNC][ROW_ERROR] Table '{table}', Row ID {row_dict.get('id')}: {row_err}")
+                            conn.rollback()
+                            continue
+
+                    conn.commit()
+                    total_processed += len(rows)
+                    offset += batch_size
+
+            except Exception as table_err:
+                print(f"[LEADS_SYNC][TABLE_ERROR] Failed processing table '{table}': {table_err}")
+                conn.rollback()
+                continue
+
+        cur.close()
+        print("[LEADS_SYNC] Sync completed successfully")
+
+        return {
+            "success": True,
+            "tables_processed": entity_tables,
+            "rows_processed": total_processed,
+            "rows_upserted": total_upserted
+        }
+
+    except Exception as e:
+        print(f"[LEADS_SYNC][FATAL] Sync failed: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Leads sync failed: {str(e)}")
+
+
+@router.get("/leads/search")
+async def search_leads(
+    business_type: str = Query(..., description="Industry / business type"),
+    location: str = Query(..., description="City, state, or country"),
+    company_size: Optional[str] = Query(None, description="Ignored for now"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """
+    Search leads by:
+    - Business Type (category)
+    - Location (partial match on address)
+
+    Company size is accepted but currently ignored.
+    """
+
+    try:
+        conn, cur = get_db_cursor()
+
+        query = """
+            SELECT
+                id,
+                name,
+                category,
+                address,
+                phone,
+                email,
+                website,
+                rating,
+                reviews_count,
+                source,
+                source_entity,
+                created_at
+            FROM leads
+            WHERE
+                category ILIKE %s
+                AND address ILIKE %s
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """
+
+        cur.execute(
+            query,
+            (
+                f"%{business_type}%",
+                f"%{location}%",
+                limit,
+                offset,
+            ),
+        )
+
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description]
+
+        results = [dict(zip(columns, row)) for row in rows]
+
+        cur.close()
+
+        return {
+            "success": True,
+            "filters": {
+                "business_type": business_type,
+                "location": location,
+                "company_size": company_size,  # ignored
+            },
+            "count": len(results),
+            "data": results,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -180,6 +180,7 @@ class QuickExtractRequest(BaseModel):
     entity_name: Optional[str] = None  # Optional: store data in this entity table
     create_entity: Optional[bool] = False  # If true, create entity table from field mappings
     source_name: Optional[str] = "Quick Extract"  # Source name for stored data
+    preview_step: Optional[int] = 1  # For previewing extraction steps
 
 class QuickExtractResponse(BaseModel):
     """Response model for quick extraction."""
