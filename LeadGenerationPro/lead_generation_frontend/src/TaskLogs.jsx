@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Loader2,
@@ -18,88 +19,93 @@ import API_BASE from './api_base';
 const TaskLogs = () => {
   const { taskId } = useParams();
   const navigate = useNavigate();
-  const [taskInfo, setTaskInfo] = useState(null);
-  const [taskLogs, setTaskLogs] = useState(null);
-  const [taskExecutions, setTaskExecutions] = useState(null);
+  const queryClient = useQueryClient();
   const [selectedExecutionId, setSelectedExecutionId] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [isPageVisible, setIsPageVisible] = useState(true);
+  const pageVisibilityRef = useRef(true);
 
+  // Track page visibility to stop polling when page is not visible
   useEffect(() => {
-    fetchTaskDetails();
-  }, [taskId]);
+    const handleVisibilityChange = () => {
+      const isVisible = !document.hidden;
+      setIsPageVisible(isVisible);
+      pageVisibilityRef.current = isVisible;
+    };
 
-  useEffect(() => {
-    if (!taskExecutions) return;
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
-    const hasCurrentExecution = taskExecutions.executions?.some(exec => exec.is_current);
-
-    if (hasCurrentExecution) {
-      const interval = setInterval(() => {
-        fetchTaskLogs(selectedExecutionId);
-        fetchTaskExecutions();
-      }, 2000);
-
-      return () => clearInterval(interval);
-    }
-  }, [taskExecutions, selectedExecutionId, taskId]);
-
-  const fetchTaskDetails = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const tasksRes = await fetch(`${API_BASE}/task/tasks`, {
+  // Fetch task info from tasks list
+  const { data: tasksData } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/task/tasks`, {
         method: 'GET',
         headers: { "ngrok-skip-browser-warning": "true" }
       });
-      const tasksData = await tasksRes.json();
-      const task = tasksData.tasks?.find(t => t.id === parseInt(taskId));
-      
-      if (task) {
-        setTaskInfo(task);
-      }
+      if (!res.ok) throw new Error('Failed to fetch tasks');
+      const data = await res.json();
+      return data.tasks || [];
+    },
+  });
 
-      await Promise.all([
-        fetchTaskLogs(),
-        fetchTaskExecutions()
-      ]);
-    } catch (err) {
-      setError(`Failed to fetch task details: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const taskInfo = tasksData?.find(t => t.id === parseInt(taskId));
 
-  const fetchTaskLogs = async (executionId = null) => {
-    try {
-      const url = executionId
-        ? `${API_BASE}/task/task-execution-logs/${taskId}?execution_id=${executionId}`
+  // Fetch task executions
+  const { data: taskExecutions, isLoading: isLoadingExecutions } = useQuery({
+    queryKey: ['taskExecutionSummary', taskId],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/task/task-execution-summary/${taskId}`, {
+        method: 'GET',
+        headers: { "ngrok-skip-browser-warning": "true" }
+      });
+      if (!res.ok) throw new Error('Failed to fetch executions');
+      const data = await res.json();
+      return data;
+    },
+  });
+
+  // Check if there's a current execution for polling
+  const hasCurrentExecution = taskExecutions?.executions?.some(exec => exec.is_current);
+  
+  // Determine if we should poll (page visible and has current execution)
+  const shouldPoll = isPageVisible && hasCurrentExecution;
+
+  // Fetch task logs
+  const { data: taskLogs, isLoading: isLoadingLogs } = useQuery({
+    queryKey: ['taskLogs', taskId, selectedExecutionId],
+    queryFn: async () => {
+      const url = selectedExecutionId
+        ? `${API_BASE}/task/task-execution-logs/${taskId}?execution_id=${selectedExecutionId}`
         : `${API_BASE}/task/task-execution-logs/${taskId}`;
       
       const res = await fetch(url, {
         method: 'GET',
         headers: { "ngrok-skip-browser-warning": "true" }
       });
+      if (!res.ok) throw new Error('Failed to fetch logs');
       const data = await res.json();
-      setTaskLogs(data);
-    } catch (err) {
-      console.error('Error fetching logs:', err);
-    }
-  };
+      return data;
+    },
+    // Only poll if page is visible, has current execution, and no specific execution selected
+    refetchInterval: (shouldPoll && !selectedExecutionId) ? 2000 : false,
+  });
 
-  const fetchTaskExecutions = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/task/task-execution-summary/${taskId}`, {
-        method: 'GET',
-        headers: { "ngrok-skip-browser-warning": "true" }
-      });
-      const data = await res.json();
-      setTaskExecutions(data);
-    } catch (err) {
-      console.error('Error fetching executions:', err);
+  // Update executions polling when shouldPoll changes
+  useEffect(() => {
+    if (shouldPoll) {
+      const interval = setInterval(() => {
+        queryClient.refetchQueries({ queryKey: ['taskExecutionSummary', taskId] });
+      }, 2000);
+      return () => clearInterval(interval);
     }
-  };
+  }, [shouldPoll, taskId, queryClient]);
+
+  const loading = (isLoadingExecutions && !taskExecutions) || (isLoadingLogs && !taskLogs);
+  const error = null; // React Query handles errors internally
 
   const formatDateTime = (dateString) => {
     return new Date(dateString).toLocaleString([], {
@@ -107,13 +113,12 @@ const TaskLogs = () => {
     });
   };
 
-  const filterByExecution = async (executionId) => {
+  const filterByExecution = (executionId) => {
     setSelectedExecutionId(executionId);
-    await fetchTaskLogs(executionId);
+    // React Query will automatically refetch when selectedExecutionId changes
   };
 
   const hasCompletedExecution = taskExecutions?.executions?.some(exec => exec.final_status === 'completed');
-  const hasCurrentExecution = taskExecutions?.executions?.some(exec => exec.is_current);
   
   const getEntityDataPageUrl = () => {
     if (taskInfo?.entity_name) {

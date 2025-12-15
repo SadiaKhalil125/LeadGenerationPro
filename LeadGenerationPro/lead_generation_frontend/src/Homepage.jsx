@@ -337,7 +337,7 @@ export default function WebScraperLanding() {
             color: '#00364A',
             textAlign: 'left'
           }}>
-            POWERFUL WEB SCRAPER FOR REGULAR AND PROFESSIONAL USE
+            POWERFUL CUSTOMIZED WEB SCRAPER FOR LEAD GENERATION
           </h1>
           
           <p style={{
@@ -358,7 +358,7 @@ export default function WebScraperLanding() {
             opacity: 0.85,
             textAlign: 'left'
           }}>
-            Web Scraper is designed for regular and scheduled use to extract large amounts of data and easily integrate with other systems.
+            Web Scraper is designed for Lead Generation and Data Extraction to extract large amounts of data and easily integrate with other systems.
           </p>
 
           {/* CTA Buttons */}
