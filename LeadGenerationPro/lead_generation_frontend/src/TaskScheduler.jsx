@@ -20,85 +20,77 @@ import {
     Check,
     ArrowLeft
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import API_BASE from "./api_base";
 
 const TaskScheduler = () => {
-    const [sources, setSources] = useState([]);
     const [selectedSourceId, setSelectedSourceId] = useState('');
-    
-    // State for all mappings to power the search
-    const [allMappings, setAllMappings] = useState([]);
     // State for mappings filtered by a selected source
     const [mappings, setMappings] = useState([]);
-
     const [selectedMappingId, setSelectedMappingId] = useState('');
     const [scheduledTime, setScheduledTime] = useState('');
     const [taskName, setTaskName] = useState('');
-    const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [pageLoading, setPageLoading] = useState(true);
     const [response, setResponse] = useState(null);
     const [activeTab, setActiveTab] = useState('create');
     const [repeat, setRepeat] = useState('once');
     const [maxItems, setMaxItems] = useState(30);
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     // State for the mapping search input
     const [mappingSearch, setMappingSearch] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-    // Fetch initial data on component mount
-    useEffect(() => {
-        const init = async () => {
-            await Promise.all([fetchSources(), fetchAllMappings(), fetchTasks()]);
-            setPageLoading(false);
-        };
-        init();
-    }, []);
-
-    const fetchSources = async () => {
-        try {
+    // Fetch sources
+    const { data: sourcesData } = useQuery({
+        queryKey: ['sources'],
+        queryFn: async () => {
             const res = await fetch(`${API_BASE}/source/sources`, {
                 method: "GET",
                 headers: { "ngrok-skip-browser-warning": "true" }
             });
+            if (!res.ok) throw new Error('Failed to load sources');
             const data = await res.json();
-            setSources(data.sources || []);
-        } catch (error) {
-            console.error('Error fetching sources:', error);
-            setResponse({ type: 'error', message: 'Failed to load sources.' });
-        }
-    };
+            return data.sources || [];
+        },
+    });
 
-    // New function to fetch all mappings at once
-    const fetchAllMappings = async () => {
-        try {
+    // Fetch all mappings
+    const { data: allMappingsData } = useQuery({
+        queryKey: ['mappings'],
+        queryFn: async () => {
             const res = await fetch(`${API_BASE}/mapping/mappings`, {
                 method: "GET",
                 headers: { "ngrok-skip-browser-warning": "true" }
             });
+            if (!res.ok) throw new Error('Failed to load mappings');
             const data = await res.json();
             // We only want enabled mappings to be schedulable
-            const enabledMappings = (data.mappings || []).filter(m => m.enabled);
-            setAllMappings(enabledMappings);
-        } catch (error) {
-            console.error('Error fetching all mappings:', error);
-        }
-    };
-    
-    const fetchTasks = async () => {
-        try {
+            return (data.mappings || []).filter(m => m.enabled);
+        },
+    });
+
+    // Fetch tasks
+    const { data: tasksData, isLoading: isLoadingTasks } = useQuery({
+        queryKey: ['tasks'],
+        queryFn: async () => {
             const res = await fetch(`${API_BASE}/task/tasks`,{
                 method: "GET",
                 headers: { "ngrok-skip-browser-warning": "true" }
             });
+            if (!res.ok) throw new Error('Failed to load tasks');
             const data = await res.json();
-            setTasks(data.tasks || []);
-        } catch (error) {
-            console.error('Error fetching tasks:', error);
-            setResponse({ type: 'error', message: 'Failed to load tasks.' });
-        }
-    };
+            return data.tasks || [];
+        },
+    });
+
+    // Only show loading on initial load, not on background refetches
+    const pageLoading = isLoadingTasks && !tasksData;
+
+    const sources = sourcesData || [];
+    const allMappings = allMappingsData || [];
+    const tasks = tasksData || [];
 
     const getMappingsForSource = (sourceId) => {
         if (!sourceId) {
@@ -156,7 +148,16 @@ const TaskScheduler = () => {
                 setTaskName('');
                 setMappingSearch('');
                 setMappings([]);
-                fetchTasks();
+                
+                // Update cache directly - add new task
+                queryClient.setQueryData(['tasks'], (oldTasks) => {
+                    if (!oldTasks) return [data.task];
+                    return [...oldTasks, data.task];
+                });
+                
+                // Mark as stale but don't refetch immediately
+                queryClient.invalidateQueries({ queryKey: ['tasks'] }, { refetchType: 'none' });
+                
                 setActiveTab('manage');
             } else {
                 setResponse({ type: 'error', message: data.detail || 'Failed to create task.' });
@@ -178,7 +179,15 @@ const TaskScheduler = () => {
             const data = await res.json();
             if (res.ok && data.success) {
                 setResponse({ type: 'success', message: data.message });
-                fetchTasks();
+                
+                // Update cache directly - remove deleted task
+                queryClient.setQueryData(['tasks'], (oldTasks) => {
+                    if (!oldTasks) return oldTasks;
+                    return oldTasks.filter(task => task.id !== taskId);
+                });
+                
+                // Mark as stale but don't refetch immediately
+                queryClient.invalidateQueries({ queryKey: ['tasks'] }, { refetchType: 'none' });
             } else {
                 setResponse({ type: 'error', message: data.detail || 'Failed to delete task.' });
             }
@@ -325,7 +334,7 @@ const TaskScheduler = () => {
                         Tasks Executor
                     </StyledButton>
                     <StyledButton 
-                        onClick={fetchTasks} 
+                        onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} 
                         variant="outline"
                         icon={<RefreshCw size={18} />}
                     >

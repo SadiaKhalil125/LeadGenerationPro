@@ -19,15 +19,14 @@ import {
   Settings,
   ArrowLeft
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
 
 const SourceManagement = () => {
-  const [sources, setSources] = useState([]);
   const [expandedSource, setExpandedSource] = useState(null);
   const [editingSource, setEditingSource] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [dependencies, setDependencies] = useState({});
@@ -36,29 +35,26 @@ const SourceManagement = () => {
   const [editPaginationConfig, setEditPaginationConfig] = useState({});
   const [response, setResponse] = useState(null);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchSources();
-  }, []);
-
-  const fetchSources = async () => {
-    try {
-      setLoading(true);
+  // Fetch sources
+  const { data: sourcesData, isLoading: isLoadingSources } = useQuery({
+    queryKey: ['sources'],
+    queryFn: async () => {
       const response = await fetch(`${API_BASE}/source/sources`,{
         method: "GET",
         headers: { "ngrok-skip-browser-warning": "true" }
       });
       if (!response.ok) throw new Error('Failed to fetch sources');
       const data = await response.json();
-      setSources(data.sources || []);
-    } catch (err) {
-      setError(err.message);
-      setResponse({ type: 'error', message: err.message });
-    } finally {
-      setLoading(false);
-      setPageLoading(false);
-    }
-  };
+      return data.sources || [];
+    },
+  });
+
+  // Only show loading on initial load, not on background refetches
+  const pageLoading = isLoadingSources && !sourcesData;
+
+  const sources = sourcesData || [];
 
   const fetchDependencies = async (sourceId) => {
     try {
@@ -142,7 +138,17 @@ const SourceManagement = () => {
 
       const data = await response.json();
       setResponse({ type: 'success', message: data.message });
-      await fetchSources();
+      
+      // Update cache directly
+      queryClient.setQueryData(['sources'], (oldSources) => {
+        if (!oldSources) return oldSources;
+        return oldSources.map(source => 
+          source.id === editingSource ? { ...source, ...payload } : source
+        );
+      });
+      
+      // Mark as stale but don't refetch immediately
+      queryClient.invalidateQueries({ queryKey: ['sources'] }, { refetchType: 'none' });
 
       // reset form state
       setEditingSource(null);
@@ -173,7 +179,16 @@ const SourceManagement = () => {
 
       const data = await response.json();
       setResponse({ type: 'success', message: data.message });
-      await fetchSources();
+      
+      // Update cache directly - remove deleted source
+      queryClient.setQueryData(['sources'], (oldSources) => {
+        if (!oldSources) return oldSources;
+        return oldSources.filter(source => source.id !== sourceId);
+      });
+      
+      // Mark as stale but don't refetch immediately
+      queryClient.invalidateQueries({ queryKey: ['sources'] }, { refetchType: 'none' });
+      
       setDeleteConfirm(null);
       setExpandedSource(null);
     } catch (err) {
@@ -287,7 +302,7 @@ const SourceManagement = () => {
               Dashboard
             </StyledButton>
             <StyledButton 
-              onClick={fetchSources} 
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['sources'] })} 
               variant="outline"
               icon={<RefreshCw size={18} />}
             >

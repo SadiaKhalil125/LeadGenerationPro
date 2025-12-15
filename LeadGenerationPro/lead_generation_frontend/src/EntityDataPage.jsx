@@ -1,62 +1,51 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle, List, ArrowLeft } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import API_BASE from "./api_base";
 import { useNavigate } from "react-router-dom";
 const EntityDataScreen = () => {
   const [searchParams] = useSearchParams();
-  const [entities, setEntities] = useState([]);
   const [selectedEntity, setSelectedEntity] = useState(null);
-  const [data, setData] = useState(null);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [pageSize] = useState(10);  // or make it adjustable
   const navigate = useNavigate();
   // Get entity from query parameter if provided
   const entityFromParam = searchParams.get('entity');
 
-  useEffect(() => {
-    fetchEntities();
-  }, []);
-
-  // Auto-select entity from URL parameter when entities load
-  useEffect(() => {
-    if (entityFromParam && entities.length > 0 && !selectedEntity) {
-      const matchingEntity = entities.find(e => e.name === entityFromParam);
-      if (matchingEntity) {
-        setSelectedEntity(entityFromParam);
-      }
-    }
-  }, [entityFromParam, entities, selectedEntity]);
-
-  useEffect(() => {
-    if (selectedEntity) {
-      fetchEntityData(selectedEntity, page);
-    }
-  }, [selectedEntity, page]);
-
-  const fetchEntities = async () => {
-    try {
+  // Fetch entities list
+  const { data: entitiesData } = useQuery({
+    queryKey: ['entities'],
+    queryFn: async () => {
       const res = await fetch(`${API_BASE}/entity/entities`,{
         method: "GET",
         headers: {
           "ngrok-skip-browser-warning": "true"
         }
       });
+      if (!res.ok) throw new Error("Failed to load entities");
       const json = await res.json();
-      setEntities(json.entities || []);
-    } catch (err) {
-      setError("Failed to load entities.");
-    }
-  };
+      return json.entities || [];
+    },
+  });
 
-  const fetchEntityData = async (entityName, pageNum) => {
-    setLoading(true);
-    setError(null);
-    try {
+  // Auto-select entity from URL parameter when entities load
+  useEffect(() => {
+    if (entityFromParam && entitiesData && entitiesData.length > 0 && !selectedEntity) {
+      const matchingEntity = entitiesData.find(e => e.name === entityFromParam);
+      if (matchingEntity) {
+        setSelectedEntity(entityFromParam);
+      }
+    }
+  }, [entityFromParam, entitiesData, selectedEntity]);
+
+  // Fetch entity data
+  const { data, isLoading: isLoadingData, isFetching: isFetchingData, error: queryError } = useQuery({
+    queryKey: ['entity-data', selectedEntity, page, pageSize],
+    queryFn: async () => {
+      if (!selectedEntity) return null;
       const res = await fetch(
-        `${API_BASE}/entity/entity-data/${entityName}?page=${pageNum}&page_size=${pageSize}`,
+        `${API_BASE}/entity/entity-data/${selectedEntity}?page=${page}&page_size=${pageSize}`,
         {
           method: "GET",
           headers: {
@@ -67,14 +56,16 @@ const EntityDataScreen = () => {
 
       if (!res.ok) throw new Error("Failed to fetch data");
       const json = await res.json();
-      setData(json);
-    } catch (err) {
-      setError(err.message);
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return json;
+    },
+    enabled: !!selectedEntity,
+  });
+
+  // Only show loading on initial load, not on background refetches
+  const loading = isLoadingData && !data;
+
+  const error = queryError?.message || null;
+  const entities = entitiesData || [];
 
   return (
     <div style={{
@@ -209,7 +200,7 @@ const EntityDataScreen = () => {
                 }}
               >
                 <option value="">-- Choose an entity --</option>
-                {entities.map((ent, idx) => (
+                {(entities || []).map((ent, idx) => (
                   <option key={idx} value={ent.name}>
                     {ent.name}
                   </option>

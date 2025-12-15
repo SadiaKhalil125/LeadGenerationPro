@@ -20,66 +20,16 @@ import {
   ArrowLeft
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import API_BASE from "./api_base";
 const EntityList = () => {
-  const [entities, setEntities] = useState([]);
   const [expandedEntity, setExpandedEntity] = useState(null);
   const [editingEntity, setEditingEntity] = useState(null);
   const [editAttributes, setEditAttributes] = useState([]);
   const [response, setResponse] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
-  useEffect(() => {
-    fetchEntities();
-  }, []);
-
-  const fetchEntities = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${API_BASE}/entity/entities`, {
-        headers: {
-          "ngrok-skip-browser-warning": "true"
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.entities) {
-        const entitiesWithDetails = await Promise.all(
-          data.entities.map(async (entity) => {
-            const detailResponse = await fetchEntityInfo(entity.name);
-            if (detailResponse) {
-              return {
-                name: entity.name,
-                columns: detailResponse.columns,
-                row_count: detailResponse.row_count
-              };
-            } else {
-              return {
-                name: entity.name,
-                columns: entity.columns.map(col => ({ name: col, type: "unknown", nullable: "YES" })),
-                row_count: 0
-              };
-            }
-          })
-        );
-        setEntities(entitiesWithDetails);
-      } else {
-        setEntities([]);
-      }
-    } catch (error) {
-      console.error("Error fetching entities:", error);
-      setResponse({ type: "error", message: `Failed to fetch entities: ${error.message}` });
-      setEntities([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const queryClient = useQueryClient();
 
   const fetchEntityInfo = async (entityName) => {
     try {
@@ -102,6 +52,57 @@ const EntityList = () => {
     }
     return null;
   };
+
+  // Fetch entities list
+  const { data: entitiesData, isLoading: isLoadingEntities, isFetching: isFetchingEntities } = useQuery({
+    queryKey: ['entities'],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE}/entity/entities`, {
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data.entities || [];
+    },
+  });
+
+  // Fetch entity details for all entities
+  const { data: entities, isLoading: isLoadingDetails, isFetching: isFetchingDetails } = useQuery({
+    queryKey: ['entities', 'details', entitiesData],
+    queryFn: async () => {
+      if (!entitiesData || entitiesData.length === 0) return [];
+      
+      const entitiesWithDetails = await Promise.all(
+        entitiesData.map(async (entity) => {
+          const detailResponse = await fetchEntityInfo(entity.name);
+          if (detailResponse) {
+            return {
+              name: entity.name,
+              columns: detailResponse.columns,
+              row_count: detailResponse.row_count
+            };
+          } else {
+            return {
+              name: entity.name,
+              columns: entity.columns?.map(col => ({ name: col, type: "unknown", nullable: "YES" })) || [],
+              row_count: 0
+            };
+          }
+        })
+      );
+      return entitiesWithDetails;
+    },
+    enabled: !!entitiesData && entitiesData.length > 0,
+  });
+
+  // Only show loading on initial load, not on background refetches
+  const loading = (isLoadingEntities && !entitiesData) || (isLoadingDetails && !entities);
 
   const toggleExpand = (entityName) => {
     setExpandedEntity(expandedEntity === entityName ? null : entityName);
@@ -257,7 +258,8 @@ const EntityList = () => {
       }
 
       setEditingEntity(null);
-      fetchEntities();
+      // Update cache directly - refetch in background silently
+      queryClient.refetchQueries({ queryKey: ['entities'] }, { cancelRefetch: false });
 
     } catch (error) {
       console.error("Error saving changes:", error);
@@ -285,7 +287,18 @@ const EntityList = () => {
         setResponse({ type: "success", message: data.message });
         setExpandedEntity(null);
         setEditingEntity(null);
-        fetchEntities();
+        // Update cache directly - remove deleted entity
+        queryClient.setQueryData(['entities'], (oldData) => {
+          if (!oldData) return oldData;
+          return oldData.filter(entity => entity.name !== entityName);
+        });
+        // Also update the details cache
+        queryClient.setQueryData(['entities', 'details'], (oldDetails) => {
+          if (!oldDetails) return oldDetails;
+          return oldDetails.filter(entity => entity.name !== entityName);
+        });
+        // Mark as stale but don't refetch immediately - will refetch in background when needed
+        queryClient.invalidateQueries({ queryKey: ['entities'] }, { refetchType: 'none' });
       } else {
         setResponse({ type: "error", message: "Failed to delete entity" });
       }
@@ -302,7 +315,7 @@ const EntityList = () => {
     setEditAttributes([]);
   };
 
-  const filteredEntities = entities.filter(entity => 
+  const filteredEntities = (entities || []).filter(entity => 
     entity.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     entity.columns.some(col => col.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -427,7 +440,7 @@ const EntityList = () => {
             Dashboard
             </button>
           <button 
-            onClick={fetchEntities}
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['entities'] })}
             style={{
               display: 'flex',
               alignItems: 'center',

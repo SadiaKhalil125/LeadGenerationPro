@@ -5,6 +5,7 @@ import './App.css'
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, AuthContext } from "./AuthContext";
 import { useContext } from "react";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WebScraperForm from './WebScraperForm'
 import EntityForm from "./EntityForm"
 import EntityMappingForm from './EntityMappingForm'
@@ -33,13 +34,28 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+// Create a QueryClient with optimized defaults for caching
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // Data is fresh for 5 minutes
+      gcTime: 10 * 60 * 1000, // Cache persists for 10 minutes (formerly cacheTime)
+      refetchOnWindowFocus: false, // Don't refetch on window focus
+      refetchOnMount: false, // Don't refetch when component remounts (uses cache)
+      retry: 1, // Only retry once on failure
+      placeholderData: (previousData) => previousData, // Keep previous data while fetching new data
+    },
+  },
+});
+
 function App() {
 
   return (
-    <AuthProvider>
-   <Router> 
-      {/* <NavigationPage /> */}
-      <Routes>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Router> 
+          {/* <NavigationPage /> */}
+          <Routes>
         <Route path="/dashboard" element={<NavigationPage />} />
         <Route path="/entityform" element={<EntityForm />} />
         <Route path="/entitylist" element={<EntityList />} />
@@ -59,9 +75,10 @@ function App() {
         <Route path="/quick-extract" element={<QuickExtract />} />
         <Route path="/userleadsdashboard" element={<LeadGeneratorPage />} />
         <Route path="/leadssync" element= {<LeadSyncTest />} />
-      </Routes>
-    </Router>
-    </AuthProvider>
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 

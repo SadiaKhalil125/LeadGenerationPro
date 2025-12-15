@@ -284,7 +284,7 @@ export default function LeadGeneratorPage() {
             }}>
               Find Leads
             </a>
-            <a href="/history" style={{
+            <a href="/dashboard" style={{
               fontWeight: '500',
               color: '#00364A',
               textDecoration: 'none',
@@ -294,7 +294,7 @@ export default function LeadGeneratorPage() {
             }}
             onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.1)'}
             onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
-              History
+              Admin Dashboard
             </a>
           </nav>
           

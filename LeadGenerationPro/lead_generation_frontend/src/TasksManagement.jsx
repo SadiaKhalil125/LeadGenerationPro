@@ -21,40 +21,38 @@ import {
     ArrowLeft,
     Plus
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
 const TasksManagement = () => {
-    const [tasks, setTasks] = useState([]);
     const [editingTask, setEditingTask] = useState(null);
     const [editScheduledTime, setEditScheduledTime] = useState('');
     const [editTaskName, setEditTaskName] = useState('');
     const [editRepeat, setEditRepeat] = useState('');
     const [editMaxItems, setEditMaxItems] = useState('');
     const [loading, setLoading] = useState(false);
-    const [pageLoading, setPageLoading] = useState(true);
     const [response, setResponse] = useState(null);
     const navigate = useNavigate();
-    useEffect(() => {
-        fetchTasks();
-    }, []);
+    const queryClient = useQueryClient();
 
-    const fetchTasks = async () => {
-        try {
-            setLoading(true);
+    // Fetch tasks
+    const { data: tasksData, isLoading: isLoadingTasks } = useQuery({
+        queryKey: ['tasks'],
+        queryFn: async () => {
             const res = await fetch(`${API_BASE}/task/tasks`, {
                 method: "GET",
                 headers: { "ngrok-skip-browser-warning": "true" }
             });
+            if (!res.ok) throw new Error('Failed to fetch tasks');
             const data = await res.json();
-            setTasks(data.tasks || []);
-        } catch (error) {
-            console.error('Error fetching tasks:', error);
-            setResponse({ type: 'error', message: 'Failed to fetch tasks' });
-        } finally {
-            setLoading(false);
-            setPageLoading(false);
-        }
-    };
+            return data.tasks || [];
+        },
+    });
+
+    // Only show loading on initial load, not on background refetches
+    const pageLoading = isLoadingTasks && !tasksData;
+
+    const tasks = tasksData || [];
 
     const handleEditClick = (task) => {
         setEditingTask(task.id);
@@ -104,7 +102,17 @@ const TasksManagement = () => {
             if (res.ok && data.success) {
                 setResponse({ type: 'success', message: data.message });
                 setEditingTask(null);
-                fetchTasks();
+                
+                // Update cache directly
+                queryClient.setQueryData(['tasks'], (oldTasks) => {
+                    if (!oldTasks) return oldTasks;
+                    return oldTasks.map(task => 
+                        task.id === taskId ? { ...task, ...requestData } : task
+                    );
+                });
+                
+                // Mark as stale but don't refetch immediately
+                queryClient.invalidateQueries({ queryKey: ['tasks'] }, { refetchType: 'none' });
             } else {
                 setResponse({ type: 'error', message: data.detail || 'Failed to update task.' });
             }
@@ -126,7 +134,15 @@ const TasksManagement = () => {
             const data = await res.json();
             if (res.ok && data.success) {
                 setResponse({ type: 'success', message: data.message });
-                fetchTasks();
+                
+                // Update cache directly - remove deleted task
+                queryClient.setQueryData(['tasks'], (oldTasks) => {
+                    if (!oldTasks) return oldTasks;
+                    return oldTasks.filter(task => task.id !== taskId);
+                });
+                
+                // Mark as stale but don't refetch immediately
+                queryClient.invalidateQueries({ queryKey: ['tasks'] }, { refetchType: 'none' });
             } else {
                 setResponse({ type: 'error', message: data.detail || 'Failed to delete task.' });
             }
@@ -266,7 +282,7 @@ const TasksManagement = () => {
                         Create Task
                     </StyledButton>
                     <StyledButton 
-                        onClick={fetchTasks} 
+                        onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} 
                         variant="outline"
                         icon={<RefreshCw size={18} />}
                     >

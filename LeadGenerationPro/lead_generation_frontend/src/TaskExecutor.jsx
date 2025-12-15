@@ -18,50 +18,48 @@ import {
   Plus,
   ArrowLeft
 } from 'lucide-react';
-
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
 
 const TaskExecution = () => {
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true);
   const [executingTask, setExecutingTask] = useState(null);
   const [response, setResponse] = useState(null);
   const [executionHistory, setExecutionHistory] = useState({});
   const [activeCategory, setActiveCategory] = useState('all');
   const [taskExecutions, setTaskExecutions] = useState({});
   const [currentExecutions, setCurrentExecutions] = useState({});
-  
-  useEffect(() => {
-    fetchTasks();
-  }, []);
+  const queryClient = useQueryClient();
 
-  const fetchTasks = async () => {
-    try {
-      setLoading(true);
+  // Fetch tasks
+  const { data: tasksData, isLoading: isLoadingTasks } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => {
       const res = await fetch(`${API_BASE}/task/tasks`,{
         method: 'GET',
         headers: {
           "ngrok-skip-browser-warning": "true"
         }
       });
+      if (!res.ok) throw new Error('Failed to fetch tasks');
       const data = await res.json();
-      const tasksList = data.tasks || [];
-      setTasks(tasksList);
-      try {
-        await Promise.all(tasksList.map(t => fetchTaskExecutions(t.id)));
-      } catch (e) {
+      return data.tasks || [];
+    },
+  });
+
+  // Only show loading on initial load, not on background refetches
+  const pageLoading = isLoadingTasks && !tasksData;
+
+  const tasks = tasksData || [];
+
+  // Fetch task executions for all tasks
+  useEffect(() => {
+    if (tasks && tasks.length > 0) {
+      Promise.all(tasks.map(t => fetchTaskExecutions(t.id))).catch(e => {
         // ignore per-task failures
-      }
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-      setResponse({ type: 'error', message: 'Failed to fetch tasks' });
-    } finally {
-      setLoading(false);
-      setPageLoading(false);
+      });
     }
-  };
+  }, [tasks]);
 
   const executeTask = async (taskId, taskName) => {
     if (!confirm(`Are you sure you want to execute task "${taskName}"? This will scrape data and store it in the database.`)) {
@@ -107,6 +105,7 @@ const TaskExecution = () => {
       setResponse({ type: 'error', message: 'Network error occurred' });
     } finally {
       setExecutingTask(null);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       if (executionHistory[taskId]) {
         fetchExecutionHistory(taskId);
       }
@@ -326,7 +325,7 @@ const TaskExecution = () => {
             Create Task
           </StyledButton>
           <StyledButton 
-            onClick={fetchTasks} 
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} 
             variant="outline"
             icon={<RefreshCw size={18} />}
           >

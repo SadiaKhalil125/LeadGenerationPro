@@ -15,6 +15,7 @@ import {
   Search,
   ArrowLeft
 } from "lucide-react";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
 import { useNavigate } from "react-router-dom";
 function shortDate(ts) {
@@ -38,43 +39,36 @@ function statusForMapping(m) {
 }
 
 const MappingManager = () => {
-  const [mappings, setMappings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState("");
   const [filterSource, setFilterSource] = useState("all");
   const [editModal, setEditModal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [lastRefreshed, setLastRefreshed] = useState(null);
   const navigate = useNavigate();
-  useEffect(() => {
-    fetchMappings();
-  }, []);
+  const queryClient = useQueryClient();
 
-  const fetchMappings = async () => {
-    setLoading(true);
-    setError("");
-    try {
+  // Fetch mappings
+  const { data: mappingsData, isLoading: isLoadingMappings, error: queryError } = useQuery({
+    queryKey: ['mappings'],
+    queryFn: async () => {
       const res = await fetch(`${API_BASE}/mapping/mappings`,{
         method: "GET",
         headers: {
           "ngrok-skip-browser-warning": "true"
         }
       });
+      if (!res.ok) throw new Error("Failed to fetch mappings");
       const data = await res.json();
-      const list = data?.mappings ?? [];
-      setMappings(list);
-      setLastRefreshed(new Date());
-    } catch (err) {
-      console.error("Failed to fetch mappings:", err);
-      setError("Failed to fetch mappings");
-      setMappings([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data?.mappings ?? [];
+    },
+  });
+
+  // Only show loading on initial load, not on background refetches
+  const loading = isLoadingMappings && !mappingsData;
+
+  const mappings = mappingsData || [];
+  const error = queryError?.message || "";
 
   const sources = useMemo(() => {
     const s = new Set(mappings.map((m) => m.source_name || "unknown"));
@@ -118,7 +112,14 @@ const MappingManager = () => {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
       
-      setMappings((prev) => prev.filter((m) => m.mapping_name !== mappingName));
+      // Update cache directly - remove deleted mapping
+      queryClient.setQueryData(['mappings'], (oldMappings) => {
+        if (!oldMappings) return oldMappings;
+        return oldMappings.filter(m => m.mapping_name !== mappingName);
+      });
+      
+      // Mark as stale but don't refetch immediately
+      queryClient.invalidateQueries({ queryKey: ['mappings'] }, { refetchType: 'none' });
     } catch (err) {
       console.error("Delete failed:", err);
       alert("Failed to delete mapping — check console for details.");
@@ -142,12 +143,16 @@ const MappingManager = () => {
       
       const data = await res.json();
       
-      // Update local state
-      setMappings((prev) =>
-        prev.map((m) =>
+      // Update cache directly - update mapping status
+      queryClient.setQueryData(['mappings'], (oldMappings) => {
+        if (!oldMappings) return oldMappings;
+        return oldMappings.map(m => 
           m.mapping_name === mappingName ? { ...m, enabled: data.enabled } : m
-        )
-      );
+        );
+      });
+      
+      // Mark as stale but don't refetch immediately
+      queryClient.invalidateQueries({ queryKey: ['mappings'] }, { refetchType: 'none' });
     } catch (err) {
       console.error("Toggle status failed:", err);
       alert("Failed to toggle mapping status — check console for details.");
@@ -251,13 +256,18 @@ const MappingManager = () => {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
 
-      setMappings((prev) =>
-        prev.map((m) =>
+      // Update cache directly - update edited mapping
+      queryClient.setQueryData(['mappings'], (oldMappings) => {
+        if (!oldMappings) return oldMappings;
+        return oldMappings.map(m =>
           m.mapping_name === editModal.originalName 
             ? { ...m, ...editModal.mapping, field_mappings: fieldMappingsObject } 
             : m
-        )
-      );
+        );
+      });
+      
+      // Mark as stale but don't refetch immediately
+      queryClient.invalidateQueries({ queryKey: ['mappings'] }, { refetchType: 'none' });
 
       setEditModal(null);
     } catch (err) {
@@ -336,7 +346,7 @@ const MappingManager = () => {
               Dashboard
             </StyledButton>
             <StyledButton 
-              onClick={fetchMappings} 
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['mappings'] })} 
               variant="outline"
               icon={<RefreshCw size={18} />}
             >
@@ -419,11 +429,6 @@ const MappingManager = () => {
                   </option>
                 ))}
               </select>
-              {lastRefreshed && (
-                <div style={{ fontSize: '13px', color: '#00364A', opacity: 0.6 }}>
-                  Last: {shortDate(lastRefreshed)}
-                </div>
-              )}
             </div>
           </div>
 
