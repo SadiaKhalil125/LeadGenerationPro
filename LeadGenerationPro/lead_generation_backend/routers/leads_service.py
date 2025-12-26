@@ -254,17 +254,21 @@ async def search_leads(
                 created_at
             FROM leads
             WHERE
-                category ILIKE %s
-                AND address ILIKE %s
+                LOWER(TRIM(category)) LIKE LOWER(TRIM(%s))
+                OR
+                LOWER(TRIM(address)) LIKE LOWER(TRIM(%s))
             ORDER BY created_at DESC
             LIMIT %s OFFSET %s
         """
 
+        bt = f"%{business_type.strip().lower()}%"
+        loc = f"%{location.strip().lower()}%"
+        
         cur.execute(
             query,
             (
-                f"%{business_type}%",
-                f"%{location}%",
+                bt,
+                loc,
                 limit,
                 offset,
             ),

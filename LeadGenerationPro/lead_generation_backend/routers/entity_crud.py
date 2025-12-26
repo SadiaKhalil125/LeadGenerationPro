@@ -410,7 +410,7 @@ async def get_all_entities():
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
             AND table_type = 'BASE TABLE'
-            AND table_name NOT IN ('entity_mappings','sources','tasks','quick_extract_results','quick_extract_logs','task_execution_logs','chat_messages','chat_sessions','event','user','users','task_logs')
+            AND table_name NOT IN ('entity_mappings','sources','tasks','quick_extract_results','quick_extract_logs','task_execution_logs','chat_messages','chat_sessions','event','user','users','task_logs','leads')
             ORDER BY table_name
         """)
         
