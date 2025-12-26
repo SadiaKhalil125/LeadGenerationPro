@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Locate, Phone, Mail } from "lucide-react";
+import { Locate, Phone, Mail , Activity, Layers} from "lucide-react";
 import { FiFilter, FiStar, FiPhone, FiGlobe, FiDownload, FiArrowUp, FiArrowDown } from "react-icons/fi";
 import { BsSortDown, BsBuilding, BsSourceforge } from "react-icons/bs";
 import API_BASE from "./api_base"; // Your FastAPI backendS
@@ -245,12 +245,15 @@ export default function LeadGeneratorPage() {
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '12px',
             fontSize: '20px',
             fontWeight: 'bold',
             color: '#00364A'
           }}>
-            <Locate size={28} color="#49A3C4" />
+            <div style={{ position: 'relative', width: '40px', height: '24px' }}>
+              <Layers size={50} strokeWidth={2} style={{ position: 'absolute', top: -14, left: -5 }} />
+              <Activity size={30} strokeWidth={2} style={{ position: 'absolute', top: -2, left: 6 }} />
+            </div>
             SCOUT
           </div>
           

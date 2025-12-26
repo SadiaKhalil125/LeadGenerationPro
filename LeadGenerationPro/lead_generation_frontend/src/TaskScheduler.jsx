@@ -149,20 +149,26 @@ const TaskScheduler = () => {
                 setMappingSearch('');
                 setMappings([]);
                 
-                // Update cache directly - add new task
-                queryClient.setQueryData(['tasks'], (oldTasks) => {
-                    if (!oldTasks) return [data.task];
-                    return [...oldTasks, data.task];
-                });
-                
-                // Mark as stale but don't refetch immediately
-                queryClient.invalidateQueries({ queryKey: ['tasks'] }, { refetchType: 'none' });
+                // --- FIX APPLIED HERE ---
+                // Only update cache manually if data.task is actually returned and valid
+                if (data.task) {
+                    queryClient.setQueryData(['tasks'], (oldTasks) => {
+                        if (!oldTasks) return [data.task];
+                        return [...oldTasks, data.task];
+                    });
+                    // Mark as stale but don't refetch immediately
+                    queryClient.invalidateQueries({ queryKey: ['tasks'] }, { refetchType: 'none' });
+                } else {
+                    // If backend didn't return the task object, force a refetch to be safe
+                    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+                }
                 
                 setActiveTab('manage');
             } else {
                 setResponse({ type: 'error', message: data.detail || 'Failed to create task.' });
             }
         } catch (error) {
+            console.error(error);
             setResponse({ type: 'error', message: 'A network error occurred.' });
         } finally {
             setLoading(false);
@@ -556,7 +562,12 @@ const TaskScheduler = () => {
                                 marginBottom: '20px'
                             }}>
                                 <StatCard title="Total Scheduled" value={tasks.length} color="#00364A" />
-                                <StatCard title="Upcoming" value={tasks.filter(t => new Date(t.scheduled_time) > new Date()).length} color="#059669" />
+                                {/* FIX APPLIED HERE: Added safety check (t && t.scheduled_time) */}
+                                <StatCard 
+                                    title="Upcoming" 
+                                    value={tasks.filter(t => t && t.scheduled_time && new Date(t.scheduled_time) > new Date()).length} 
+                                    color="#059669" 
+                                />
                             </div>
 
                             {tasks.length === 0 ? (
@@ -572,69 +583,72 @@ const TaskScheduler = () => {
                                     <p style={{ color: '#00364A', opacity: 0.6 }}>Use the "Create Task" tab to schedule your first task.</p>
                                 </div>
                             ) : (
-                                tasks.map((task) => (
-                                    <div key={task.id} style={{
-                                        backgroundColor: 'white',
-                                        border: '2px solid rgba(0, 54, 74, 0.08)',
-                                        borderRadius: '20px',
-                                        boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
-                                        overflow: 'hidden',
-                                        transition: 'all 0.3s'
-                                    }}>
-                                        <div style={{ padding: '30px' }}>
-                                            <div style={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'flex-start',
-                                                gap: '20px',
-                                                flexWrap: 'wrap'
-                                            }}>
-                                                <div style={{ flex: '1 1 300px', minWidth: '0' }}>
-                                                    <h3 style={{
-                                                        fontSize: '18px',
-                                                        fontWeight: '700',
-                                                        color: '#00364A',
-                                                        marginBottom: '20px',
-                                                        whiteSpace: 'nowrap',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis'
-                                                    }}>
-                                                        {task.task_name}
-                                                    </h3>
-                                                    
-                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '15px' }}>
-                                                        <InfoItem icon={<Database size={14} />} label="Source">{task.source_name}</InfoItem>
-                                                        <InfoItem icon={<Map size={14} />} label="Mapping">{task.mapping_name}</InfoItem>
-                                                        <InfoItem icon={<List size={14} />} label="Entity">{task.entity_name}</InfoItem>
-                                                        <InfoItem icon={<Calendar size={14} />} label="Scheduled">{formatDateTime(task.scheduled_time)}</InfoItem>
-                                                        <InfoItem icon={<RotateCw size={14} />} label="Repeat">{task.repeat}</InfoItem>
-                                                        <InfoItem icon={<Clock size={14} />} label="Last Run">
-                                                            {task.last_executed_at ? formatDateTime(task.last_executed_at) : 'Never'}
-                                                        </InfoItem>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div style={{ 
-                                                    display: 'flex', 
-                                                    flexDirection: 'column', 
-                                                    alignItems: 'flex-end', 
-                                                    gap: '15px', 
-                                                    flexShrink: 0,
-                                                    marginLeft: 'auto'
+                                tasks.map((task) => {
+                                    if (!task) return null; // Safety check for map loop
+                                    return (
+                                        <div key={task.id} style={{
+                                            backgroundColor: 'white',
+                                            border: '2px solid rgba(0, 54, 74, 0.08)',
+                                            borderRadius: '20px',
+                                            boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
+                                            overflow: 'hidden',
+                                            transition: 'all 0.3s'
+                                        }}>
+                                            <div style={{ padding: '30px' }}>
+                                                <div style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'flex-start',
+                                                    gap: '20px',
+                                                    flexWrap: 'wrap'
                                                 }}>
-                                                    {getStatusBadge(task.scheduled_time)}
-                                                    <IconButton 
-                                                        onClick={() => handleDeleteTask(task.id, task.task_name)} 
-                                                        icon={<Trash2 size={16} />} 
-                                                        color="#EF4444"
-                                                        title="Delete Task"
-                                                        label="Delete"
-                                                    />
+                                                    <div style={{ flex: '1 1 300px', minWidth: '0' }}>
+                                                        <h3 style={{
+                                                            fontSize: '18px',
+                                                            fontWeight: '700',
+                                                            color: '#00364A',
+                                                            marginBottom: '20px',
+                                                            whiteSpace: 'nowrap',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis'
+                                                        }}>
+                                                            {task.task_name}
+                                                        </h3>
+                                                        
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '15px' }}>
+                                                            <InfoItem icon={<Database size={14} />} label="Source">{task.source_name}</InfoItem>
+                                                            <InfoItem icon={<Map size={14} />} label="Mapping">{task.mapping_name}</InfoItem>
+                                                            <InfoItem icon={<List size={14} />} label="Entity">{task.entity_name}</InfoItem>
+                                                            <InfoItem icon={<Calendar size={14} />} label="Scheduled">{formatDateTime(task.scheduled_time)}</InfoItem>
+                                                            <InfoItem icon={<RotateCw size={14} />} label="Repeat">{task.repeat}</InfoItem>
+                                                            <InfoItem icon={<Clock size={14} />} label="Last Run">
+                                                                {task.last_executed_at ? formatDateTime(task.last_executed_at) : 'Never'}
+                                                            </InfoItem>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div style={{ 
+                                                        display: 'flex', 
+                                                        flexDirection: 'column', 
+                                                        alignItems: 'flex-end', 
+                                                        gap: '15px', 
+                                                        flexShrink: 0,
+                                                        marginLeft: 'auto'
+                                                    }}>
+                                                        {getStatusBadge(task.scheduled_time)}
+                                                        <IconButton 
+                                                            onClick={() => handleDeleteTask(task.id, task.task_name)} 
+                                                            icon={<Trash2 size={16} />} 
+                                                            color="#EF4444"
+                                                            title="Delete Task"
+                                                            label="Delete"
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     )}
