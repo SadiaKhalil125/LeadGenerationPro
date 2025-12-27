@@ -660,19 +660,22 @@ export default function EntityMappingScreen() {
         });
 
       // Build follow_links from configuration
-      const follow_links = (followLinksConfig[entity] || []).map((fl) => ({
-        name: fl.name,
-        selector: fl.selectorField,
-        field_mappings: (fl.fieldMappings || []).reduce((acc, fm) => {
-          if (fm.selector && fm.selector.trim()) {
-            acc[fm.attribute] = {
-              selector: fm.selector,
-              extract: fm.extract || "text"
-            };
-          }
-          return acc;
-        }, {})
-      })).filter((fl) => fl.selector && fl.selector.trim() && Object.keys(fl.field_mappings).length > 0);
+      const follow_links = (followLinksConfig[entity] || [])
+        .filter((fl) => fl.name && fl.name.trim() && fl.selectorField && fl.selectorField.trim()) // Only include valid follow links
+        .map((fl) => ({
+          name: fl.name.trim(),
+          selector: fl.selectorField.trim(), // CSS selector for the link element
+          field_mappings: (fl.fieldMappings || []).reduce((acc, fm) => {
+            if (fm.attribute && fm.selector && fm.selector.trim()) {
+              acc[fm.attribute] = {
+                selector: fm.selector.trim(),
+                extract: fm.extract || "text"
+              };
+            }
+            return acc;
+          }, {})
+        }))
+        .filter((fl) => Object.keys(fl.field_mappings).length > 0); // Only include if it has field mappings
 
       return {
         entity_name: entity,
@@ -1152,17 +1155,17 @@ export default function EntityMappingScreen() {
                           </h4>
                           <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#00364A', lineHeight: '1.8' }}>
                             <li style={{ marginBottom: '6px' }}>
-                              <strong>First, configure a link field above:</strong> Add an attribute (e.g., "profile_url"), enter its CSS selector, and set the extract type to <strong>"href"</strong> in the metadata dropdown.
+                              <strong>Click "Add Detail Page"</strong> below to add a new detail page configuration.
                             </li>
                             <li style={{ marginBottom: '6px' }}>
-                              <strong>Then click "Add Detail Page"</strong> below and select that field from the dropdown.
+                              <strong>Enter the Link CSS Selector:</strong> Enter the CSS selector for the link element (e.g., "a.profile-link"). The system will automatically extract the href attribute.
                             </li>
                             <li style={{ marginBottom: '6px' }}>
-                              <strong>Add fields to extract from detail pages:</strong> Select attributes and their selectors (auto-filled from above if same).
+                              <strong>Add fields to extract from detail pages:</strong> Select attributes and their selectors. Selectors will be auto-filled if the same attribute exists in the main mapping above.
                             </li>
                           </ol>
                           <div style={{ marginTop: '12px', padding: '10px', backgroundColor: 'white', borderRadius: '6px', fontSize: '12px', color: '#00364A' }}>
-                            <strong>💡 How it works:</strong> The system will extract the URL from your link field, visit each detail page, scrape the additional fields you configure, and merge everything into a single record.
+                            <strong>💡 How it works:</strong> The system will extract the URL from your CSS selector, visit each detail page, scrape the additional fields you configure, and merge everything into a single record. <strong>You don't need to add a link field in the entity mapping above.</strong>
                           </div>
                         </div>
                       </div>
@@ -1191,42 +1194,16 @@ export default function EntityMappingScreen() {
                           </div>
                           <div style={{ flex: 1, marginRight: '15px' }}>
                             <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#00364A', marginBottom: '6px', textTransform: 'uppercase' }}>
-                              Link Field (with href)
+                              Link CSS Selector
                             </label>
-                            <select
-                              value={fl.selectorField}
-                              onChange={(e) => handleFollowLinkChange(entity, flIndex, 'selectorField', e.target.value)}
-                              style={{
-                                width: '100%',
-                                padding: '10px 12px',
-                                borderRadius: '8px',
-                                border: '1px solid rgba(0, 54, 74, 0.2)',
-                                fontSize: '14px',
-                                backgroundColor: 'white'
-                              }}
-                            >
-                              <option value="">Select field that contains the link...</option>
-                              {entityData[entity]?.fields
-                                .filter((f) => {
-                                  // Show only fields that have a selector configured
-                                  return f.attribute.toLowerCase() !== "id" && f.selector && f.selector.trim();
-                                })
-                                .map((f) => {
-                                  const hasHref = f.metadata === "href";
-                                  return (
-                                    <option key={f.attribute} value={f.attribute}>
-                                      {f.attribute}{hasHref ? ' ✓ (href configured)' : ''}
-                                    </option>
-                                  );
-                                })}
-                            </select>
+                            <SelectorInput
+                              placeholder="e.g., a.profile-link, .detail-page-url"
+                              value={fl.selectorField || ""}
+                              onChange={(val) => handleFollowLinkChange(entity, flIndex, 'selectorField', val)}
+                              options={availableSelectors[entity] || []}
+                            />
                             <p style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>
-                              Select the field that contains the detail page URL. The CSS selector is already configured above - you don't need to provide it again.
-                              {fl.selectorField && entityData[entity]?.fields.find(f => f.attribute === fl.selectorField)?.metadata !== "href" && (
-                                <span style={{ color: '#F59E0B', display: 'block', marginTop: '4px' }}>
-                                  💡 Tip: Change the extract type to "href" for this field above for proper URL extraction.
-                                </span>
-                              )}
+                              Enter the CSS selector for the link element (e.g., "a.profile-link"). The system will extract the href attribute automatically.
                             </p>
                           </div>
                           <button
@@ -1345,15 +1322,15 @@ export default function EntityMappingScreen() {
                         }}>
                           <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ fontWeight: '600' }}>1️⃣</span> 
-                            <span>Configure a link field <strong>above</strong> with extract="href"</span>
-                          </p>
-                          <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontWeight: '600' }}>2️⃣</span> 
                             <span>Click <strong>"Add Detail Page"</strong> button</span>
                           </p>
                           <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontWeight: '600' }}>2️⃣</span> 
+                            <span>Enter the <strong>CSS selector</strong> for the link (e.g., "a.profile-link")</span>
+                          </p>
+                          <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ fontWeight: '600' }}>3️⃣</span> 
-                            <span>Select that field and add detail page fields</span>
+                            <span>Add fields to extract from detail pages</span>
                           </p>
                         </div>
                       </div>
