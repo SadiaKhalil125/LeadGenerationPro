@@ -277,6 +277,9 @@ export default function EntityMappingScreen() {
   const [availableSelectors, setAvailableSelectors] = useState({}); // { entityName: string[] }
 
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
+  
+  // State for multi-page scraping (follow_links)
+  const [followLinksConfig, setFollowLinksConfig] = useState({}); // { entityName: [{ name, selectorField, fieldMappings }] }
 
   useEffect(() => {
     const urlLower = url.toLowerCase();
@@ -357,6 +360,90 @@ export default function EntityMappingScreen() {
         f.attribute === attribute ? { ...f, [key]: value } : f
       );
       return { ...prev, [entity]: { ...cur, fields: updatedFields } };
+    });
+  };
+  
+  // Add follow link configuration
+  const handleAddFollowLink = (entity) => {
+    setFollowLinksConfig((prev) => {
+      const entityLinks = prev[entity] || [];
+      return {
+        ...prev,
+        [entity]: [
+          ...entityLinks,
+          {
+            name: `detail_${entityLinks.length + 1}`,
+            selectorField: "",
+            fieldMappings: []
+          }
+        ]
+      };
+    });
+  };
+  
+  // Remove follow link configuration
+  const handleRemoveFollowLink = (entity, index) => {
+    setFollowLinksConfig((prev) => {
+      const entityLinks = prev[entity] || [];
+      return {
+        ...prev,
+        [entity]: entityLinks.filter((_, i) => i !== index)
+      };
+    });
+  };
+  
+  // Update follow link configuration
+  const handleFollowLinkChange = (entity, index, key, value) => {
+    setFollowLinksConfig((prev) => {
+      const entityLinks = prev[entity] || [];
+      const updated = [...entityLinks];
+      updated[index] = { ...updated[index], [key]: value };
+      return { ...prev, [entity]: updated };
+    });
+  };
+  
+  // Update follow link field mapping
+  const handleUpdateFollowLinkField = (entity, linkIndex, fieldIndex, key, value) => {
+    setFollowLinksConfig((prev) => {
+      const entityLinks = prev[entity] || [];
+      const updated = [...entityLinks];
+      const fieldMappings = [...(updated[linkIndex].fieldMappings || [])];
+      const currentField = fieldMappings[fieldIndex] || {};
+      
+      // If attribute is being changed, auto-fill selector and extract from main field mappings
+      if (key === 'attribute' && value) {
+        const mainField = entityData[entity]?.fields.find(f => f.attribute === value);
+        if (mainField) {
+          fieldMappings[fieldIndex] = {
+            attribute: value,
+            selector: mainField.selector || "",
+            extract: mainField.metadata || "text"
+          };
+        } else {
+          fieldMappings[fieldIndex] = { ...currentField, [key]: value };
+        }
+      } else {
+        fieldMappings[fieldIndex] = { ...currentField, [key]: value };
+      }
+      
+      updated[linkIndex] = {
+        ...updated[linkIndex],
+        fieldMappings
+      };
+      return { ...prev, [entity]: updated };
+    });
+  };
+  
+  // Remove field mapping from follow link
+  const handleRemoveFollowLinkField = (entity, linkIndex, fieldIndex) => {
+    setFollowLinksConfig((prev) => {
+      const entityLinks = prev[entity] || [];
+      const updated = [...entityLinks];
+      updated[linkIndex] = {
+        ...updated[linkIndex],
+        fieldMappings: (updated[linkIndex].fieldMappings || []).filter((_, i) => i !== fieldIndex)
+      };
+      return { ...prev, [entity]: updated };
     });
   };
 
@@ -462,6 +549,24 @@ export default function EntityMappingScreen() {
     setPreviewEntity(entity);
 
     try {
+      // Build follow_links from configuration
+      const follow_links = (followLinksConfig[entity] || [])
+        .filter((fl) => fl.name && fl.name.trim() && fl.selectorField && fl.selectorField.trim()) // Only include valid follow links
+        .map((fl) => ({
+          name: fl.name.trim(),
+          selector: fl.selectorField.trim(),
+          field_mappings: (fl.fieldMappings || []).reduce((acc, fm) => {
+            if (fm.attribute && fm.selector && fm.selector.trim()) {
+              acc[fm.attribute] = {
+                selector: fm.selector.trim(),
+                extract: fm.extract || "text"
+              };
+            }
+            return acc;
+          }, {})
+        }))
+        .filter((fl) => Object.keys(fl.field_mappings).length > 0); // Only include if it has field mappings
+
       const res = await fetch(`${API_BASE}/task/preview-mapping`, {
         method: "POST",
         headers: { 
@@ -473,9 +578,17 @@ export default function EntityMappingScreen() {
           entity_name: entity,
           container_selector: entityInfo.containerSelector || null,
           field_mappings,
+          follow_links: follow_links.length > 0 ? follow_links : [],
           preview_step: step, // Send the step parameter
         }),
       });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ detail: "Unknown error" }));
+        console.error("Preview error response:", errorData);
+        alert(`Preview failed (${res.status}): ${errorData.detail || errorData.message || res.statusText}`);
+        return;
+      }
 
       const data = await res.json();
 
@@ -546,10 +659,26 @@ export default function EntityMappingScreen() {
           }
         });
 
+      // Build follow_links from configuration
+      const follow_links = (followLinksConfig[entity] || []).map((fl) => ({
+        name: fl.name,
+        selector: fl.selectorField,
+        field_mappings: (fl.fieldMappings || []).reduce((acc, fm) => {
+          if (fm.selector && fm.selector.trim()) {
+            acc[fm.attribute] = {
+              selector: fm.selector,
+              extract: fm.extract || "text"
+            };
+          }
+          return acc;
+        }, {})
+      })).filter((fl) => fl.selector && fl.selector.trim() && Object.keys(fl.field_mappings).length > 0);
+
       return {
         entity_name: entity,
         container_selector,
         field_mappings,
+        follow_links: follow_links.length > 0 ? follow_links : undefined,
         enabled: entityData[entity]?.enabled !== false,
       };
     });
@@ -977,6 +1106,259 @@ export default function EntityMappingScreen() {
                       </div>
                     );
                   })}
+                  
+                  {/* Multi-Page Scraping Configuration */}
+                  <div style={{ marginTop: '30px', padding: '20px', backgroundColor: '#F0F9FF', borderRadius: '12px', border: '2px solid #49A3C4' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <div>
+                        <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', margin: 0 }}>
+                          Multi-Page Scraping
+                        </h3>
+                        <p style={{ fontSize: '12px', color: '#00364A', opacity: 0.7, marginTop: '4px' }}>
+                          Extract data from detail pages linked from the listing page
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleAddFollowLink(entity)}
+                        style={{
+                          padding: '8px 16px',
+                          backgroundColor: '#49A3C4',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          fontSize: '14px'
+                        }}
+                      >
+                        + Add Detail Page
+                      </button>
+                    </div>
+                    
+                    {/* Instructions Box */}
+                    <div style={{ 
+                      marginBottom: '20px', 
+                      padding: '15px', 
+                      backgroundColor: '#E0F2FE', 
+                      borderRadius: '10px', 
+                      border: '1px solid #49A3C4',
+                      borderLeft: '4px solid #49A3C4'
+                    }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <Info size={20} color="#00364A" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                          <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#00364A', margin: '0 0 8px 0' }}>
+                            How to Configure Multi-Page Scraping:
+                          </h4>
+                          <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#00364A', lineHeight: '1.8' }}>
+                            <li style={{ marginBottom: '6px' }}>
+                              <strong>First, configure a link field above:</strong> Add an attribute (e.g., "profile_url"), enter its CSS selector, and set the extract type to <strong>"href"</strong> in the metadata dropdown.
+                            </li>
+                            <li style={{ marginBottom: '6px' }}>
+                              <strong>Then click "Add Detail Page"</strong> below and select that field from the dropdown.
+                            </li>
+                            <li style={{ marginBottom: '6px' }}>
+                              <strong>Add fields to extract from detail pages:</strong> Select attributes and their selectors (auto-filled from above if same).
+                            </li>
+                          </ol>
+                          <div style={{ marginTop: '12px', padding: '10px', backgroundColor: 'white', borderRadius: '6px', fontSize: '12px', color: '#00364A' }}>
+                            <strong>💡 How it works:</strong> The system will extract the URL from your link field, visit each detail page, scrape the additional fields you configure, and merge everything into a single record.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {(followLinksConfig[entity] || []).map((fl, flIndex) => (
+                      <div key={flIndex} style={{ marginBottom: '20px', padding: '15px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #49A3C4' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                          <div style={{ flex: 1, marginRight: '15px' }}>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#00364A', marginBottom: '6px', textTransform: 'uppercase' }}>
+                              Link Name
+                            </label>
+                            <input
+                              type="text"
+                              value={fl.name}
+                              onChange={(e) => handleFollowLinkChange(entity, flIndex, 'name', e.target.value)}
+                              placeholder="e.g., profile, detail"
+                              style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(0, 54, 74, 0.2)',
+                                fontSize: '14px'
+                              }}
+                            />
+                          </div>
+                          <div style={{ flex: 1, marginRight: '15px' }}>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#00364A', marginBottom: '6px', textTransform: 'uppercase' }}>
+                              Link Field (with href)
+                            </label>
+                            <select
+                              value={fl.selectorField}
+                              onChange={(e) => handleFollowLinkChange(entity, flIndex, 'selectorField', e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(0, 54, 74, 0.2)',
+                                fontSize: '14px',
+                                backgroundColor: 'white'
+                              }}
+                            >
+                              <option value="">Select field that contains the link...</option>
+                              {entityData[entity]?.fields
+                                .filter((f) => {
+                                  // Show only fields that have a selector configured
+                                  return f.attribute.toLowerCase() !== "id" && f.selector && f.selector.trim();
+                                })
+                                .map((f) => {
+                                  const hasHref = f.metadata === "href";
+                                  return (
+                                    <option key={f.attribute} value={f.attribute}>
+                                      {f.attribute}{hasHref ? ' ✓ (href configured)' : ''}
+                                    </option>
+                                  );
+                                })}
+                            </select>
+                            <p style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>
+                              Select the field that contains the detail page URL. The CSS selector is already configured above - you don't need to provide it again.
+                              {fl.selectorField && entityData[entity]?.fields.find(f => f.attribute === fl.selectorField)?.metadata !== "href" && (
+                                <span style={{ color: '#F59E0B', display: 'block', marginTop: '4px' }}>
+                                  💡 Tip: Change the extract type to "href" for this field above for proper URL extraction.
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveFollowLink(entity, flIndex)}
+                            style={{
+                              padding: '10px',
+                              backgroundColor: '#EF4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              alignSelf: 'flex-end'
+                            }}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                        
+                        <div style={{ marginTop: '15px' }}>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#00364A', marginBottom: '10px', textTransform: 'uppercase' }}>
+                            Fields to Extract from Detail Page
+                          </label>
+                          {(fl.fieldMappings || []).map((fm, fmIndex) => (
+                            <div key={fmIndex} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                              <select
+                                value={fm.attribute || ""}
+                                onChange={(e) => handleUpdateFollowLinkField(entity, flIndex, fmIndex, 'attribute', e.target.value)}
+                                style={{
+                                  padding: '8px 10px',
+                                  borderRadius: '8px',
+                                  border: '1px solid rgba(0, 54, 74, 0.2)',
+                                  fontSize: '13px'
+                                }}
+                              >
+                                <option value="">Select attribute...</option>
+                                {entityData[entity]?.fields
+                                  .filter((f) => f.attribute.toLowerCase() !== "id")
+                                  .map((f) => {
+                                    const hasSelector = f.selector && f.selector.trim();
+                                    return (
+                                      <option key={f.attribute} value={f.attribute}>
+                                        {f.attribute}{hasSelector ? ' ✓' : ''}
+                                      </option>
+                                    );
+                                  })}
+                              </select>
+                              <SelectorInput
+                                placeholder={fm.attribute && entityData[entity]?.fields.find(f => f.attribute === fm.attribute)?.selector 
+                                  ? `Auto-filled: ${entityData[entity].fields.find(f => f.attribute === fm.attribute).selector}` 
+                                  : "CSS Selector (auto-filled if configured above)"}
+                                value={fm.selector || ""}
+                                onChange={(val) => handleUpdateFollowLinkField(entity, flIndex, fmIndex, 'selector', val)}
+                                options={availableSelectors[entity] || []}
+                              />
+                              <MetadataInput
+                                value={fm.extract || "text"}
+                                onChange={(val) => handleUpdateFollowLinkField(entity, flIndex, fmIndex, 'extract', val)}
+                                options={METADATA_OPTIONS}
+                              />
+                              <button
+                                onClick={() => handleRemoveFollowLinkField(entity, flIndex, fmIndex)}
+                                style={{
+                                  padding: '8px',
+                                  backgroundColor: '#EF4444',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => {
+                              const updated = [...(fl.fieldMappings || []), { attribute: "", selector: "", extract: "text" }];
+                              handleFollowLinkChange(entity, flIndex, 'fieldMappings', updated);
+                            }}
+                            style={{
+                              padding: '8px 16px',
+                              backgroundColor: '#E0F2FE',
+                              color: '#00364A',
+                              border: '1px solid #49A3C4',
+                              borderRadius: '8px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              fontSize: '13px'
+                            }}
+                          >
+                            + Add Field
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {(followLinksConfig[entity] || []).length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '20px', color: '#6B7280', fontSize: '14px' }}>
+                        <div style={{ marginBottom: '12px' }}>
+                          <AlertTriangle size={24} color="#F59E0B" style={{ marginBottom: '8px' }} />
+                        </div>
+                        <p style={{ fontWeight: '600', marginBottom: '8px', color: '#374151' }}>No detail pages configured yet.</p>
+                        <p style={{ fontSize: '13px', marginBottom: '12px', color: '#6B7280' }}>
+                          To enable multi-page scraping:
+                        </p>
+                        <div style={{ 
+                          textAlign: 'left', 
+                          display: 'inline-block', 
+                          backgroundColor: 'white', 
+                          padding: '12px 16px', 
+                          borderRadius: '8px',
+                          border: '1px solid #E5E7EB',
+                          fontSize: '12px',
+                          color: '#374151',
+                          maxWidth: '400px'
+                        }}>
+                          <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontWeight: '600' }}>1️⃣</span> 
+                            <span>Configure a link field <strong>above</strong> with extract="href"</span>
+                          </p>
+                          <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontWeight: '600' }}>2️⃣</span> 
+                            <span>Click <strong>"Add Detail Page"</strong> button</span>
+                          </p>
+                          <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontWeight: '600' }}>3️⃣</span> 
+                            <span>Select that field and add detail page fields</span>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
               </div>
             ))}
           </div>

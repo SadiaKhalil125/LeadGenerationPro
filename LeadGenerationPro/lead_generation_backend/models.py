@@ -7,12 +7,17 @@ class FieldMapping(BaseModel):
     selector: str
     extract: str = "text"  # text, href, src, or attribute name
 
+class FollowLink(BaseModel):
+    name: str
+    selector: str
+    field_mappings: Dict[str, FieldMapping]
 
 class EntityMappingRequest(BaseModel):
     entity_name: str              # e.g., "company", "job", "person" 
     container_selector: Optional[str] = None
     field_mappings: Dict[str, FieldMapping]
     enabled: bool = True
+    follow_links: Optional[List[FollowLink]] = []   # <-- Added
     # key = field name (e.g., "company_name"), value = FieldMapping selector/extract info
 
 class MappingFormRequest(BaseModel):
@@ -54,6 +59,7 @@ class ScrapeRequest(BaseModel):
     field_mappings: Dict[str, FieldMapping]
     max_items: Optional[int] = 10
     timeout: Optional[int] = 15
+    follow_links: Optional[List[FollowLink]] = []
     pagination_config: Optional[PaginationConfig] = None
     captcha_params: Optional[CaptchaParams] = None
 
@@ -91,6 +97,7 @@ class MappingInfo(BaseModel):
     mapping_name: str
     container_selector: Optional[str] = None
     field_mappings: Dict[str, Any]
+    follow_links: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
     source_id: int
     enabled:Optional[bool] = True
@@ -157,6 +164,7 @@ class PreviewMappingRequest(BaseModel):
     entity_name: str
     container_selector: Optional[str] = None
     field_mappings: Dict[str, FieldMapping]
+    follow_links: Optional[List[FollowLink]] = []
     preview_step:Optional[int] = 1
     
 class MessageRequest(BaseModel):
@@ -177,6 +185,7 @@ class QuickExtractRequest(BaseModel):
     timeout: Optional[int] = 15
     pagination_config: Optional[PaginationConfig] = None
     captcha_params: Optional[CaptchaParams] = None
+    follow_links: Optional[List[FollowLink]] = []
     entity_name: Optional[str] = None  # Optional: store data in this entity table
     create_entity: Optional[bool] = False  # If true, create entity table from field mappings
     source_name: Optional[str] = "Quick Extract"  # Source name for stored data

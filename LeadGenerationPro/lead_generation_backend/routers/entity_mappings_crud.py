@@ -47,6 +47,7 @@ async def save_entity_mapping(mapping: MappingFormRequest):
                 mapping_name TEXT NOT NULL UNIQUE,
                 container_selector TEXT,
                 field_mappings JSONB NOT NULL,
+                follow_links JSONB,
                 enabled BOOLEAN DEFAULT TRUE,
                 created_at TIMESTAMP DEFAULT NOW(),
                 CONSTRAINT unique_entity_source UNIQUE (entity_name, source_id)
@@ -57,6 +58,12 @@ async def save_entity_mapping(mapping: MappingFormRequest):
         cur.execute("""
             ALTER TABLE entity_mappings 
             ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT TRUE;
+        """)
+        
+        # Add follow_links column if it doesn't exist
+        cur.execute("""
+            ALTER TABLE entity_mappings 
+            ADD COLUMN IF NOT EXISTS follow_links JSONB;
         """)
 
         saved_mappings = []
@@ -88,26 +95,77 @@ async def save_entity_mapping(mapping: MappingFormRequest):
                     status_code=400,
                     detail=f"Invalid fields {invalid} for '{entity_name}'. Valid columns: {sorted(existing_columns)}"
                 )
+            
+            # Automatically add columns for follow_links field names
+            # Fields from detail pages use the field name directly (as configured in the mapping)
+            # No prefixing - the field name matches the entity attribute name
+            if em.follow_links:
+                from psycopg2 import sql
+                columns_added = []
+                
+                for fl in em.follow_links:
+                    link_name = fl.name.strip()
+                    if not link_name:
+                        continue
+                    # For each field in the follow_link, use the field name directly
+                    for field_name in fl.field_mappings.keys():
+                        # Clean the field name to match database naming conventions
+                        clean_field_name = field_name.strip().lower().replace(' ', '_').replace('-', '_')
+                        clean_field_name = ''.join(c for c in clean_field_name if c.isalnum() or c == '_')
+                        
+                        # Ensure the column exists (it should already exist as an entity attribute)
+                        if clean_field_name and clean_field_name not in existing_columns:
+                            try:
+                                alter_stmt = sql.SQL("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} TEXT;").format(
+                                    table=sql.Identifier(entity_name),
+                                    col=sql.Identifier(clean_field_name)
+                                )
+                                cur.execute(alter_stmt)
+                                existing_columns.add(clean_field_name)
+                                columns_added.append(clean_field_name)
+                            except Exception as e:
+                                print(f"Warning: Could not add column {clean_field_name} to {entity_name}: {str(e)}")
+                
+                if columns_added:
+                    conn.commit()  # Commit the ALTER TABLE statements
+                    print(f"Added {len(columns_added)} column(s) to entity table '{entity_name}': {columns_added}")
 
             # Serialize mappings and generate mapping_name
             serialized = {
                 key: {"selector": fm.selector, "extract": fm.extract}
                 for key, fm in em.field_mappings.items()
             }
+            
+            # Serialize follow_links if present
+            follow_links_serialized = None
+            if em.follow_links:
+                follow_links_serialized = [
+                    {
+                        "name": fl.name,
+                        "selector": fl.selector,
+                        "field_mappings": {
+                            key: {"selector": fm.selector, "extract": fm.extract}
+                            for key, fm in fl.field_mappings.items()
+                        }
+                    }
+                    for fl in em.follow_links
+                ]
+            
             mapping_name = f"{entity_name}-{mapping.source}-mapping"
 
             # Insert or update mapping with enabled status
             cur.execute("""
-                INSERT INTO entity_mappings (entity_name, source_id, mapping_name, container_selector, field_mappings, enabled)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO entity_mappings (entity_name, source_id, mapping_name, container_selector, field_mappings, follow_links, enabled)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (entity_name, source_id)
                 DO UPDATE SET
                     container_selector = EXCLUDED.container_selector,
                     field_mappings = EXCLUDED.field_mappings,
+                    follow_links = EXCLUDED.follow_links,
                     enabled = EXCLUDED.enabled,
                     created_at = NOW()
                 RETURNING id;
-            """, (entity_name, source_id, mapping_name, em.container_selector, Json(serialized), em.enabled))
+            """, (entity_name, source_id, mapping_name, em.container_selector, Json(serialized), Json(follow_links_serialized) if follow_links_serialized else None, em.enabled))
 
             mapping_id = cur.fetchone()[0]
             saved_mappings.append({
@@ -158,6 +216,7 @@ async def get_all_mappings():
                    em.mapping_name,
                    em.container_selector,
                    em.field_mappings,
+                   em.follow_links,
                    COALESCE(em.enabled, TRUE) as enabled,
                    em.created_at,
                    em.source_id,
@@ -178,11 +237,12 @@ async def get_all_mappings():
                 mapping_name=row[2],
                 container_selector=row[3],
                 field_mappings=row[4],
-                enabled=row[5],  # This should now always be True/False, not None
-                created_at=row[6],
-                source_id=row[7],
-                source_name=row[8],
-                url=row[9]
+                follow_links=row[5],  # follow_links JSONB
+                enabled=row[6],  # This should now always be True/False, not None
+                created_at=row[7],
+                source_id=row[8],
+                source_name=row[9],
+                url=row[10]
             ))
         
         cur.close()
@@ -219,6 +279,7 @@ async def edit_mapping(mapping_name: str, payload: dict = Body(...)):
         new_mapping_name = payload.get("mapping_name", mapping_name)
         container_selector = payload.get("container_selector")
         field_mappings = payload.get("field_mappings", {})
+        follow_links = payload.get("follow_links")
         source_id = payload.get("source_id")
         enabled = payload.get("enabled", True)  # Default to True if not provided
 
@@ -228,6 +289,7 @@ async def edit_mapping(mapping_name: str, payload: dict = Body(...)):
             SET mapping_name = %s,
                 container_selector = %s,
                 field_mappings = %s,
+                follow_links = %s,
                 source_id = %s,
                 enabled = %s
             WHERE mapping_name = %s;
@@ -235,6 +297,7 @@ async def edit_mapping(mapping_name: str, payload: dict = Body(...)):
             new_mapping_name,
             container_selector,
             Json(field_mappings),
+            Json(follow_links) if follow_links else None,
             source_id,
             enabled,
             mapping_name
