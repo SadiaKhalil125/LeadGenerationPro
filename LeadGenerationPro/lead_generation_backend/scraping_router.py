@@ -1,6 +1,6 @@
 from models import ScrapeRequest, ScrapeResponse
 from google_maps_scraper import scrape_google_maps, is_google_maps_url
-from crawl4Util import extract_website
+from helperutil import extract_website
 import re
 
 # Google Maps supported fields with their canonical names and aliases

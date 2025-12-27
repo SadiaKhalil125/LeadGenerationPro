@@ -21,7 +21,7 @@ from models import SelectorRequest, SourceInfo, SourcesListResponse, FieldMappin
 from utils import extract_value, fetch_page
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-from crawl4Util import extract_website
+from helperutil import extract_website
 from scraping_router import route_scraping_request
 from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login, leads_service
 

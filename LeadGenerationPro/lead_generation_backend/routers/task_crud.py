@@ -1,9 +1,9 @@
 from fastapi import HTTPException
-from models import TaskInfo,TaskRequest,TasksListResponse, SourceInfo, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig, CaptchaParams
+from models import TaskInfo,TaskRequest,TasksListResponse, SourceInfo, TaskUpdateRequest, PreviewMappingRequest, PaginationConfig, CaptchaParams, FollowLink, FieldMapping
 from fastapi import APIRouter
 from datetime import datetime
 from routers.get_db_connection import get_db_cursor
-from crawl4Util import extract_website
+from helperutil import extract_website
 from scraping_router import route_scraping_request 
 from models import ScrapeRequest
 from psycopg2 import sql
@@ -595,7 +595,8 @@ async def _execute_task_internal(task_id: int):
                 em.mapping_name,
                 em.entity_name,
                 em.container_selector,
-                em.field_mappings
+                em.field_mappings,
+                em.follow_links
             FROM tasks t
             JOIN sources s ON t.source_id = s.id
             JOIN entity_mappings em ON t.mapping_id = em.id
@@ -611,7 +612,7 @@ async def _execute_task_internal(task_id: int):
         
         # Extract task information
         (task_id_db, task_name, source_id, source_name, source_url, pagination_config, is_captcha_protected, captcha_params,
-         mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings) = task_data
+         mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings, follow_links) = task_data
 
         log_execution(conn, task_id, execution_id, 'processing', 'info', 
                      'Task details retrieved successfully', {
@@ -620,24 +621,151 @@ async def _execute_task_internal(task_id: int):
                          'source_url': source_url,
                          'entity_name': entity_name,
                          'mapping_name': mapping_name,
-                         'max_items': max_items
+                         'max_items': max_items,
+                         'follow_links_raw': follow_links,
+                         'follow_links_type': type(follow_links).__name__,
+                         'follow_links_is_none': follow_links is None,
+                         'follow_links_length': len(follow_links) if follow_links else 0
                      })
 
         # Build ScrapeRequest from task data
         log_execution(conn, task_id, execution_id, 'processing', 'info', 
                      'Building scrape request')
         
+        # Convert field_mappings from dict to FieldMapping objects
+        field_mappings_objects = {}
+        if field_mappings:
+            try:
+                for key, value in field_mappings.items():
+                    if isinstance(value, dict):
+                        field_mappings_objects[key] = FieldMapping(**value)
+                    else:
+                        field_mappings_objects[key] = value
+            except Exception as e:
+                log_execution(conn, task_id, execution_id, 'processing', 'error',
+                             f'Error converting field_mappings: {str(e)}')
+                raise HTTPException(status_code=500, detail=f"Failed to convert field_mappings: {str(e)}")
+        
+        # Convert follow_links JSON to FollowLink objects if present
+        follow_links_objects = []
+        if follow_links is not None:
+            if isinstance(follow_links, list) and len(follow_links) > 0:
+                try:
+                    log_execution(conn, task_id, execution_id, 'processing', 'info',
+                                 f'Converting follow_links: {len(follow_links)} link(s) found')
+                    log_execution(conn, task_id, execution_id, 'processing', 'debug',
+                                 f'Raw follow_links data: {follow_links}')
+                    for fl_dict in follow_links:
+                        # Validate required fields - check both "selector" and "selectorField" (for backward compatibility)
+                        selector_value = fl_dict.get("selector") or fl_dict.get("selectorField")
+                        name_value = fl_dict.get("name")
+                        
+                        # Ensure both name and selector are non-empty strings
+                        if not name_value or not isinstance(name_value, str) or not name_value.strip():
+                            log_execution(conn, task_id, execution_id, 'processing', 'warning',
+                                         f'Skipping invalid follow_link: missing or invalid name. Dict keys: {list(fl_dict.keys())}, Dict: {fl_dict}')
+                            continue
+                        
+                        if not selector_value or not isinstance(selector_value, str) or not selector_value.strip():
+                            log_execution(conn, task_id, execution_id, 'processing', 'warning',
+                                         f'Skipping invalid follow_link: missing or invalid selector. Dict keys: {list(fl_dict.keys())}, Dict: {fl_dict}')
+                            continue
+                        
+                        log_execution(conn, task_id, execution_id, 'processing', 'info',
+                                     f'Processing follow_link: name={name_value}, selector={selector_value}, field_mappings_keys={list(fl_dict.get("field_mappings", {}).keys())}')
+                        try:
+                            follow_link_obj = FollowLink(
+                                name=name_value.strip(),
+                                selector=selector_value.strip(),  # Use the found selector value
+                                field_mappings={
+                                    key: FieldMapping(**fm_dict)
+                                    for key, fm_dict in fl_dict.get("field_mappings", {}).items()
+                                }
+                            )
+                            # Double-check the object was created correctly by accessing the attribute
+                            try:
+                                test_selector = follow_link_obj.selector
+                                test_name = follow_link_obj.name
+                                test_fields = follow_link_obj.field_mappings
+                            except AttributeError as attr_err:
+                                log_execution(conn, task_id, execution_id, 'processing', 'error',
+                                             f'FollowLink object missing attribute: {str(attr_err)}, Object type: {type(follow_link_obj)}, Dict: {fl_dict}')
+                                continue
+                            
+                            follow_links_objects.append(follow_link_obj)
+                            log_execution(conn, task_id, execution_id, 'processing', 'info',
+                                         f'Follow link converted: {follow_link_obj.name} with selector={follow_link_obj.selector} and {len(follow_link_obj.field_mappings)} field(s)')
+                        except Exception as fl_error:
+                            log_execution(conn, task_id, execution_id, 'processing', 'error',
+                                         f'Error creating FollowLink object: {str(fl_error)}, dict: {fl_dict}, traceback: {traceback.format_exc()}')
+                            continue
+                except Exception as e:
+                    log_execution(conn, task_id, execution_id, 'processing', 'error',
+                                 f'Error parsing follow_links: {str(e)}, traceback: {traceback.format_exc()}')
+                    follow_links_objects = []
+            else:
+                log_execution(conn, task_id, execution_id, 'processing', 'info',
+                             f'follow_links is empty or not a list: {follow_links}')
+        else:
+            log_execution(conn, task_id, execution_id, 'processing', 'info',
+                         'follow_links is None in database')
+        
         # Build ScrapeRequest from task data
-        scrape_request = ScrapeRequest(
-            entity_name=entity_name,
-            url=source_url,
-            pagination_config=pagination_config,
-            container_selector=container_selector,
-            field_mappings=field_mappings,
-            max_items=max_items,
-            timeout=30,
-            captcha_params=captcha_params if is_captcha_protected else None
-        )
+        # Validate follow_links_objects before creating ScrapeRequest
+        validated_follow_links = []
+        for fl in follow_links_objects:
+            if hasattr(fl, 'selector') and hasattr(fl, 'name') and hasattr(fl, 'field_mappings'):
+                validated_follow_links.append(fl)
+            else:
+                log_execution(conn, task_id, execution_id, 'processing', 'error',
+                             f'Invalid FollowLink object: has selector={hasattr(fl, "selector")}, has name={hasattr(fl, "name")}, has field_mappings={hasattr(fl, "field_mappings")}, object type={type(fl)}')
+        
+        try:
+            scrape_request = ScrapeRequest(
+                entity_name=entity_name,
+                url=source_url,
+                pagination_config=pagination_config,
+                container_selector=container_selector,
+                field_mappings=field_mappings_objects,
+                follow_links=validated_follow_links,
+                max_items=max_items,
+                timeout=30,
+                captcha_params=captcha_params if is_captcha_protected else None
+            )
+        except Exception as scrape_req_error:
+            log_execution(conn, task_id, execution_id, 'processing', 'error',
+                         f'Error creating ScrapeRequest: {str(scrape_req_error)}, traceback: {traceback.format_exc()}')
+            log_execution(conn, task_id, execution_id, 'processing', 'error',
+                         f'FollowLinks objects: {[type(fl).__name__ for fl in validated_follow_links]}')
+            log_execution(conn, task_id, execution_id, 'processing', 'error',
+                         f'First FollowLink attributes: {dir(validated_follow_links[0]) if validated_follow_links else "No follow links"}')
+            raise HTTPException(status_code=500, detail=f"Failed to create ScrapeRequest: {str(scrape_req_error)}")
+        
+        # Log the scrape request details
+        follow_links_details = []
+        for fl in validated_follow_links:
+            try:
+                # Safely access attributes
+                fl_name = getattr(fl, 'name', 'UNKNOWN')
+                fl_selector = getattr(fl, 'selector', 'MISSING')
+                fl_fields = list(getattr(fl, 'field_mappings', {}).keys())
+                follow_links_details.append({
+                    'name': fl_name,
+                    'selector': fl_selector,
+                    'fields': fl_fields
+                })
+            except Exception as e:
+                log_execution(conn, task_id, execution_id, 'processing', 'warning',
+                             f'Error logging follow_link details: {str(e)}, object type: {type(fl)}')
+                follow_links_details.append({'error': str(e), 'object_type': str(type(fl))})
+        
+        log_execution(conn, task_id, execution_id, 'processing', 'info',
+                     'ScrapeRequest built', {
+                         'has_follow_links': len(follow_links_objects) > 0,
+                         'follow_links_count': len(follow_links_objects),
+                         'follow_links_details': follow_links_details,
+                         'field_mappings_count': len(field_mappings_objects)
+                     })
         # if user left params to us to auto-detect
         if is_captcha_protected and scrape_request.captcha_params is None:
             scrape_request.captcha_params = CaptchaParams(
@@ -706,6 +834,49 @@ async def _execute_task_internal(task_id: int):
                          'columns': list(table_columns.keys())
                      })
         
+        # Check for missing columns in scraped data and add them to the table
+        # This is especially important for multi-page scraping where detail page fields
+        # (e.g., "detail_1_description") need to be added as columns
+        all_scraped_fields = set()
+        for item in scrape_data:
+            all_scraped_fields.update(item.keys())
+        
+        # Exclude system columns and internal fields
+        system_columns = {'id', 'source', 'modified_at', '_follow_urls'}
+        missing_columns = all_scraped_fields - set(table_columns.keys()) - system_columns
+        
+        if missing_columns:
+            log_execution(conn, task_id, execution_id, 'processing', 'info', 
+                         f'Found {len(missing_columns)} missing column(s) in entity table', {
+                             'missing_columns': list(missing_columns),
+                             'table_name': entity_name
+                         })
+            
+            # Add missing columns to the table (all as TEXT by default)
+            for col_name in missing_columns:
+                try:
+                    # Sanitize column name
+                    clean_col_name = col_name.strip().lower().replace(' ', '_').replace('-', '_')
+                    # Remove special characters, keep only alphanumeric and underscore
+                    clean_col_name = ''.join(c for c in clean_col_name if c.isalnum() or c == '_')
+                    
+                    if clean_col_name and clean_col_name not in system_columns:
+                        alter_stmt = sql.SQL("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} TEXT;").format(
+                            table=sql.Identifier(entity_name),
+                            col=sql.Identifier(clean_col_name)
+                        )
+                        cur.execute(alter_stmt)
+                        table_columns[clean_col_name] = 'TEXT'  # Update local cache
+                        log_execution(conn, task_id, execution_id, 'processing', 'info', 
+                                     f'Added column {clean_col_name} to entity table {entity_name}')
+                except Exception as e:
+                    log_execution(conn, task_id, execution_id, 'processing', 'warning', 
+                                 f'Failed to add column {col_name} to table: {str(e)}')
+            
+            conn.commit()  # Commit the ALTER TABLE statements
+            log_execution(conn, task_id, execution_id, 'processing', 'info', 
+                         f'Successfully added {len(missing_columns)} column(s) to entity table')
+        
         # Insert / Update scraped data in the entity table
         log_execution(conn, task_id, execution_id, 'processing', 'info', 
                      'Starting to upsert scraped data into database')
@@ -715,7 +886,69 @@ async def _execute_task_internal(task_id: int):
         upsert_errors = []
         
         for idx, item in enumerate(scrape_data):
-            insert_data = {col: item.get(col) for col in table_columns.keys()}
+            # Normalize field names for case-insensitive matching
+            def normalize_field_name(name):
+                """Normalize field name to match database column naming convention"""
+                normalized = name.strip().lower().replace(' ', '_').replace('-', '_')
+                return ''.join(c for c in normalized if c.isalnum() or c == '_')
+            
+            # Create normalized lookup dictionary from item
+            item_normalized = {}
+            for k, v in item.items():
+                if k == '_follow_urls':
+                    continue
+                normalized_key = normalize_field_name(k)
+                # Store both original and normalized for lookup
+                item_normalized[normalized_key] = v
+                if k not in item_normalized:  # Keep original key too if different
+                    item_normalized[k] = v
+            
+            # Match table columns to item fields (try exact match first, then normalized)
+            # Also try case-insensitive matching
+            insert_data = {}
+            unmatched_columns = []
+            unmatched_item_fields = []
+            
+            # Create case-insensitive lookup for item fields
+            item_case_insensitive = {k.lower(): (k, v) for k, v in item.items() if k != '_follow_urls'}
+            
+            for col in table_columns.keys():
+                # Try exact match first
+                if col in item:
+                    insert_data[col] = item[col]
+                # Try case-insensitive match
+                elif col.lower() in item_case_insensitive:
+                    original_key, value = item_case_insensitive[col.lower()]
+                    insert_data[col] = value
+                # Try normalized match
+                else:
+                    col_normalized = normalize_field_name(col)
+                    if col_normalized in item_normalized:
+                        insert_data[col] = item_normalized[col_normalized]
+                    else:
+                        unmatched_columns.append(col)
+            
+            # Find item fields that weren't matched to any column
+            matched_item_fields = set(insert_data.keys())
+            for k in item.keys():
+                if k != '_follow_urls' and k not in matched_item_fields:
+                    k_normalized = normalize_field_name(k)
+                    if k_normalized not in [normalize_field_name(col) for col in matched_item_fields]:
+                        unmatched_item_fields.append(k)
+            
+            # Log detail page fields for debugging (first 3 items)
+            if idx < 3:
+                detail_fields_in_item = {k: v for k, v in item.items() if '_' in k and (k.startswith(('detail_', 'follow_')) or any(x in k for x in ['detail', 'follow']))}
+                detail_fields_in_insert = {k: v for k, v in insert_data.items() if '_' in k and (k.startswith(('detail_', 'follow_')) or any(x in k for x in ['detail', 'follow']))}
+                
+                log_execution(conn, task_id, execution_id, 'processing', 'debug',
+                             f'Item {idx + 1} field matching', {
+                                 'detail_fields_in_scraped_data': list(detail_fields_in_item.keys()),
+                                 'detail_fields_being_stored': list(detail_fields_in_insert.keys()),
+                                 'unmatched_columns': unmatched_columns[:5],  # First 5
+                                 'unmatched_item_fields': unmatched_item_fields[:5]  # First 5
+                             })
+            
             try:
                 await upsert_entity_record(cur, entity_name, source_name, insert_data)
                 items_stored += 1
@@ -1149,6 +1382,9 @@ async def preview_mapping(request: PreviewMappingRequest):
     """
     try:
         step = request.preview_step or 1
+        
+        # Debug: log the request to help diagnose validation issues
+        print(f"Preview request - entity: {request.entity_name}, follow_links: {len(request.follow_links or [])}")
 
         # STEP 1 → SIMPLE PREVIEW
         if step == 1:
@@ -1157,6 +1393,7 @@ async def preview_mapping(request: PreviewMappingRequest):
                 url=request.url,
                 container_selector=request.container_selector,
                 field_mappings=request.field_mappings,
+                follow_links=request.follow_links,
                 max_items=5,
                 timeout=15
             )
@@ -1210,6 +1447,7 @@ async def preview_mapping(request: PreviewMappingRequest):
             url=request.url,
             container_selector=request.container_selector,
             field_mappings=request.field_mappings,
+            follow_links=request.follow_links,
             max_items=500,  # must be > 5 (500 limit for now)
             timeout=15,
             pagination_config=pagination_dict
