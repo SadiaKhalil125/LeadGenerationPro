@@ -47,7 +47,7 @@ def build_paginated_url(base_url: str, page: int, pagination: PaginationConfig) 
 # EXTRACTION SCHEMA (CRITICAL FIX)
 # ===================================================
 
-def build_extraction_schema(request: ScrapeRequest):
+def build_extraction_schema(request: ScrapeRequest, include_follow_links: bool = False):
     fields = []
 
     for name, fm in request.field_mappings.items():
@@ -70,6 +70,17 @@ def build_extraction_schema(request: ScrapeRequest):
                 "type": "attribute",
                 "attribute": fm.extract
             })
+
+    # Include follow link selectors as temporary fields if requested
+    if include_follow_links and request.follow_links:
+        for fl in request.follow_links:
+            if fl.selector:
+                fields.append({
+                    "name": f"_follow_link_{fl.name}",
+                    "selector": fl.selector,
+                    "type": "attribute",
+                    "attribute": "href"
+                })
 
     if not fields:
         raise ValueError("No valid field mappings")
@@ -94,26 +105,23 @@ def base_config(strategy, request: ScrapeRequest):
 # ===================================================
 
 def extract_follow_urls(row: dict, follow_links: list[FollowLink], base_url: str):
+    """
+    Extract URLs from row data.
+    fl.selector is a CSS selector that was used to extract href into a temporary field.
+    The extracted value is stored in row as "_follow_link_{fl.name}".
+    """
     urls = {}
 
     for fl in follow_links:
-        # fl.selector is the field name that contains the href (e.g., "profile_url")
-        field_name = fl.selector
-        url_val = row.get(field_name)
+        # Look for the temporary field created by the extraction schema
+        temp_field_name = f"_follow_link_{fl.name}"
+        url_val = row.get(temp_field_name)
+        
+        # If not found, try treating selector as a field name (backward compatibility)
+        if not url_val:
+            url_val = row.get(fl.selector)
 
         if not url_val:
-            # Only show detailed debug info once to avoid spam
-            if not hasattr(extract_follow_urls, '_debug_shown'):
-                available_fields = [k for k in row.keys() if k != "_follow_urls"]
-                print(f"    ⚠️ Field '{field_name}' not found in row or is empty")
-                print(f"    📋 Available fields in scraped data: {available_fields}")
-                print(f"    🔍 Looking for field: '{field_name}'")
-                # Check for case-insensitive match or similar field names
-                matching_fields = [f for f in available_fields if field_name.lower() in f.lower() or f.lower() in field_name.lower()]
-                if matching_fields:
-                    print(f"    💡 Similar field names found: {matching_fields}")
-                print(f"    ❗ Make sure the field name in follow_link selector matches exactly with the field name in your field mappings!")
-                extract_follow_urls._debug_shown = True
             continue
 
         if url_val.startswith("/"):
@@ -139,7 +147,8 @@ def get_follow_fields(link_name: str, request: ScrapeRequest):
 
 async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
     try:
-        schema = build_extraction_schema(request)
+        # Include follow link selectors in the main extraction schema
+        schema = build_extraction_schema(request, include_follow_links=True)
         strategy = JsonCssExtractionStrategy(schema, verbose=True)
         config = base_config(strategy, request)
     except Exception as e:
@@ -175,11 +184,17 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
 
             for row in page_data:
                 row = dict(row)
+                # Extract follow URLs from the row (they were extracted as temporary fields)
                 row["_follow_urls"] = extract_follow_urls(
                     row,
                     request.follow_links or [],
                     str(request.url)
                 )
+                # Remove temporary follow link fields from the row
+                for fl in request.follow_links or []:
+                    temp_field = f"_follow_link_{fl.name}"
+                    if temp_field in row:
+                        del row[temp_field]
                 all_rows.append(row)
 
             if not pagination:
