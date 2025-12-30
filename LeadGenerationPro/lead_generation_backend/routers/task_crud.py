@@ -1625,6 +1625,17 @@ async def execute_quick_extract_task(execution_id: str, request_data: dict):
         if pagination_config:
             scrape_request_details["pagination_type"] = pagination_config.type
         log_quick_extract(execution_id, "processing", "info", "Building scrape request", scrape_request_details)
+        # Convert follow_links if present
+        follow_links_objects = []
+        if request_data.get("follow_links"):
+            from models import FollowLink
+            for fl_dict in request_data["follow_links"]:
+                if isinstance(fl_dict, dict):
+                    try:
+                        follow_links_objects.append(FollowLink(**fl_dict))
+                    except Exception as e:
+                        log_quick_extract(execution_id, "processing", "warning", f"Invalid follow_link entry: {str(e)}", {"follow_link_dict": fl_dict})
+        
         scrape_request = ScrapeRequest(
             entity_name="quick_extract_task",
             url=HttpUrl(request_data["url"]),
@@ -1633,7 +1644,8 @@ async def execute_quick_extract_task(execution_id: str, request_data: dict):
             max_items=request_data.get("max_items"),
             timeout=request_data.get("timeout", 15),
             pagination_config=pagination_config,
-            captcha_params=captcha_params
+            captcha_params=captcha_params,
+            follow_links=follow_links_objects
         )
         
         # Execute scraping
