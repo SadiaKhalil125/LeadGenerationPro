@@ -291,7 +291,8 @@ async def quick_extract(request: QuickExtractRequest):
             max_items=request.max_items,
             timeout=request.timeout,
             pagination_config=request.pagination_config,
-            captcha_params=request.captcha_params
+            captcha_params=request.captcha_params,
+            follow_links=request.follow_links or []
         )
         
         # Use existing routing logic
@@ -336,7 +337,8 @@ async def quick_extract_preview(request: QuickExtractRequest):
             max_items=preview_request.max_items,
             timeout=preview_request.timeout,
             pagination_config=preview_request.pagination_config,
-            captcha_params=preview_request.captcha_params
+            captcha_params=preview_request.captcha_params,
+            follow_links=preview_request.follow_links or []
         )
         
         # Use existing routing logic
@@ -405,7 +407,8 @@ async def quick_extract_preview_next(request: QuickExtractRequest):
             max_items=500,  # Setting 500 items to allow next page preview
             timeout=request.timeout or 15,
             pagination_config=PaginationConfig(**pagination_dict),
-            captcha_params=request.captcha_params
+            captcha_params=request.captcha_params,
+            follow_links=request.follow_links or []
         )
         
         # Execute scraping using the dynamic scraper
@@ -456,7 +459,8 @@ async def quick_extract_paginated_preview(request: QuickExtractRequest, preview_
                 field_mappings=request.field_mappings,
                 max_items=5,  # Limit to 5 for first preview
                 timeout=request.timeout or 15,
-                pagination_config=None  # No pagination for first step
+                pagination_config=None,  # No pagination for first step
+                follow_links=request.follow_links or []
             )
             
             scrape_response = await route_scraping_request(scrape_request)
@@ -523,7 +527,8 @@ async def quick_extract_paginated_preview(request: QuickExtractRequest, preview_
             field_mappings=request.field_mappings,
             max_items=500,  # Must be > 5 to get last 5 items
             timeout=request.timeout or 15,
-            pagination_config=PaginationConfig(**pagination_dict)
+            pagination_config=PaginationConfig(**pagination_dict),
+            follow_links=request.follow_links or []
         )
         
         scrape_response = await route_scraping_request(scrape_request)
@@ -599,7 +604,8 @@ async def quick_extract_execute_as_task(request: QuickExtractRequest):
                 "create_entity": request.create_entity,
                 "source_name": request.source_name,
                 "pagination_config": request.pagination_config.model_dump() if request.pagination_config else None,
-                "captcha_params": request.captcha_params.model_dump() if request.captcha_params else None
+                "captcha_params": request.captcha_params.model_dump() if request.captcha_params else None,
+                "follow_links": [fl.model_dump() if hasattr(fl, 'model_dump') else fl.dict() if hasattr(fl, 'dict') else fl for fl in (request.follow_links or [])]
             }
         }
         
