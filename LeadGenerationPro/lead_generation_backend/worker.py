@@ -34,7 +34,7 @@ try:
         KAFKA_TOPIC,
         bootstrap_servers=BOOTSTRAP,
         auto_offset_reset='earliest',
-        enable_auto_commit=True,
+        enable_auto_commit=False,  # Manual commit to prevent reruns
         group_id='scraping-workers',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
         max_poll_interval_ms=600000
@@ -78,7 +78,7 @@ def create_consumer():
         KAFKA_TOPIC,
         bootstrap_servers=BOOTSTRAP,
         auto_offset_reset='earliest',
-        enable_auto_commit=True,  # Keep this if you want auto-commit
+        enable_auto_commit=False,  # Manual commit to prevent reruns
         group_id='scraping-workers',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
         max_poll_interval_ms=600000,  # Already good - 10 minutes
@@ -104,45 +104,99 @@ while True:
                         request_data = payload.get("request", {})
                         
                         if execution_id and request_data:
+                            # Check if this execution has already been completed or is being processed
+                            from routers.task_crud import get_quick_extract_result
+                            existing_result = get_quick_extract_result(execution_id)
+                            if existing_result and existing_result.get("status") in ["completed", "failed"]:
+                                print(f"⏭️ Skipping already processed quick extract task {task_id} (execution_id: {execution_id}, status: {existing_result.get('status')})")
+                                # Commit the message since we're skipping it (it's already been processed)
+                                consumer.commit()
+                                continue
+                            
                             print(f"➡ Received quick extract task {task_id} (execution_id: {execution_id}).")
                             send_status_update(task_id, "processing", "Worker picked up the quick extract task.")
                             
-                            result = asyncio.run(execute_quick_extract_task(execution_id, request_data))
-                            
-                            # Verify result was stored
-                            from routers.task_crud import get_quick_extract_result
-                            stored_result = get_quick_extract_result(execution_id)
-                            if stored_result:
-                                print(f"✅ Result stored successfully for execution_id: {execution_id}, status: {stored_result.get('status')}")
-                            else:
-                                print(f"❌ WARNING: Result NOT found after execution for execution_id: {execution_id}")
-                            
-                            if result and result.get("success"):
-                                success_msg = f"Quick extract completed. Scraped {result.get('items_scraped', 0)} items."
-                                print(f" {success_msg}")
-                                send_status_update(task_id, "completed", success_msg, result)
-                            else:
-                                failure_msg = f"Quick extract failed. Message: {result.get('message', 'N/A')}"
-                                print(f" {failure_msg}")
-                                send_status_update(task_id, "failed", failure_msg, result)
+                            try:
+                                result = asyncio.run(execute_quick_extract_task(execution_id, request_data))
+                                
+                                # Verify result was stored
+                                from routers.task_crud import get_quick_extract_result
+                                stored_result = get_quick_extract_result(execution_id)
+                                if stored_result:
+                                    print(f"✅ Result stored successfully for execution_id: {execution_id}, status: {stored_result.get('status')}")
+                                else:
+                                    print(f"❌ WARNING: Result NOT found after execution for execution_id: {execution_id}")
+                                
+                                if result and result.get("success"):
+                                    success_msg = f"Quick extract completed. Scraped {result.get('items_scraped', 0)} items."
+                                    print(f" {success_msg}")
+                                    send_status_update(task_id, "completed", success_msg, result)
+                                else:
+                                    failure_msg = f"Quick extract failed. Message: {result.get('message', 'N/A')}"
+                                    print(f" {failure_msg}")
+                                    send_status_update(task_id, "failed", failure_msg, result)
+                                
+                                # Commit message only after successful processing
+                                consumer.commit()
+                                print(f"✅ Committed Kafka message for task {task_id} (execution_id: {execution_id})")
+                            except Exception as e:
+                                print(f"❌ Error processing quick extract task {task_id}: {e}")
+                                send_status_update(task_id, "failed", f"Error: {str(e)}")
+                                # Don't commit on error - let it retry
+                                raise
                         else:
                             print(f"Invalid quick extract task payload: missing execution_id or request")
                             send_status_update(task_id, "failed", "Invalid quick extract task payload")
                     else:
                         # Regular task execution
+                        # For manual execution (negative task_id), check if already processed
+                        if task_id < 0:
+                            # Negative task_id indicates manual execution (quick extract or one-time task)
+                            # Check if there's a recent execution for this task
+                            from routers.task_crud import get_db_cursor
+                            try:
+                                conn, cur = get_db_cursor()
+                                cur.execute("""
+                                    SELECT status FROM task_executions 
+                                    WHERE task_id = %s 
+                                    ORDER BY created_at DESC 
+                                    LIMIT 1
+                                """, (task_id,))
+                                row = cur.fetchone()
+                                cur.close()
+                                conn.close()
+                                
+                                if row and row[0] in ["completed", "failed"]:
+                                    print(f"⏭️ Skipping already processed manual task {task_id} (status: {row[0]})")
+                                    # Commit the message since we're skipping it
+                                    consumer.commit()
+                                    continue
+                            except Exception as e:
+                                print(f"⚠️ Could not check task execution status: {e}, proceeding anyway")
+                        
                         print(f"➡ Received task {task_id}. Handing off to execute_task function.")
                         send_status_update(task_id, "processing", "Worker picked up the task.")
 
-                        result = asyncio.run(execute_task(task_id))
+                        try:
+                            result = asyncio.run(execute_task(task_id))
 
-                        if result and result.get("success"):
-                            success_msg = f"Task completed. Stored {result.get('items_stored', 0)} items."
-                            print(f" {success_msg}")
-                            send_status_update(task_id, "completed", success_msg, result)
-                        else:
-                            failure_msg = f"Task processed but failed. Message: {result.get('message', 'N/A')}"
-                            print(f" {failure_msg}")
-                            send_status_update(task_id, "failed", failure_msg, result)
+                            if result and result.get("success"):
+                                success_msg = f"Task completed. Stored {result.get('items_stored', 0)} items."
+                                print(f" {success_msg}")
+                                send_status_update(task_id, "completed", success_msg, result)
+                            else:
+                                failure_msg = f"Task processed but failed. Message: {result.get('message', 'N/A')}"
+                                print(f" {failure_msg}")
+                                send_status_update(task_id, "failed", failure_msg, result)
+                            
+                            # Commit message only after successful processing
+                            consumer.commit()
+                            print(f"✅ Committed Kafka message for task {task_id}")
+                        except Exception as e:
+                            print(f"❌ Error processing task {task_id}: {e}")
+                            send_status_update(task_id, "failed", f"Error: {str(e)}")
+                            # Don't commit on error - let it retry
+                            raise
                 else:
                     print(f"Received message without a 'task_id': {task_msg}")
 

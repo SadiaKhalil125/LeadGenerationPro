@@ -1432,14 +1432,34 @@ async def preview_mapping(request: PreviewMappingRequest):
             }
 
         pagination_dict = source.pagination_config.model_dump()
-        pagination_type = pagination_dict["type"]
+        pagination_type = pagination_dict.get("type")
+        
+        if not pagination_type:
+            return {
+                "success": False,
+                "message": "Pagination type is required for step 2+ previews",
+                "data": [],
+                "total_items": 0
+            }
 
-        # Adjust pagination depth based on step
+        # For step >= 2, we want to show only the NEXT page's data (first 5 items)
+        # So for step 2, scrape only page 2; for step 3, scrape only page 3, etc.
+        # Get the original start_page (default to 1 if not specified)
+        original_start_page = pagination_dict.get("start_page", 1)
+        
+        # Calculate which page we want to show (step 2 = page 2, step 3 = page 3, etc.)
+        target_page = original_start_page + (step - 1)
+        
+        # Adjust pagination to start from target_page and only scrape 1 page
         if pagination_type not in ["button_click", "scroll", "ajax_click"]:
-            pagination_dict["max_pages"] = step
+            # For query_param, offset, path: set start_page to target_page and max_pages to 1
+            pagination_dict["start_page"] = target_page
+            pagination_dict["max_pages"] = 1
         elif pagination_type in ["button_click", "ajax_click"]:
+            # For button clicks: set click_steps to step
             pagination_dict["click_steps"] = step
-        else:
+        else:  # scroll
+            # Similar to button clicks
             pagination_dict["scroll_steps"] = step
 
         scrape_request = ScrapeRequest(
@@ -1448,9 +1468,9 @@ async def preview_mapping(request: PreviewMappingRequest):
             container_selector=request.container_selector,
             field_mappings=request.field_mappings,
             follow_links=request.follow_links,
-            max_items=500,  # must be > 5 (500 limit for now)
+            max_items=5,  # Limit to 5 items for preview
             timeout=15,
-            pagination_config=pagination_dict
+            pagination_config=PaginationConfig(**pagination_dict)
         )
         scrape_response = await route_scraping_request(scrape_request)
 
@@ -1462,8 +1482,12 @@ async def preview_mapping(request: PreviewMappingRequest):
                 "total_items": 0
             }
         
-        # CRITICAL: always last 5 to ensure data from last page
-        preview_data = scrape_response.data[-5:]
+        # Get first 5 items from the scraped page (not last 5)
+        preview_data = scrape_response.data[:5] if scrape_response.data else []
+        
+        # For button_click and scroll, we need to take the last 5 items since we can't jump to a specific page
+        if pagination_type in ["button_click", "scroll", "ajax_click"]:
+            preview_data = scrape_response.data[-5:] if scrape_response.data else []
 
         if not preview_data:
             return {
@@ -1473,9 +1497,22 @@ async def preview_mapping(request: PreviewMappingRequest):
                 "total_items": 0
             }
 
+        if not preview_data:
+            return {
+                "success": False,
+                "message": f"No items found for page {step}",
+                "data": [],
+                "total_items": scrape_response.total_items,
+                "preview_step": step,
+                "entity_name": request.entity_name,
+                "url": str(request.url),
+                "scraped_at": scrape_response.scraped_at.isoformat() if scrape_response.scraped_at else None,
+                "page_size": scrape_response.page_size
+            }
+
         return {
             "success": True,
-            "message": f"Preview successful - Page {step}",
+            "message": f"Preview successful - Page {step} (showing {len(preview_data)} items from this page)",
             "data": preview_data,
             "total_items": scrape_response.total_items,
             "preview_step": step,
@@ -1534,6 +1571,17 @@ async def execute_quick_extract_task(execution_id: str, request_data: dict):
     """
     execution_start = datetime.now()
     
+    # Check if task is already running to prevent duplicate execution
+    with quick_extract_lock:
+        existing_result = quick_extract_results.get(execution_id)
+        if existing_result and existing_result.get("status") in ["processing", "started"]:
+            print(f"⚠️ Task {execution_id} is already running, skipping duplicate execution")
+            return {
+                "success": False,
+                "message": f"Task {execution_id} is already being processed",
+                "execution_id": execution_id
+            }
+    
     try:
         # Initialize logs
         log_quick_extract(execution_id, "started", "info", "Task execution started", {"execution_id": execution_id})
@@ -1582,7 +1630,9 @@ async def execute_quick_extract_task(execution_id: str, request_data: dict):
         # Reconstruct pagination_config if present
         pagination_config = None
         if request_data.get("pagination_config"):
+            print(f"🔍 RAW pagination_config from request_data: {request_data['pagination_config']}")
             pagination_config = PaginationConfig(**request_data["pagination_config"])
+            print(f"✅ Reconstructed pagination_config: type={pagination_config.type}, start_page={pagination_config.start_page}, max_pages={pagination_config.max_pages}")
             pagination_details = {
                 "pagination_type": pagination_config.type,
                 "start_page": pagination_config.start_page if hasattr(pagination_config, 'start_page') else 1,
@@ -1648,6 +1698,11 @@ async def execute_quick_extract_task(execution_id: str, request_data: dict):
             follow_links=follow_links_objects
         )
         
+        # Verify pagination_config was set in the request
+        print(f"🔎 ScrapeRequest.pagination_config is None: {scrape_request.pagination_config is None}")
+        if scrape_request.pagination_config:
+            print(f"🔎 ScrapeRequest.pagination_config type: {scrape_request.pagination_config.type}")
+        
         # Execute scraping
         scraping_details = {
             "url": str(request_data["url"]),
@@ -1657,9 +1712,11 @@ async def execute_quick_extract_task(execution_id: str, request_data: dict):
         if pagination_config:
             scraping_details["pagination_enabled"] = True
             scraping_details["pagination_type"] = pagination_config.type
+            scraping_details["pagination_config_object"] = str(pagination_config)
         else:
             scraping_details["pagination_enabled"] = False
         
+        print(f"📋 Scraping details: {scraping_details}")
         log_quick_extract(execution_id, "processing", "info", "Starting web scraping", scraping_details)
         scrape_start = datetime.now()
         scrape_response = await route_scraping_request(scrape_request)

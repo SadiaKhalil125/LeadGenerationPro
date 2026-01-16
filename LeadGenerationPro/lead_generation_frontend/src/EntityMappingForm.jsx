@@ -23,7 +23,19 @@ const GOOGLE_MAPS_FIELDS = {
 
 const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoading = false }) => {
   if (!data) return null;
-  const headers = data.data && data.data.length > 0 ? Object.keys(data.data[0]) : [];
+  
+  // Dynamically get all headers from all rows (not just the first row)
+  // This ensures we capture all columns even when following links or pagination changes columns
+  const getAllHeaders = () => {
+    if (!data.data || data.data.length === 0) return [];
+    const headerSet = new Set();
+    data.data.forEach(row => {
+      Object.keys(row).forEach(key => headerSet.add(key));
+    });
+    return Array.from(headerSet);
+  };
+  
+  const headers = getAllHeaders();
 
   return (
     <div

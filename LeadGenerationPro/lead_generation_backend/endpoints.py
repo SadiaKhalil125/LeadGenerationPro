@@ -511,12 +511,28 @@ async def quick_extract_paginated_preview(request: QuickExtractRequest, preview_
                 message="Pagination type is required for step 2+ previews"
             )
 
-        # Adjust pagination depth based on step
+        # For step >= 2, we want to show only the NEXT page's data (first 5 items)
+        # So for step 2, scrape only page 2; for step 3, scrape only page 3, etc.
+        # Get the original start_page (default to 1 if not specified)
+        original_start_page = pagination_dict.get("start_page", 1)
+        
+        # Calculate which page we want to show (step 2 = page 2, step 3 = page 3, etc.)
+        target_page = original_start_page + (step - 1)
+        
+        # Adjust pagination to start from target_page and only scrape 1 page
         if pagination_type not in ["button_click", "scroll", "ajax_click"]:
-            pagination_dict["max_pages"] = step  # For query_param, offset, path
+            # For query_param, offset, path: set start_page to target_page and max_pages to 1
+            pagination_dict["start_page"] = target_page
+            pagination_dict["max_pages"] = 1
         elif pagination_type in ["button_click", "ajax_click"]:
+            # For button clicks: we need to click (step - 1) times to get to the target page
+            # But we only want 1 page of data, so set click_steps to 1
+            # However, we need to account for the fact that we're starting from a later page
+            # This is complex for button clicks, so we'll use a workaround:
+            # Set click_steps to step, but limit max_items to 5
             pagination_dict["click_steps"] = step
         else:  # scroll
+            # Similar to button clicks
             pagination_dict["scroll_steps"] = step
 
         # Build full scrape request for paginated preview
@@ -525,7 +541,7 @@ async def quick_extract_paginated_preview(request: QuickExtractRequest, preview_
             url=request.url,
             container_selector=request.container_selector,
             field_mappings=request.field_mappings,
-            max_items=500,  # Must be > 5 to get last 5 items
+            max_items=5,  # Limit to 5 items for preview
             timeout=request.timeout or 15,
             pagination_config=PaginationConfig(**pagination_dict),
             follow_links=request.follow_links or []
@@ -543,8 +559,8 @@ async def quick_extract_paginated_preview(request: QuickExtractRequest, preview_
                 message=f"Paginated preview failed: {scrape_response.message}"
             )
         
-        # Get last 5 items to ensure data from the current page/step
-        preview_data = scrape_response.data[-5:] if scrape_response.data else []
+        # Get first 5 items from the scraped page (not last 5)
+        preview_data = scrape_response.data[:5] if scrape_response.data else []
         
         if not preview_data:
             return QuickExtractResponse(
@@ -556,13 +572,18 @@ async def quick_extract_paginated_preview(request: QuickExtractRequest, preview_
                 message=f"No items found for page {step}"
             )
 
+        # For button_click and scroll, we need to take the last 5 items since we can't jump to a specific page
+        # For query_param, offset, and path, we've already set start_page to target_page, so first 5 items are correct
+        if pagination_type in ["button_click", "scroll", "ajax_click"]:
+            preview_data = scrape_response.data[-5:] if scrape_response.data else []
+        
         return QuickExtractResponse(
             url=scrape_response.url,
             scraped_at=scrape_response.scraped_at,
             total_items=scrape_response.total_items,
             data=preview_data,
             success=True,
-            message=f"Preview successful - Page {step} (last 5 items)"
+            message=f"Preview successful - Page {step} (showing {len(preview_data)} items from this page)"
         )
 
     except Exception as e:

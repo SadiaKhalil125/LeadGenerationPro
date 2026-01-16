@@ -168,6 +168,15 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
 
     all_data = []
 
+    # Log pagination setup
+    if pagination:
+        print(f"📍 Pagination configured - Type: {pagination.type}, Start Page: {page}, Max Items: {request.max_items}")
+        print(f"   ├─ Pagination details: {pagination}")
+    else:
+        print(f"📍 No pagination configured - Single page extraction only, Max Items: {request.max_items}")
+    
+    print(f"   └─ Starting loop with max_items={request.max_items}, page={page}, pagination={pagination is not None}")
+
     # ---- CAPTCHA HANDLING (if passed in request) ----
     captcha=request.captcha_params
     if captcha is not None:
@@ -247,25 +256,32 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 all_data.extend(page_data)
                 print(f"✅ Page {page}: {len(page_data)} items (total={len(all_data)})")
 
-                # moved these 2 stopping conditions before max_items to support next preview (that needs all items returned to show last 5 items from the next page/scroll)
-                
-                # ---- 1. Stop by pagination max pages ----
-                if pagination and pagination.max_pages and page >= pagination.max_pages:
-                    break
-                
-                 # ---- 2. Scroll AND Click pagination runs only once ----
-                if pagination and (pagination.type in ["button_click", "ajax_click", "scroll"]):
-                    break
-
-                # ---- 3. Stop by max items ----
+                # ---- 1. Stop by max items ----
+                # CRITICAL FIX: Check max_items FIRST before breaking for pagination types
+                # This ensures we continue pagination until we reach the requested number of items
                 if request.max_items and len(all_data) >= request.max_items:
                     all_data = all_data[:request.max_items]
+                    print(f"   ✅ Condition 1: Reached max_items limit ({request.max_items}), stopping pagination")
                     break
 
-                # ---- No pagination? Only one iteration ----
+                # ---- 2. Stop by pagination max pages ----
+                if pagination and pagination.max_pages and page >= pagination.max_pages:
+                    print(f"   ✅ Condition 2: Reached max_pages limit ({pagination.max_pages}), stopping pagination")
+                    break
+                
+                # ---- 3. Scroll AND Click pagination runs only once per action ----
+                # These types handle all pagination in JavaScript in one crawl, so we don't loop
+                if pagination and (pagination.type in ["button_click", "ajax_click", "scroll"]):
+                    print(f"   ✅ Condition 3: {pagination.type} pagination complete (all items loaded in single crawl)")
+                    break
+
+                # ---- 4. No pagination? Only one iteration ----
                 if not pagination:
+                    print(f"   ✅ Condition 4: No pagination configured - stopping after first page")
                     break
 
+                # ---- Continue to next page ----
+                print(f"   ➡️  No break conditions met. Continuing to page {page + 1} (current items: {len(all_data)}, target: {request.max_items})")
                 page += 1
 
             # ---- Build response ----
