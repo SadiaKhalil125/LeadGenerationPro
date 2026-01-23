@@ -45,6 +45,14 @@ def build_paginated_url(base_url: str, page: int, pagination: PaginationConfig) 
         pattern = pagination.path_pattern or "{page}"
         new_path = parsed.path.rstrip("/") + pattern.replace("{page}", str(page))
         return urlunparse(parsed._replace(path=new_path))
+    
+    elif pagination.type in ["button_click", "ajax_click", "scroll"]:
+        # These pagination types don't change the URL, they use JavaScript
+        return base_url
+    
+    else:
+        # Fallback: return original URL for unknown pagination types
+        return base_url
 
     return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
 
@@ -106,6 +114,80 @@ def base_config(strategy, request: ScrapeRequest):
         extraction_strategy=strategy,
         page_timeout=(request.timeout or 15) * 1000
     )
+
+
+# ===================================================
+# PAGINATION TYPE HANDLERS (from crawl4Util)
+# ===================================================
+
+def apply_scroll_pagination(config, pagination):
+    '''Scroll complete page (or upto given steps) to load all items first, then scrape.
+       So that crawler doesn't keep scraping the same items at the top of the page after each scroll'''
+    
+    print("Handling infinite scroll")
+
+    scroll_steps = pagination.scroll_steps or 15
+    scroll_delay = 1
+
+    js_scroll = f"""
+        async function scrollPage() {{
+            for (let i = 0; i < {scroll_steps}; i++) {{
+                window.scrollTo(0, document.body.scrollHeight);
+                await new Promise(r => setTimeout(r, {scroll_delay * 1000}));
+            }}
+        }}
+        scrollPage();
+    """
+
+    config.session_id = "scroll_session"
+    config.js_only = False
+    config.wait_for = None
+    config.js_code = js_scroll
+    config.delay_before_return_html = scroll_steps * scroll_delay
+
+    return config
+
+def apply_button_click_pagination(config, pagination):
+    '''Click again and again (upto click_steps or till button disappears) to load all items first, then scrape.
+       So that crawler doesn't keep scraping the same items at the top of the page after each scroll'''
+    
+    print("Handling button/ajax click pagination")
+
+    click_steps = pagination.click_steps if pagination.click_steps else 15     # total number of clicks to perform (hard-coded to avoid infinite loops)
+    click_delay = 3      # seconds between clicks
+    selector = pagination.button_selector
+
+    js_click_loop = f"""
+        async function clickButtonLoop() {{
+            for (let i = 0; i < {click_steps}; i++) {{
+
+                // Try up to 3 times to find the button
+                let btn = null;
+                for (let t = 0; t < 3; t++) {{
+                    btn = document.querySelector("{selector}");
+                    if (btn) break;
+                    await new Promise(r => setTimeout(r, 1000)); 
+
+                    // wait 1s before retry (bcz button may be taking time to load/appear)
+                }}
+
+                if (!btn) break;
+
+                btn.click();
+                await new Promise(r => setTimeout(r, {click_delay * 1000}));
+            }}
+        }}
+        clickButtonLoop();
+    """
+
+    config.session_id = "btn_pg_session"
+    config.js_only = False
+    config.wait_for = None
+    config.js_code = js_click_loop
+
+    # total wait = number of clicks × delay per click
+    config.delay_before_return_html = click_steps * click_delay
+    return config
 
 
 # ===================================================
@@ -187,15 +269,94 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
     else:
         print(f"📄 NO PAGINATION: Single page extraction, max_items={max_items}")
 
+    # ===============================================
+    # CAPTCHA HANDLING (from crawl4Util)
+    # ===============================================
+    captcha = request.captcha_params
+    if captcha is not None:
+        print("🧩 Handling captcha…")
+        try:
+            captcha_result = await solve_captcha_auto(
+               api_key=captcha.api_key if captcha.api_key else CAPSOLVER_API_KEY,
+               site_url=captcha.site_url if captcha.site_url else str(request.url),
+               site_key=captcha.site_key if captcha.site_key else None,
+               captcha_type=captcha.captcha_type if captcha.captcha_type else None
+            )
+            print("Captcha result:", captcha_result)
+                 
+        except Exception as e:
+            print("Captcha solving error:", str(e))
+            return ScrapeResponse(
+                entity_name=request.entity_name,
+                url=str(request.url),
+                scraped_at=datetime.now(),
+                total_items=0,
+                data=[],
+                success=False,
+                message=f"Captcha failed: {str(e)}"
+            )
+
+        if not captcha_result.get("success"):
+            return ScrapeResponse(
+                entity_name=request.entity_name,
+                url=str(request.url),
+                scraped_at=datetime.now(),
+                total_items=0,
+                data=[],
+                success=False,
+                message=f"Captcha failed: {captcha_result.get('error')}"
+            )
+        
+        if captcha_result.get("type") != "none":
+            # Apply captcha session to crawler config (will be applied in the loop)
+            captcha_session_id = captcha_result.get("session_id")
+            if "cookies" in captcha_result:
+                browser_cookies = [{"name": k, "value": v, "url": str(request.url)} for k, v in captcha_result["cookies"].items()]
+            else:
+                browser_cookies = []
+            print("✅ Captcha solved, continuing scrape…")
+        else:
+            captcha_session_id = None
+            browser_cookies = []
+            print("No captcha detected, continuing scrape…")
+    else:
+        captcha_session_id = None
+        browser_cookies = []
+
     async with AsyncWebCrawler(verbose=True) as crawler:
         while True:
+            # ===============================================
+            # STEP 1: BUILD CONFIG AND APPLY PAGINATION/CAPTCHA
+            # Recreate strategy and config for each page to avoid any caching issues
+            # ===============================================
+            strategy = JsonCssExtractionStrategy(schema, verbose=True)
+            config = base_config(strategy, request)
+            
+            # Apply captcha session and cookies if available
+            if captcha_session_id:
+                config.session_id = captcha_session_id
+            if browser_cookies:
+                config.extra_cookies = (config.extra_cookies or []) + browser_cookies
+            
+            # Apply pagination logic (scroll, button_click, ajax_click)
+            if pagination:
+                if pagination.type == "scroll":
+                    config = apply_scroll_pagination(config, pagination)
+                elif pagination.type in ["button_click", "ajax_click"]:
+                    config = apply_button_click_pagination(config, pagination)
+            
             # Build paginated URL
             # Use base URL only if: no pagination, OR (pagination AND start_page == 1 AND page == 1)
+            # OR pagination type is scroll/button_click/ajax_click (they don't change URL)
             # Otherwise, build paginated URL
             if pagination:
+                # Scroll, button_click, and ajax_click don't change the URL
+                if pagination.type in ["scroll", "button_click", "ajax_click"]:
+                    target_url = str(request.url)
+                    print(f"📄 Fetching page {page} (pagination type: {pagination.type}): {target_url}")
                 # If start_page is 1 and we're on page 1, use base URL
                 # Otherwise, build paginated URL (needed for start_page != 1 or page > 1)
-                if start_page == 1 and page == 1:
+                elif start_page == 1 and page == 1:
                     target_url = str(request.url)
                     print(f"📄 Fetching start page {page}: {target_url}")
                 else:
@@ -204,13 +365,6 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
             else:
                 target_url = str(request.url)
                 print(f"📄 Fetching single page: {target_url}")
-
-            # ===============================================
-            # STEP 1: SCRAPE CURRENT PAGE
-            # Recreate strategy and config for each page to avoid any caching issues
-            # ===============================================
-            strategy = JsonCssExtractionStrategy(schema, verbose=True)
-            config = base_config(strategy, request)
             
             result = await crawler.arun(url=target_url, config=config)
             if not result.success:
@@ -374,6 +528,12 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 break
             if pagination.max_pages and page >= pagination.max_pages:
                 print(f"🛑 Reached max_pages limit ({pagination.max_pages}), stopping pagination")
+                break
+            
+            # Scroll AND Click pagination runs only once per action
+            # These types handle all pagination in JavaScript in one crawl, so we don't loop
+            if pagination.type in ["button_click", "ajax_click", "scroll"]:
+                print(f"🛑 {pagination.type} pagination complete (all items loaded in single crawl)")
                 break
 
             # Move to next page
