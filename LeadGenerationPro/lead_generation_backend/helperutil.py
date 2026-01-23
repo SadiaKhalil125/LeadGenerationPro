@@ -168,6 +168,11 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
 
     async with AsyncWebCrawler(verbose=True) as crawler:
         while True:
+            # Check if we've reached max_items BEFORE fetching the next page
+            if request.max_items and len(all_rows) >= request.max_items:
+                print(f"ℹ️  Reached max_items limit ({request.max_items}). Stopping pagination.")
+                break
+
             target_url = (
                 build_paginated_url(str(request.url), page, pagination)
                 if pagination and page > 1
@@ -183,6 +188,10 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 break
 
             for row in page_data:
+                # Stop adding rows if we've reached max_items
+                if request.max_items and len(all_rows) >= request.max_items:
+                    break
+                
                 row = dict(row)
                 # Extract follow URLs from the row (they were extracted as temporary fields)
                 row["_follow_urls"] = extract_follow_urls(
@@ -198,6 +207,10 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 all_rows.append(row)
 
             if not pagination:
+                break
+            # Stop if we've reached max_items
+            if request.max_items and len(all_rows) >= request.max_items:
+                print(f"ℹ️  Reached max_items limit ({request.max_items}). Stopping pagination.")
                 break
             if pagination.max_pages and page >= pagination.max_pages:
                 break
