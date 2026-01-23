@@ -560,7 +560,11 @@ async def upsert_entity_record(cur,entity_name: str, source_name: str, item: dic
 
 async def _execute_task_internal(task_id: int):
     """Internal function to execute a task by scraping data and storing it in the corresponding entity table.
-    This is called by the Kafka worker after consuming a task from the queue."""
+    This is called by the Kafka worker after consuming a task from the queue.
+    
+    Includes idempotency check: compares current execution with last_executed_at to prevent
+    duplicate execution when the same task is reprocessed from Kafka due to pod restart.
+    """
     import uuid
     execution_id = str(uuid.uuid4())
     execution_start = datetime.now()
@@ -571,8 +575,32 @@ async def _execute_task_internal(task_id: int):
         # Create execution logs table if it doesn't exist
         create_execution_logs_table(conn)
         
+        # Idempotency Check: Prevent re-execution if this task was already successfully executed recently
+        # This handles the case where a K8s pod restart causes Kafka to re-send old messages
+        cur.execute("""
+            SELECT last_executed_at FROM tasks WHERE id = %s
+        """, (task_id,))
+        task_last_exec = cur.fetchone()
+        if task_last_exec and task_last_exec[0]:
+            last_exec_time = task_last_exec[0]
+            # If last execution was less than 10 seconds ago, skip this execution
+            # (likely a duplicate from Kafka reprocessing)
+            time_since_last_exec = (datetime.now() - last_exec_time).total_seconds()
+            if time_since_last_exec < 10:
+                print(f"⚠️  Task {task_id} was already executed {time_since_last_exec:.1f} seconds ago. Skipping to prevent duplicate execution.")
+                return {
+                    "success": True,
+                    "task_id": task_id,
+                    "message": f"Task already executed recently (skipped duplicate from Kafka reprocessing)",
+                    "items_scraped": 0,
+                    "items_stored": 0,
+                    "execution_id": execution_id,
+                    "is_duplicate": True
+                }
+        
         # Log execution start
         log_execution(conn, task_id, execution_id, 'started', 'info', 
+
                      f'Task execution started', {'execution_id': execution_id})
         
         # Get task details with all necessary information
@@ -780,8 +808,8 @@ async def _execute_task_internal(task_id: int):
         scrape_response = await route_scraping_request(scrape_request)
         scrape_duration = int((datetime.now() - scrape_start).total_seconds() * 1000)
 
-        # clip to max_items (before was handled in crawler)
-        scrape_data = scrape_response.data[:max_items] if scrape_response.data else [] 
+        # No need to clip - pagination limit is now enforced in helperutil.py during scraping
+        scrape_data = scrape_response.data if scrape_response.data else [] 
         
         if not scrape_response.success or not scrape_data:
             error_details = {
