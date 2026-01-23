@@ -282,6 +282,12 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 # Process each follow-up URL for this row
                 for link_name, link_url in follow_urls.items():
                     print(f"    → Following link '{link_name}': {link_url}")
+                    
+                    # Validate URL scheme - skip javascript: and other invalid schemes
+                    if not link_url.startswith(('http://', 'https://')):
+                        print(f"      ⚠️ Skipping invalid URL scheme: {link_url}")
+                        continue
+                    
                     follow_fields = get_follow_fields(link_name, request)
                     
                     if not follow_fields:
