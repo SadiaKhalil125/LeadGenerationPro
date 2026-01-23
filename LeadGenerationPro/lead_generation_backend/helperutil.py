@@ -189,29 +189,17 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
 
     async with AsyncWebCrawler(verbose=True) as crawler:
         while True:
-            # Build paginated URL
-            # Use base URL only if: no pagination, OR (pagination AND start_page == 1 AND page == 1)
-            # Otherwise, build paginated URL
-            if pagination:
-                # If start_page is 1 and we're on page 1, use base URL
-                # Otherwise, build paginated URL (needed for start_page != 1 or page > 1)
-                if start_page == 1 and page == 1:
-                    target_url = str(request.url)
-                    print(f"📄 Fetching start page {page}: {target_url}")
-                else:
-                    target_url = build_paginated_url(str(request.url), page, pagination)
-                    print(f"📄 Fetching page {page} (start_page={start_page}): {target_url}")
-            else:
-                target_url = str(request.url)
-                print(f"📄 Fetching single page: {target_url}")
+            # Check if we've reached max_items BEFORE fetching the next page
+            if request.max_items and len(all_rows) >= request.max_items:
+                print(f"ℹ️  Reached max_items limit ({request.max_items}). Stopping pagination.")
+                break
 
-            # ===============================================
-            # STEP 1: SCRAPE CURRENT PAGE
-            # Recreate strategy and config for each page to avoid any caching issues
-            # ===============================================
-            strategy = JsonCssExtractionStrategy(schema, verbose=True)
-            config = base_config(strategy, request)
-            
+            target_url = (
+                build_paginated_url(str(request.url), page, pagination)
+                if pagination and page > 1
+                else str(request.url)
+            )
+
             result = await crawler.arun(url=target_url, config=config)
             if not result.success:
                 print(f"❌ Failed to fetch page {page}: {result.error_message if hasattr(result, 'error_message') else 'Unknown error'}")
@@ -247,17 +235,9 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                     print(f"   Markdown preview (first 500 chars): {md_preview}")
                 break
 
-            print(f"✅ Extracted {len(page_data)} items from page {page}")
-
-            # ===============================================
-            # STEP 2: PROCESS FOLLOW-UP URLS FOR THIS PAGE
-            # ===============================================
-            page_final_data = []
-            
-            for row_idx, row in enumerate(page_data):
-                # Check max_items before processing row
-                if max_items and len(final_data) >= max_items:
-                    print(f"✅ Reached max_items limit ({max_items}) before processing page {page} row {row_idx + 1}")
+            for row in page_data:
+                # Stop adding rows if we've reached max_items
+                if request.max_items and len(all_rows) >= request.max_items:
                     break
                 
                 row = dict(row)
@@ -371,6 +351,10 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
             # Check pagination limits
             if not pagination:
                 print(f"🛑 No pagination configured, stopping after first page")
+                break
+            # Stop if we've reached max_items
+            if request.max_items and len(all_rows) >= request.max_items:
+                print(f"ℹ️  Reached max_items limit ({request.max_items}). Stopping pagination.")
                 break
             if pagination.max_pages and page >= pagination.max_pages:
                 print(f"🛑 Reached max_pages limit ({pagination.max_pages}), stopping pagination")

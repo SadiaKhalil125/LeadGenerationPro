@@ -40,7 +40,9 @@ for message in consumer:
         
         print(f"Received status for task {task_id}: '{status}'")
         
-        # We only need to act on the 'completed' status for now
+        # Only update last_executed_at on successful completion
+        # Do NOT process 'failed' status as it may come after 'completed' status
+        # due to async processing, causing the success to be overwritten
         if status == "completed":
             conn, cur = get_db_cursor()
             
@@ -51,6 +53,9 @@ for message in consumer:
             conn.commit()
             cur.close()
             conn.close()
+        elif status == "failed":
+            # Log failed status but don't override the completed timestamp
+            print(f"   ⚠️  Task {task_id} reported failure. Check execution logs for details.")
         
     except Exception as e:
         print(f" Error processing status update: {e}")
