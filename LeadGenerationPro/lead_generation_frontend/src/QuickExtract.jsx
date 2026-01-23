@@ -51,7 +51,19 @@ const GOOGLE_MAPS_FIELDS = {
 
 const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoading = false }) => {
   if (!data) return null;
-  const headers = data.data && data.data.length > 0 ? Object.keys(data.data[0]) : [];
+  
+  // Dynamically get all headers from all rows (not just the first row)
+  // This ensures we capture all columns even when following links or pagination changes columns
+  const getAllHeaders = () => {
+    if (!data.data || data.data.length === 0) return [];
+    const headerSet = new Set();
+    data.data.forEach(row => {
+      Object.keys(row).forEach(key => headerSet.add(key));
+    });
+    return Array.from(headerSet);
+  };
+  
+  const headers = getAllHeaders();
   const isFirstStep = currentStep <= 1;
 
   return (
@@ -483,8 +495,15 @@ export default function QuickExtract() {
     setPreviewLoading(true);
 
     try {
-      // Only include pagination config for steps > 1
-      const paginationPayload = stepNumber > 1 ? buildPaginationPayload() : null;
+      // CRITICAL FIX: Build pagination config for ALL steps >= 2, not just based on paginationType
+      let paginationPayload = null;
+      if (stepNumber > 1 && paginationType) {
+        paginationPayload = {
+          type: paginationType,
+          ...paginationConfig
+        };
+        console.log("Using pagination config for step", stepNumber, ":", paginationPayload);
+      }
 
       // Build follow_links from configuration
       const follow_links = followLinksConfig
@@ -979,9 +998,19 @@ export default function QuickExtract() {
     setTimeout(poll, 1000);
   };
 
+  // Helper function to get all unique headers from all data rows
+  const getAllDataHeaders = (data) => {
+    if (!data || data.length === 0) return [];
+    const headerSet = new Set();
+    data.forEach(row => {
+      Object.keys(row).forEach(key => headerSet.add(key));
+    });
+    return Array.from(headerSet);
+  };
+
   const exportToCSV = () => {
     if (!extractedData || !extractedData.data || extractedData.data.length === 0) { alert("No data to export!"); return; }
-    const headers = Object.keys(extractedData.data[0]);
+    const headers = getAllDataHeaders(extractedData.data);
     const csvRows = [headers.join(','), ...extractedData.data.map(row => headers.map(header => {
       const value = row[header] || '';
       if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) { return `"${value.replace(/"/g, '""')}"`; }
@@ -997,7 +1026,7 @@ export default function QuickExtract() {
   const exportToExcel = () => {
     if (!extractedData || !extractedData.data || extractedData.data.length === 0) { alert("No data to export!"); return; }
     try {
-      const headers = Object.keys(extractedData.data[0]);
+      const headers = getAllDataHeaders(extractedData.data);
       let xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40"><Worksheet ss:Name="Sheet1"><Table>';
       xml += '<Row>' + headers.map(h => `<Cell><Data ss:Type="String">${escapeXml(h)}</Data></Cell>`).join('') + '</Row>';
       extractedData.data.forEach(row => {
@@ -2083,7 +2112,7 @@ export default function QuickExtract() {
                         <table className="w-full text-sm text-left text-gray-600">
                           <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-semibold border-b border-gray-200 sticky top-0">
                             <tr>
-                              {Object.keys(extractedData.data[0]).map((header) => (
+                              {getAllDataHeaders(extractedData.data).map((header) => (
                                 <th key={header} className="px-6 py-4 whitespace-nowrap bg-gray-50">
                                   {header}
                                 </th>
@@ -2093,7 +2122,7 @@ export default function QuickExtract() {
                           <tbody className="divide-y divide-gray-100">
                             {extractedData.data.map((item, index) => (
                               <tr key={index} className="hover:bg-blue-50/30 transition-colors">
-                                {Object.keys(extractedData.data[0]).map((header) => (
+                                {getAllDataHeaders(extractedData.data).map((header) => (
                                   <td key={`${index}-${header}`} className="px-6 py-4 whitespace-nowrap">
                                     {String(item[header] || '')}
                                   </td>
