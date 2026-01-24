@@ -40,7 +40,7 @@ try:
         
         # --- CRITICAL PERFORMANCE FIXES FOR K8S ---
         max_poll_records=1,           # Only fetch 1 task at a time. Ensures we commit before fetching next.
-        max_poll_interval_ms=1200000, # 20 Minutes. Allows long scraping tasks without getting kicked from group.
+        max_poll_interval_ms=90000000, # 25 hours. Allows long scraping tasks without getting kicked from group.
         session_timeout_ms=60000,     # 60 Seconds. Tolerates network jitter in K8s.
         heartbeat_interval_ms=10000   # 10 Seconds. Frequent heartbeats to keep connection alive.
     )
