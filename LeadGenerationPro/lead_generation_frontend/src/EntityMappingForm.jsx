@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef} from "react";
 import { Eye, ArrowRight, ArrowLeft, ArrowRightCircle, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, Info, AlertTriangle, Code, RefreshCw } from "lucide-react";
-import ServerHtmlPreview from "./ServerHtmlPreview";
+import SmartWebsitePreview from "./ServerHtmlPreview";
 import { useNavigate } from "react-router-dom";
 import API_BASE from "./api_base";
 
@@ -203,8 +203,82 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
+// Add this function to EntityMappingScreen component
+const handleSelectorFromPreview = (selector, elementInfo) => {
+  if (!previewEntity) {
+    // If no specific entity is being previewed, ask user which field to fill
+    const selectedEntity = selectedEntities[0]; // Default to first selected entity
+    
+    if (selectedEntity && entityData[selectedEntity]) {
+      const fields = entityData[selectedEntity].fields;
+      if (fields.length > 0) {
+        // Show a dialog or auto-fill the first empty field
+        const firstEmptyField = fields.find(f => !f.selector);
+        if (firstEmptyField) {
+          handleFieldChange(selectedEntity, firstEmptyField.attribute, "selector", selector);
+          alert(`Selector "${selector}" added to ${firstEmptyField.attribute} field`);
+        } else {
+          // Let user choose which field to fill
+          const fieldNames = fields.map(f => f.attribute).join(", ");
+          const choice = prompt(
+            `Which field should receive this selector?\nAvailable fields: ${fieldNames}\n\nEnter field name:`
+          );
+          if (choice && fields.find(f => f.attribute === choice)) {
+            handleFieldChange(selectedEntity, choice, "selector", selector);
+          }
+        }
+      }
+    }
+  } else {
+    // If we're in preview mode for a specific entity
+    const fields = entityData[previewEntity]?.fields || [];
+    
+    if (fields.length > 0) {
+      // Auto-suggest based on element info
+      const suggestions = fields
+        .filter(f => {
+          const fieldLower = f.attribute.toLowerCase();
+          const tagLower = elementInfo?.tagName?.toLowerCase() || '';
+          
+          // Simple heuristic matching
+          if (fieldLower.includes('name') && tagLower.includes('h1')) return true;
+          if (fieldLower.includes('title') && (tagLower.includes('h1') || tagLower.includes('h2'))) return true;
+          if (fieldLower.includes('desc') && tagLower.includes('p')) return true;
+          if (fieldLower.includes('link') && tagLower.includes('a')) return true;
+          if (fieldLower.includes('image') && tagLower.includes('img')) return true;
+          return false;
+        });
+
+      if (suggestions.length === 1) {
+        // Auto-fill if only one suggestion
+        handleFieldChange(previewEntity, suggestions[0].attribute, "selector", selector);
+      } else if (suggestions.length > 1) {
+        // Let user choose from suggestions
+        const fieldNames = suggestions.map(f => f.attribute).join(", ");
+        const choice = prompt(
+          `Multiple fields match this element:\n${fieldNames}\n\nEnter field name to fill:`
+        );
+        if (choice && suggestions.find(f => f.attribute === choice)) {
+          handleFieldChange(previewEntity, choice, "selector", selector);
+        }
+      } else {
+        // No suggestions, let user choose any field
+        const fieldNames = fields.map(f => f.attribute).join(", ");
+        const choice = prompt(
+          `Select a field for selector "${selector}":\nAvailable fields: ${fieldNames}\n\nEnter field name:`
+        );
+        if (choice && fields.find(f => f.attribute === choice)) {
+          handleFieldChange(previewEntity, choice, "selector", selector);
+        }
+      }
+    }
+  }
+  
+  console.log("Selector received from preview:", selector, elementInfo);
+};
 // New Component: CSS Selector Input with Autocomplete from Backend
-const SelectorInput = ({ value, onChange, placeholder, options = [] }) => {
+// Update the SelectorInput component in EntityMappingScreen.jsx
+const SelectorInput = ({ value, onChange, placeholder, options = [], entity, attribute, onQuickFill }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -218,21 +292,45 @@ const SelectorInput = ({ value, onChange, placeholder, options = [] }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Filter options based on what user is typing (optional, but nice)
   const filteredOptions = options.filter(opt => 
     opt.toLowerCase().includes(value?.toLowerCase() || "")
   );
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <input
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setIsOpen(true)}
-        className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400 font-mono text-sm"
-      />
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setIsOpen(true)}
+          className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400 font-mono text-sm"
+          style={{ flex: 1 }}
+        />
+        {onQuickFill && (
+          <button
+            type="button"
+            onClick={() => onQuickFill(entity, attribute)}
+            title="Click to select from preview"
+            style={{
+              padding: '0 16px',
+              backgroundColor: '#49A3C4',
+              color: 'white',
+              borderRadius: '12px',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: '600',
+              fontSize: '12px'
+            }}
+          >
+            <MousePointer size={16} />
+          </button>
+        )}
+      </div>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -262,7 +360,17 @@ const SelectorInput = ({ value, onChange, placeholder, options = [] }) => {
     </div>
   );
 };
-
+// Add this function to EntityMappingScreen component
+const handleQuickFillClick = (entity, attribute) => {
+  // Set this entity as the preview entity
+  setPreviewEntity(entity);
+  
+  // Show instructions
+  alert(`Now click "Select Elements" in the preview pane, then click on the ${attribute} element you want to capture.`);
+  
+  // Optionally, scroll to preview pane
+  document.querySelector('[style*="Right Panel"]')?.scrollIntoView({ behavior: 'smooth' });
+};
 
 export default function EntityMappingScreen() {
   const [source, setSource] = useState("");
@@ -730,7 +838,7 @@ export default function EntityMappingScreen() {
         width: '50%',
         height: '100%',
         overflowY: 'auto',
-        padding: '30px'
+        padding: '20px'
       }}>
         
         <div style={{
@@ -1262,13 +1370,15 @@ export default function EntityMappingScreen() {
                                     );
                                   })}
                               </select>
+
                               <SelectorInput
-                                placeholder={fm.attribute && entityData[entity]?.fields.find(f => f.attribute === fm.attribute)?.selector 
-                                  ? `Auto-filled: ${entityData[entity].fields.find(f => f.attribute === fm.attribute).selector}` 
-                                  : "CSS Selector (auto-filled if configured above)"}
-                                value={fm.selector || ""}
-                                onChange={(val) => handleUpdateFollowLinkField(entity, flIndex, fmIndex, 'selector', val)}
+                                placeholder={isSupported ? "Auto (or custom CSS)" : "CSS Selector"}
+                                value={field.selector}
+                                onChange={(val) => handleFieldChange(entity, field.attribute, "selector", val)}
                                 options={availableSelectors[entity] || []}
+                                entity={entity}
+                                attribute={field.attribute}
+                                onQuickFill={handleQuickFillClick}
                               />
                               <MetadataInput
                                 value={fm.extract || "text"}
@@ -1401,7 +1511,7 @@ export default function EntityMappingScreen() {
       <div style={{
         width: '50%',
         height: '100%',
-        padding: '30px',
+        padding: '20px',
         display: 'flex',
         flexDirection: 'column'
       }}>
@@ -1414,7 +1524,10 @@ export default function EntityMappingScreen() {
           borderTop: '8px solid #49A3C4',
           overflow: 'hidden'
         }}>
-          <ServerHtmlPreview url={url} />
+          <SmartWebsitePreview
+            url={url}
+            onSelectorSelected={handleSelectorFromPreview}
+          />
         </div>
       </div>
       
