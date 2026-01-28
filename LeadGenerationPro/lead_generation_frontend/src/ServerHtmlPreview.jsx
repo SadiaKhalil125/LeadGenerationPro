@@ -1,20 +1,23 @@
+// SmartWebsitePreview.jsx - UPDATED WITH BETTER SELECTOR GENERATION
 import React, { useState, useEffect, useRef } from "react";
 import { Code, AlertTriangle } from "lucide-react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import API_BASE from "./api_base";
 
-export default function ServerHtmlPreview({ url }) {
+export default function SmartWebsitePreview({ url, onSelectorSelected }) {
   const [status, setStatus] = useState("idle");
   const [htmlContent, setHtmlContent] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-
+  const [lastSelectedSelector, setLastSelectedSelector] = useState("");
   const iframeRef = useRef(null);
-  const overlayRef = useRef(null);
   const selectedCallbackRef = useRef(null);
-  const [renderedPageId, setRenderedPageId] = useState(null);
+
+  // Set the callback for when a selector is selected
+  useEffect(() => {
+    selectedCallbackRef.current = onSelectorSelected;
+  }, [onSelectorSelected]);
+
   // -------------------------
-  // FETCH LOGIC (STATIC → JS)
+  // FETCH LOGIC
   // -------------------------
 
   useEffect(() => {
@@ -33,9 +36,19 @@ export default function ServerHtmlPreview({ url }) {
     setStatus("loading");
     setHtmlContent("");
     setErrorMessage("");
+    setLastSelectedSelector("");
 
     try {
-      // ---- FIRST ATTEMPT: STATIC BACKEND ----
+      await fetchPreview(urlToFetch);
+    } catch (err) {
+      console.error("Fetch error:", err);
+      setErrorMessage(err.message);
+      setStatus("error");
+    }
+  };
+
+  const fetchPreview = async (urlToFetch) => {
+    try {
       let res = await fetch(`${API_BASE}/fetchcontent`, {
         method: "POST",
         headers: {
@@ -47,17 +60,15 @@ export default function ServerHtmlPreview({ url }) {
 
       let data = await res.json();
 
+      // Check if needs JavaScript rendering
       const needsJS =
         !data.success ||
         (data.content &&
-          (
-            data.content.toLowerCase().includes("enable javascript") ||
+          (data.content.toLowerCase().includes("enable javascript") ||
             data.content.toLowerCase().includes("please enable javascript") ||
             data.content.toLowerCase().includes("javascript is disabled") ||
-            data.content.trim().length < 50
-          ));
+            data.content.trim().length < 50));
 
-      // ---- FALLBACK TO JS-RENDERED VERSION ----
       if (needsJS) {
         res = await fetch(`${API_BASE}/fetchcontent-js`, {
           method: "POST",
@@ -69,105 +80,308 @@ export default function ServerHtmlPreview({ url }) {
         });
 
         data = await res.json();
-      
-        setRenderedPageId(data.page_id);
-
       }
 
       if (!data.success) throw new Error(data.error);
 
-      setHtmlContent(data.content);
+      // Add enhanced click detection
+      const modifiedHtml = addClickDetection(data.content);
+      setHtmlContent(modifiedHtml);
       setStatus("success");
-    } catch (err) {
-      setErrorMessage(err.message);
-      setStatus("error");
+    } catch (error) {
+      throw new Error(`Preview failed: ${error.message}`);
     }
   };
 
-  // -------------------------
-  // ELEMENT HIGHLIGHT SYSTEM
-  // -------------------------
+  // CSS escape helper
+  const cssEscape = (str) => {
+    return str.replace(/[!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~]/g, '\\$&');
+  };
 
+  // Add click detection to HTML
+  const addClickDetection = (html) => {
+    const clickScript = `
+      <script>
+        // CSS selector generation for scraping
+        function generateSelector(element) {
+          if (!element || !(element instanceof Element)) return '';
+          
+          // 1. If element has ID - use it (most specific)
+          if (element.id) {
+            return '#' + cssEscape(element.id);
+          }
+          
+          // 2. Element with all classes
+          let selector = element.tagName.toLowerCase();
+          
+          // Get original classes (excluding our preview classes)
+          if (element.className && typeof element.className === 'string') {
+            // Filter out our preview classes
+            const classes = element.className.trim().split(/\\s+/).filter(c => c);
+            const filteredClasses = classes.filter(cls => 
+              cls !== 'preview-hover' && cls !== 'preview-clicked'
+            );
+            
+            if (filteredClasses.length > 0) {
+              // Add ALL filtered classes
+              selector += '.' + filteredClasses.map(cssEscape).join('.');
+            }
+          }
+          
+          return selector;
+        }
+        
+        // CSS escape helper
+        function cssEscape(str) {
+          if (!str) return '';
+          return str.replace(/[!"#$%&'()*+,.\\/:;<=>?@[\\\\\\]^\`{|}~]/g, '\\\\$&');
+        }
+        
+        // Hover highlighting and selector preview
+        let hoverTimeout = null;
+        let lastHovered = null;
+        let lastSelected = null;
+        let hoverTooltip = null;
+        
+        // Create hover styles
+        const hoverStyle = document.createElement('style');
+        hoverStyle.textContent = \`
+          .preview-hover {
+            outline: 2px dashed #4285f4 !important;
+            outline-offset: 2px !important;
+            background-color: rgba(66, 133, 244, 0.1) !important;
+            cursor: crosshair !important;
+          }
+          .preview-clicked {
+            outline: 2px solid #ea4335 !important;
+            outline-offset: 2px !important;
+            background-color: rgba(234, 67, 53, 0.15) !important;
+          }
+        \`;
+        document.head.appendChild(hoverStyle);
+        
+        // Create tooltip for selector preview
+        function createTooltip() {
+          if (!hoverTooltip) {
+            hoverTooltip = document.createElement('div');
+            hoverTooltip.id = 'preview-tooltip';
+            hoverTooltip.style.cssText = \`
+              position: fixed;
+              background: rgba(0, 0, 0, 0.85);
+              color: white;
+              padding: 6px 10px;
+              border-radius: 4px;
+              font-size: 11px;
+              font-family: monospace;
+              z-index: 100000;
+              pointer-events: none;
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              max-width: 300px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              display: none;
+            \`;
+            document.body.appendChild(hoverTooltip);
+          }
+          return hoverTooltip;
+        }
+        
+        // Hover event handler
+        document.addEventListener('mousemove', function(e) {
+          clearTimeout(hoverTimeout);
+          
+          // Remove hover from previous element
+          if (lastHovered && lastHovered !== e.target) {
+            lastHovered.classList.remove('preview-hover');
+          }
+          
+          hoverTimeout = setTimeout(() => {
+            const el = e.target;
+            if (el && el.nodeType === Node.ELEMENT_NODE && el !== lastSelected) {
+              lastHovered = el;
+              el.classList.add('preview-hover');
+              
+              // Show selector preview in tooltip (excluding our classes)
+              const selector = generateSelector(el);
+              const tooltip = createTooltip();
+              tooltip.textContent = selector;
+              tooltip.style.left = (e.clientX + 15) + 'px';
+              tooltip.style.top = (e.clientY + 15) + 'px';
+              tooltip.style.display = 'block';
+            }
+          }, 50);
+        });
+        
+        // Mouse out handler
+        document.addEventListener('mouseout', function(e) {
+          clearTimeout(hoverTimeout);
+          if (e.target) {
+            e.target.classList.remove('preview-hover');
+          }
+          if (hoverTooltip) {
+            hoverTooltip.style.display = 'none';
+          }
+        });
+        
+        // Double Click handler
+        document.addEventListener('dblclick', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const element = e.target;
+          if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+            return;
+          }
+          
+          // Remove hover
+          element.classList.remove('preview-hover');
+          if (lastHovered === element) {
+            lastHovered = null;
+          }
+          
+          // Hide tooltip
+          if (hoverTooltip) {
+            hoverTooltip.style.display = 'none';
+          }
+          
+          // Remove previous selection
+          if (lastSelected && lastSelected !== element) {
+            lastSelected.classList.remove('preview-clicked');
+          }
+          
+          // Add click highlight (persistent until next selection)
+          element.classList.add('preview-clicked');
+          lastSelected = element;
+          
+          // Generate selector (excluding our classes)
+          const selector = generateSelector(element);
+          
+          // Get text content for context
+          let textContent = '';
+          try {
+            textContent = element.textContent ? element.textContent.trim().slice(0, 200) : '';
+            if (element.textContent && element.textContent.trim().length > 200) {
+              textContent += '...';
+            }
+          } catch (e) {
+            textContent = '';
+          }
+          
+          // Send selector to parent
+          window.parent.postMessage({
+            type: 'SELECTOR_SELECTED',
+            selector: selector,
+            tagName: element.tagName,
+            className: element.className,
+            id: element.id,
+            text: textContent
+          }, '*');
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+          if (hoverStyle && hoverStyle.parentNode) {
+            hoverStyle.parentNode.removeChild(hoverStyle);
+          }
+          if (hoverTooltip && hoverTooltip.parentNode) {
+            hoverTooltip.parentNode.removeChild(hoverTooltip);
+          }
+        });
+        
+        console.log('Preview with hover & click detection loaded');
+      </script>
+    `;
+
+    // Insert script into HTML
+    if (html.includes("</head>")) {
+      return html.replace("</head>", clickScript + "</head>");
+    } else if (html.includes("<body")) {
+      const bodyIndex = html.indexOf("<body");
+      return html.slice(0, bodyIndex) + "<head>" + clickScript + "</head>" + html.slice(bodyIndex);
+    } else {
+      return "<!DOCTYPE html><html><head>" + clickScript + "</head><body>" + html + "</body></html>";
+    }
+  };
+
+  // Handle messages from iframe
   useEffect(() => {
-    if (status !== "success") return;
-
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-
-    const doc = iframe.contentDocument || iframe.contentWindow.document;
-    const overlay = overlayRef.current;
-
-    if (!doc || !overlay) return;
-
-    const highlight = (e) => {
-      const el = e.target;
-      const rect = el.getBoundingClientRect();
-
-      overlay.style.display = "block";
-      overlay.style.left = rect.left + iframe.offsetLeft + "px";
-      overlay.style.top = rect.top + iframe.offsetTop + "px";
-      overlay.style.width = rect.width + "px";
-      overlay.style.height = rect.height + "px";
-    };
-
-    const handleClick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const selector = getCssSelector(e.target);
-      console.log("SELECTOR PICKED:", selector);
-
-      if (selectedCallbackRef.current) {
-        selectedCallbackRef.current(selector);
+    const handleMessage = (event) => {
+      if (event.data.type === "SELECTOR_SELECTED") {
+        const selector = event.data.selector;
+        setLastSelectedSelector(selector);
+        if (selectedCallbackRef.current) {
+          selectedCallbackRef.current(selector, {
+            tagName: event.data.tagName,
+            id: event.data.id,
+            className: event.data.className,
+            text: event.data.text || "",
+            attributes: []
+          });
+        }
       }
     };
 
-    doc.addEventListener("mousemove", highlight);
-    doc.addEventListener("click", handleClick);
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
-    return () => {
-      doc.removeEventListener("mousemove", highlight);
-      doc.removeEventListener("click", handleClick);
-    };
-  }, [status]);
-
-
-  // CSS SELECTOR GENERATOR
-  const getCssSelector = (el) => {
-    if (!el) return "";
-
-    if (el.id) return `#${el.id}`;
-    if (el.className) {
-      const classSelector = "." + el.className.trim().replace(/\s+/g, ".");
-      return `${el.tagName.toLowerCase()}${classSelector}`;
+  // Load HTML into iframe
+  useEffect(() => {
+    if (status === "success" && htmlContent && iframeRef.current) {
+      const iframe = iframeRef.current;
+      iframe.srcdoc = htmlContent;
     }
-
-    return el.tagName.toLowerCase();
-  };
+  }, [status, htmlContent]);
 
   // -------------------------
-  // RENDER UI
+  // UI RENDER
   // -------------------------
 
   return (
     <div className="relative w-full h-full flex flex-col bg-gray-800">
+      {/* Simple Header */}
+      <div className="flex items-center justify-between p-3 bg-gray-900 border-b border-gray-700">
+        <div className="flex items-center gap-2">
+          <div
+            className="px-2 py-1 rounded-lg text-xs font-semibold text-white"
+            style={{ backgroundColor: 'rgb(56, 149, 183)' }}
+          >
+            Interactive Preview
+          </div>
+        </div>
+        <div className="text-gray-100 text-sm">
+          Hover to highlight | Double Click to generate selector
+        </div>
+      </div>
 
-      {/* Overlay highlight */}
-      <div
-        ref={overlayRef}
-        style={{
-          position: "absolute",
-          border: "2px solid #00e6b8",
-          display: "none",
-          pointerEvents: "none",
-          zIndex: 9999,
-        }}
-      ></div>
 
+      {/* Last Selected Display */}
+      {lastSelectedSelector && (
+        <div className="bg-gray-900 p-2 border-b border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-100 ml-2 text-sm">Selector:</span>
+              <code className="bg-gray-800 px-2 py-1 rounded text-teal-200 font-mono text-sm">
+                {lastSelectedSelector}
+              </code>
+            </div>
+            <button
+              onClick={() => navigator.clipboard.writeText(lastSelectedSelector)}
+              className="text-xs text-black hover:text-teal-600 mr-2 py-1 rounded"
+              title="Copy to clipboard"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Content States */}
       {status === "idle" && (
         <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
           <Code size={48} className="mb-4 text-gray-500" />
-          <h3 className="text-lg font-semibold">HTML Source View</h3>
+          <h3 className="text-lg font-semibold">Website Preview</h3>
           <p>Enter a URL to load the webpage.</p>
         </div>
       )}
@@ -177,14 +391,14 @@ export default function ServerHtmlPreview({ url }) {
           <div className="animate-spin text-teal-500">
             <Code size={48} />
           </div>
-          <p className="mt-4 font-semibold">Loading Webpage...</p>
+          <p className="mt-4 font-semibold">Loading Website...</p>
         </div>
       )}
 
       {status === "error" && (
         <div className="flex-grow flex flex-col items-center justify-center text-red-400 p-4">
           <AlertTriangle size={48} className="mb-4 text-red-500" />
-          <h3 className="text-lg font-bold">Fetch Failed</h3>
+          <h3 className="text-lg font-bold">Preview Failed</h3>
           <p className="text-center mt-2 bg-red-900 bg-opacity-30 p-3 rounded-md">
             {errorMessage}
           </p>
@@ -193,14 +407,12 @@ export default function ServerHtmlPreview({ url }) {
 
       {status === "success" && (
         <div className="relative w-full h-full overflow-hidden">
-         <iframe
+          <iframe
             ref={iframeRef}
-            src={`${API_BASE}/rendered/${renderedPageId}`}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups allow-modals"
+            title="Website Preview"
             className="w-full h-full border-0"
-        />
-
-
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock"
+          />
         </div>
       )}
     </div>
