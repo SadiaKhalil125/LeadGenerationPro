@@ -147,7 +147,7 @@ def log_execution(conn, task_id: int, execution_id: str, status: str, log_level:
 
 @router.post("/create-task", response_model=dict)
 async def create_task(request: TaskRequest):
-    """Create a scheduled scraping task."""
+    """Create a scheduled scraping task - supports both web and API sources."""
     try:
         if request.repeat not in VALID_REPEATS:
             raise HTTPException(status_code=400, detail="Invalid repeat value")
@@ -156,7 +156,6 @@ async def create_task(request: TaskRequest):
             raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
 
         conn, cur = get_db_cursor()
-        # cur = conn.cursor()
         
         # Create tasks table if it doesn't exist
         cur.execute("""
@@ -170,50 +169,106 @@ async def create_task(request: TaskRequest):
             last_executed_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT NOW(),
             max_items INT DEFAULT 10,
+            source_type VARCHAR(20) DEFAULT 'web',
+            api_source_id INT,
             CONSTRAINT unique_task_mapping UNIQUE (source_id, mapping_id, scheduled_time)
             );
         """)
 
-        # Verify source exists
-        cur.execute("SELECT id FROM sources WHERE id = %s", (request.source_id,))
-        if not cur.fetchone():
-            raise HTTPException(status_code=404, detail="Source not found")
-        
-        # Verify mapping exists and belongs to the source, get mapping details
-        cur.execute("""
-            SELECT id, mapping_name, entity_name 
-            FROM entity_mappings 
-            WHERE id = %s AND source_id = %s
-        """, (request.mapping_id, request.source_id))
-        
-        result = cur.fetchone()
-        if not result:
-            raise HTTPException(status_code=404, detail="Mapping not found for the specified source")
+        # Handle both web and API sources
+        if request.source_type == 'web':
+            # Existing web source logic
+            if not request.source_id or not request.mapping_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="source_id and mapping_id required for web sources"
+                )
             
-        mapping_id, mapping_name, entity_name = result
-        
-        # Generate unique task name if not provided
-        task_name = request.task_name
-        if not task_name:
-            timestamp = request.scheduled_time.strftime("%Y%m%d_%H%M%S")
-            task_name = f"{entity_name}_{mapping_name}_{timestamp}"
-            
-        # Ensure task name is unique
-        counter = 1
-        original_task_name = task_name
-        while True:
-            cur.execute("SELECT id FROM tasks WHERE task_name = %s", (task_name,))
+            # Verify source exists
+            cur.execute("SELECT id FROM sources WHERE id = %s", (request.source_id,))
             if not cur.fetchone():
-                break
-            task_name = f"{original_task_name}_{counter}"
-            counter += 1
-        
-        # Insert task
-        cur.execute("""
-            INSERT INTO tasks (task_name, source_id, mapping_id, scheduled_time, repeat, max_items)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (task_name, request.source_id, request.mapping_id, request.scheduled_time, request.repeat, request.max_items))
+                raise HTTPException(status_code=404, detail="Source not found")
+            
+            # Verify mapping exists and belongs to the source, get mapping details
+            cur.execute("""
+                SELECT id, mapping_name, entity_name 
+                FROM entity_mappings 
+                WHERE id = %s AND source_id = %s
+            """, (request.mapping_id, request.source_id))
+            
+            result = cur.fetchone()
+            if not result:
+                raise HTTPException(status_code=404, detail="Mapping not found for the specified source")
+                
+            mapping_id, mapping_name, entity_name = result
+            
+            # Generate unique task name if not provided
+            task_name = request.task_name
+            if not task_name:
+                timestamp = request.scheduled_time.strftime("%Y%m%d_%H%M%S")
+                task_name = f"{entity_name}_{mapping_name}_{timestamp}"
+                
+            # Ensure task name is unique
+            counter = 1
+            original_task_name = task_name
+            while True:
+                cur.execute("SELECT id FROM tasks WHERE task_name = %s", (task_name,))
+                if not cur.fetchone():
+                    break
+                task_name = f"{original_task_name}_{counter}"
+                counter += 1
+            
+            # Insert web task
+            cur.execute("""
+                INSERT INTO tasks (task_name, source_type, source_id, mapping_id, scheduled_time, repeat, max_items)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (task_name, 'web', request.source_id, request.mapping_id, request.scheduled_time, request.repeat, request.max_items))
+            
+        elif request.source_type == 'api':
+            # New API source logic
+            if not request.api_source_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="api_source_id required for API sources"
+                )
+            
+            # Verify API source exists
+            cur.execute("SELECT name, entity_name FROM api_sources WHERE id = %s", (request.api_source_id,))
+            result = cur.fetchone()
+            if not result:
+                raise HTTPException(status_code=404, detail="API source not found")
+            
+            api_source_name, entity_name = result
+            
+            # Generate unique task name if not provided
+            task_name = request.task_name
+            if not task_name:
+                timestamp = request.scheduled_time.strftime("%Y%m%d_%H%M%S")
+                task_name = f"{api_source_name}_{timestamp}"
+                
+            # Ensure task name is unique
+            counter = 1
+            original_task_name = task_name
+            while True:
+                cur.execute("SELECT id FROM tasks WHERE task_name = %s", (task_name,))
+                if not cur.fetchone():
+                    break
+                task_name = f"{original_task_name}_{counter}"
+                counter += 1
+            
+            # Insert API task
+            cur.execute("""
+                INSERT INTO tasks (task_name, source_type, api_source_id, scheduled_time, repeat, max_items)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (task_name, 'api', request.api_source_id, request.scheduled_time, request.repeat, request.max_items))
+            
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="source_type must be 'web' or 'api'"
+            )
         
         task_id = cur.fetchone()[0]
         conn.commit()
@@ -232,6 +287,7 @@ async def create_task(request: TaskRequest):
             "task_name": task_name,
             "message": f"Task '{task_name}' created successfully"
         }
+           
         
     except HTTPException:
         # conn.rollback()
@@ -242,29 +298,31 @@ async def create_task(request: TaskRequest):
 
 @router.get("/tasks", response_model=TasksListResponse)
 async def get_all_tasks():
-    """Get all scheduled tasks with their details."""
+    """Get all scheduled tasks with their details (both web and API sources)."""
     try:
         conn, cur = get_db_cursor()
-        # cur = conn.cursor()
         
+        # Union query to get both web and API tasks
         cur.execute("""
             SELECT 
                 t.id,
                 t.task_name,
-                t.source_id,
-                s.name as source_name,
-                t.mapping_id,
-                em.mapping_name,
-                em.entity_name,
+                COALESCE(t.source_id, -1) as source_id,
+                COALESCE(s.name, (SELECT name FROM api_sources WHERE id = t.api_source_id)) as source_name,
+                COALESCE(t.mapping_id, -1) as mapping_id,
+                COALESCE(em.mapping_name, 'N/A') as mapping_name,
+                COALESCE(em.entity_name, (SELECT entity_name FROM api_sources WHERE id = t.api_source_id)) as entity_name,
                 t.scheduled_time,
                 t.created_at,
                 t.repeat,
                 t.last_executed_at,
-                t.max_items
+                t.max_items,
+                COALESCE(t.source_type, 'web') as source_type,
+                COALESCE(t.api_source_id, -1) as api_source_id
                     
             FROM tasks t
-            JOIN sources s ON t.source_id = s.id
-            JOIN entity_mappings em ON t.mapping_id = em.id
+            LEFT JOIN sources s ON t.source_id = s.id AND t.source_type = 'web'
+            LEFT JOIN entity_mappings em ON t.mapping_id = em.id AND t.source_type = 'web'
             ORDER BY t.scheduled_time DESC
         """)
         
@@ -272,21 +330,24 @@ async def get_all_tasks():
         tasks = []
         
         for row in rows:
-            tasks.append(TaskInfo(
-                id=row[0],
-                task_name=row[1],
-                source_id=row[2],
-                source_name=row[3],
-                mapping_id=row[4],
-                mapping_name=row[5],
-                entity_name=row[6],
-                scheduled_time=row[7],
-                created_at=row[8],
-                repeat=row[9],
-                last_executed_at=row[10],
-                max_items=row[11]
-
-            ))
+            # Create task info with source type info
+            task_info_dict = {
+                "id": row[0],
+                "task_name": row[1],
+                "source_id": row[2],
+                "source_name": row[3],
+                "mapping_id": row[4],
+                "mapping_name": row[5],
+                "entity_name": row[6],
+                "scheduled_time": row[7],
+                "created_at": row[8],
+                "repeat": row[9],
+                "last_executed_at": row[10],
+                "max_items": row[11],
+                "source_type": row[12],
+                "api_source_id": row[13] if row[13] != -1 else None
+            }
+            tasks.append(TaskInfo(**task_info_dict))
         
         cur.close()
         
@@ -1069,6 +1130,98 @@ async def _execute_task_internal(task_id: int):
 # Alias for backward compatibility with worker.py
 execute_task = _execute_task_internal
 
+# @router.post("/execute-task/{task_id}")
+# async def execute_task_endpoint(task_id: int):
+#     """Enqueue a task to Kafka for execution by the worker."""
+#     conn = None
+#     try:
+#         conn, cur = get_db_cursor()
+        
+#         # Verify task exists
+#         cur.execute("""
+#             SELECT t.id, t.task_name, em.entity_name
+#             FROM tasks t
+#             JOIN entity_mappings em ON t.mapping_id = em.id
+#             WHERE t.id = %s
+#         """, (task_id,))
+        
+#         task_data = cur.fetchone()
+#         if not task_data:
+#             raise HTTPException(status_code=404, detail="Task not found")
+        
+#         task_name = task_data[1]
+#         entity_name = task_data[2]
+#         cur.close()
+
+#         # Enqueue task to Kafka instead of executing directly
+#         enqueue_task(task_id)
+
+#         # To avoid duplicate immediate executions when the scheduler also has
+#         # a job scheduled for this task, remove the scheduler job (if any)
+#         # and reschedule the next occurrence when applicable. This makes
+#         # manual execute behave like a one-off run while preserving the
+#         # repeating schedule.
+#         try:
+#             job_id = str(task_id)
+#             try:
+#                 if scheduler.get_job(job_id):
+#                     scheduler.remove_job(job_id)
+#             except Exception:
+#                 # If scheduler isn't running in this process or job not found,
+#                 # ignore and continue.
+#                 pass
+
+#             # Fetch current repeat and scheduled_time and reschedule next occurrence
+#             conn2, cur2 = get_db_cursor()
+#             try:
+#                 cur2.execute("SELECT repeat, scheduled_time FROM tasks WHERE id = %s", (task_id,))
+#                 row = cur2.fetchone()
+#                 if row:
+#                     repeat, scheduled_time = row[0], row[1]
+#                     next_time = get_next_scheduled_time(repeat, scheduled_time)
+#                     if next_time:
+#                         cur2.execute("UPDATE tasks SET scheduled_time = %s WHERE id = %s", (next_time, task_id))
+#                         conn2.commit()
+#                         try:
+#                             scheduler.add_job(
+#                                 lambda t=task_id: enqueue_and_reschedule(t),
+#                                 'date',
+#                                 id=job_id,
+#                                 replace_existing=True,
+#                                 run_date=next_time
+#                             )
+#                         except Exception:
+#                             pass
+#             finally:
+#                 try:
+#                     cur2.close()
+#                 except Exception:
+#                     pass
+#                 try:
+#                     conn2.close()
+#                 except Exception:
+#                     pass
+#         except Exception:
+#             # Non-fatal: don't block the API response if scheduler update fails
+#             pass
+
+#         return {
+#             "success": True,
+#             "task_id": task_id,
+#             "task_name": task_name,
+#             "entity_name": entity_name,
+#             "message": f"Task '{task_name}' has been queued for execution in Kafka",
+#             "queued": True
+#         }
+        
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Failed to enqueue task: {str(e)}")
+#     finally:
+#         if conn:
+#             conn.close()
+
 @router.post("/execute-task/{task_id}")
 async def execute_task_endpoint(task_id: int):
     """Enqueue a task to Kafka for execution by the worker."""
@@ -1076,11 +1229,15 @@ async def execute_task_endpoint(task_id: int):
     try:
         conn, cur = get_db_cursor()
         
-        # Verify task exists
+        # FIXED: Use LEFT JOIN and COALESCE to support both web (entity_mappings) and api (api_sources)
         cur.execute("""
-            SELECT t.id, t.task_name, em.entity_name
+            SELECT 
+                t.id, 
+                t.task_name, 
+                COALESCE(em.entity_name, aps.entity_name) as entity_name
             FROM tasks t
-            JOIN entity_mappings em ON t.mapping_id = em.id
+            LEFT JOIN entity_mappings em ON t.mapping_id = em.id AND t.source_type = 'web'
+            LEFT JOIN api_sources aps ON t.api_source_id = aps.id AND t.source_type = 'api'
             WHERE t.id = %s
         """, (task_id,))
         
@@ -1092,25 +1249,15 @@ async def execute_task_endpoint(task_id: int):
         entity_name = task_data[2]
         cur.close()
 
-        # Enqueue task to Kafka instead of executing directly
+        # Enqueue task to Kafka
         enqueue_task(task_id)
 
-        # To avoid duplicate immediate executions when the scheduler also has
-        # a job scheduled for this task, remove the scheduler job (if any)
-        # and reschedule the next occurrence when applicable. This makes
-        # manual execute behave like a one-off run while preserving the
-        # repeating schedule.
+        # Scheduler logic
         try:
             job_id = str(task_id)
-            try:
-                if scheduler.get_job(job_id):
-                    scheduler.remove_job(job_id)
-            except Exception:
-                # If scheduler isn't running in this process or job not found,
-                # ignore and continue.
-                pass
+            if scheduler.get_job(job_id):
+                scheduler.remove_job(job_id)
 
-            # Fetch current repeat and scheduled_time and reschedule next occurrence
             conn2, cur2 = get_db_cursor()
             try:
                 cur2.execute("SELECT repeat, scheduled_time FROM tasks WHERE id = %s", (task_id,))
@@ -1121,27 +1268,17 @@ async def execute_task_endpoint(task_id: int):
                     if next_time:
                         cur2.execute("UPDATE tasks SET scheduled_time = %s WHERE id = %s", (next_time, task_id))
                         conn2.commit()
-                        try:
-                            scheduler.add_job(
-                                lambda t=task_id: enqueue_and_reschedule(t),
-                                'date',
-                                id=job_id,
-                                replace_existing=True,
-                                run_date=next_time
-                            )
-                        except Exception:
-                            pass
+                        scheduler.add_job(
+                            lambda t=task_id: enqueue_and_reschedule(t),
+                            'date',
+                            id=job_id,
+                            replace_existing=True,
+                            run_date=next_time
+                        )
             finally:
-                try:
-                    cur2.close()
-                except Exception:
-                    pass
-                try:
-                    conn2.close()
-                except Exception:
-                    pass
+                cur2.close()
+                conn2.close()
         except Exception:
-            # Non-fatal: don't block the API response if scheduler update fails
             pass
 
         return {
@@ -1152,7 +1289,6 @@ async def execute_task_endpoint(task_id: int):
             "message": f"Task '{task_name}' has been queued for execution in Kafka",
             "queued": True
         }
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -1161,6 +1297,60 @@ async def execute_task_endpoint(task_id: int):
         if conn:
             conn.close()
 
+# @router.get("/task-execution-history/{task_id}")
+# async def get_task_execution_history(task_id: int):
+#     """Get execution history for a specific task."""
+#     try:
+#         conn, cur = get_db_cursor()
+        
+#         # Get task info
+#         cur.execute("""
+#             SELECT 
+#                 t.id,
+#                 t.task_name,
+#                 s.name as source_name,
+#                 em.entity_name,
+#                 t.created_at,
+#                 t.scheduled_time,
+#                 t.repeat,
+#                 t.last_executed_at,
+#                 t.max_items
+                
+#             FROM tasks t
+#             JOIN sources s ON t.source_id = s.id
+#             JOIN entity_mappings em ON t.mapping_id = em.id
+#             WHERE t.id = %s
+#         """, (task_id,))
+        
+#         task_info = cur.fetchone()
+#         if not task_info:
+#             raise HTTPException(status_code=404, detail="Task not found")
+        
+#         # Get count of records in entity table (as a simple execution indicator)
+#         entity_name = task_info[3]
+#         cur.execute(sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(entity_name)))
+#         record_count = cur.fetchone()[0]
+        
+#         cur.close()
+        
+#         return {
+#             "task_id": task_info[0],
+#             "task_name": task_info[1],
+#             "source_name": task_info[2],
+#             "entity_name": task_info[3],
+#             "created_at": task_info[4],
+#             "scheduled_time": task_info[5],
+#             "repeat": task_info[6],
+#             "last_executed_at": task_info[7],
+#             "max_items": task_info[8],
+#             "current_record_count": record_count
+            
+#         }
+        
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Failed to get execution history: {str(e)}")
 
 @router.get("/task-execution-history/{task_id}")
 async def get_task_execution_history(task_id: int):
@@ -1168,22 +1358,22 @@ async def get_task_execution_history(task_id: int):
     try:
         conn, cur = get_db_cursor()
         
-        # Get task info
+        # FIXED: Supports both source types
         cur.execute("""
             SELECT 
                 t.id,
                 t.task_name,
-                s.name as source_name,
-                em.entity_name,
+                COALESCE(s.name, aps.name) as source_name,
+                COALESCE(em.entity_name, aps.entity_name) as entity_name,
                 t.created_at,
                 t.scheduled_time,
                 t.repeat,
                 t.last_executed_at,
                 t.max_items
-                
             FROM tasks t
-            JOIN sources s ON t.source_id = s.id
-            JOIN entity_mappings em ON t.mapping_id = em.id
+            LEFT JOIN sources s ON t.source_id = s.id AND t.source_type = 'web'
+            LEFT JOIN entity_mappings em ON t.mapping_id = em.id AND t.source_type = 'web'
+            LEFT JOIN api_sources aps ON t.api_source_id = aps.id AND t.source_type = 'api'
             WHERE t.id = %s
         """, (task_id,))
         
@@ -1191,11 +1381,16 @@ async def get_task_execution_history(task_id: int):
         if not task_info:
             raise HTTPException(status_code=404, detail="Task not found")
         
-        # Get count of records in entity table (as a simple execution indicator)
         entity_name = task_info[3]
-        cur.execute(sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(entity_name)))
-        record_count = cur.fetchone()[0]
         
+        # Check if table exists before counting to avoid crash
+        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)", (entity_name.lower(),))
+        if cur.fetchone()[0]:
+            cur.execute(sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(entity_name)))
+            record_count = cur.fetchone()[0]
+        else:
+            record_count = 0
+            
         cur.close()
         
         return {
@@ -1209,14 +1404,12 @@ async def get_task_execution_history(task_id: int):
             "last_executed_at": task_info[7],
             "max_items": task_info[8],
             "current_record_count": record_count
-            
         }
-        
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get execution history: {str(e)}")
-
+    
 @router.get("/task-execution-logs/{task_id}")
 async def get_task_execution_logs(task_id: int, execution_id: str = None, limit: int = 1000):
     """Get detailed execution logs for a specific task. Optionally filter by execution_id."""

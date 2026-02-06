@@ -6,6 +6,7 @@ from datetime import datetime
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import CommitFailedError
 from routers.task_crud import execute_task, execute_quick_extract_task
+from api_executor import execute_api_task
 import httpx
 
 sys.path.append('/app')
@@ -119,19 +120,40 @@ while True:
                                 print(f"Invalid quick extract task payload: missing execution_id or request")
                                 send_status_update(task_id, "failed", "Invalid quick extract task payload")
                         else:
-                            # Regular task execution
-                            print(f"➡ Received task {task_id}. Handing off to execute_task function.")
-                            send_status_update(task_id, "processing", "Worker picked up the task.")
+                            # Regular task execution - handle both web and API tasks
+                            # Fetch task type from database to determine executor
+                            try:
+                                from routers.get_db_connection import get_db_cursor
+                                conn, cur = get_db_cursor()
+                                cur.execute("""
+                                    SELECT source_type FROM tasks WHERE id = %s
+                                """, (task_id,))
+                                result_row = cur.fetchone()
+                                cur.close()
+                                
+                                source_type = result_row[0] if result_row else 'web'
+                            except Exception as db_err:
+                                print(f"⚠️  Could not fetch source_type for task {task_id}, defaulting to 'web': {db_err}")
+                                source_type = 'web'
+                            
+                            print(f"➡ Received task {task_id} (type: {source_type}). Handing off to executor.")
+                            send_status_update(task_id, "processing", f"Worker picked up the task ({source_type} source).")
 
-                            result = asyncio.run(execute_task(task_id))
+                            # Route to appropriate executor based on source type
+                            if source_type == 'api':
+                                result = asyncio.run(execute_api_task(task_id))
+                            else:
+                                result = asyncio.run(execute_task(task_id))
 
                             if result and result.get("success"):
-                                success_msg = f"Task completed. Stored {result.get('items_stored', 0)} items."
+                                # Handle both web (items_stored) and API (items_upserted) task results
+                                items_count = result.get('items_upserted') or result.get('items_stored', 0)
+                                success_msg = f"Task completed ({source_type}). Stored {items_count} items."
                                 print(f" {success_msg}")
                                 send_status_update(task_id, "completed", success_msg, result)
                                 task_success = True
                             else:
-                                failure_msg = f"Task processed but failed. Message: {result.get('message', 'N/A')}"
+                                failure_msg = f"Task processed but failed ({source_type}). Message: {result.get('message', 'N/A')}"
                                 print(f" {failure_msg}")
                                 send_status_update(task_id, "failed", failure_msg, result)
                     

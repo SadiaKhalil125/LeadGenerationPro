@@ -35,8 +35,10 @@ const NavigationPage = () => {
       label: "Source",
       icon: <Settings size={20} />,
       items: [
-        { label: "Source Manager", path: "/sourcemanagement", description: "Manage data sources and connections" },
-        { label: "Add New Source", path: "/addsource", description: "Configure a new data source" },
+        { label: "Web Source Manager", path: "/sourcemanagement", description: "Manage web scraping data sources" },
+        { label: "Add Web Source", path: "/addsource", description: "Configure a new web scraping source" },
+        { label: "API Source Manager", path: "/api-sources", description: "Manage API-based data sources" },
+        { label: "Create API Source", path: "/api-source-creator", description: "Configure a new API data source" },
       ],
     },
     mapping: {
@@ -53,7 +55,8 @@ const NavigationPage = () => {
       items: [
         { label: "Schedule a Task", path: "/taskscheduler", description: "Create and schedule new automated tasks" },
         { label: "Task List", path: "/tasksmanagement", description: "View and manage all scheduled tasks" },
-        { label: "Task Executor", path: "/taskexecutor", description: "Execute tasks manually or view execution logs" },
+        { label: "Web Task Executor", path: "/taskexecutor", description: "Execute web scraping tasks" },
+        { label: "API Task Executor", path: "/api-task-executor", description: "Execute API-based tasks and fetch data" },
       ],
     },
 
