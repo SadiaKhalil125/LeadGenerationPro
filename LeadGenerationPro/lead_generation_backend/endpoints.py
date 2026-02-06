@@ -23,11 +23,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from helperutil import extract_website
 from scraping_router import route_scraping_request
-from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login, leads_service
+from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login, leads_service, api_sources_crud
 
 from routers.leads_service import router as leads_service_router
 from routers.scheduler_config import scheduler, task_lifespan
 from routers.login import create_users_table
+from db_migrations import initialize_api_sources_schema
 from urllib.parse import urljoin
 from playwright.async_api import async_playwright
 import random 
@@ -38,6 +39,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def combined_lifespan(app: FastAPI):
+    # Initialize database schema for API sources (safe, backward compatible)
+    try:
+        initialize_api_sources_schema()
+    except Exception as e:
+        logger.warning(f"⚠️  Could not initialize API sources schema: {str(e)}")
+    
     # create users table
     create_users_table()
 
@@ -56,6 +63,7 @@ RENDER_CACHE = {}
 
 app.include_router(entity_crud.router, prefix="/entity", tags=["Entity Management"])
 app.include_router(source_crud.router, prefix="/source", tags=["Source Management"])
+app.include_router(api_sources_crud.router, prefix="/api-sources", tags=["API Sources Management"])
 app.include_router(entity_mappings_crud.router, prefix="/mapping", tags=["Entity Mappings Management"])
 app.include_router(task_crud.router, prefix="/task", tags=["Task Management"])
 app.include_router(chat_crud.router, prefix="/chat", tags=["Chat Management"])

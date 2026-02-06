@@ -25,6 +25,9 @@ import Chatbot from './Chatbot'
 import QuickExtract from './QuickExtract'
 import LeadGeneratorPage from './UserLeadsDashboard';
 import LeadSyncTest from '../LeadsSyncPage';
+import ApiSourceManager from './ApiSourceManager';
+import ApiSourceCreator from './ApiSourceCreator';
+import ApiTaskExecutor from './ApiTaskExecutor';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useContext(AuthContext);
@@ -69,6 +72,9 @@ function App() {
         <Route path="/sourcemanagement" element={<SourceManagement />} />
         <Route path="/entity-data" element={<EntityDataPage />} />
         <Route path="/addsource" element={<SourceCreator />} />
+        <Route path="/api-sources" element={<ApiSourceManager />} />
+        <Route path="/api-source-creator" element={<ApiSourceCreator />} />
+        <Route path="/api-task-executor" element={<ApiTaskExecutor />} />
         <Route path="/login" element={<Login/>} />
         <Route path="/" element={<Homepage/>}/>
         <Route path="/chatbot" element={<Chatbot />} />

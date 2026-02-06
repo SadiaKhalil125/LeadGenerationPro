@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Dict, List, Optional, Any
 from pydantic import HttpUrl
 from datetime import datetime
+from api_source_models import ApiRequestTemplate, ApiResponseStructure, FieldMappingItem
 
 class FieldMapping(BaseModel):
     selector: str
@@ -126,27 +127,74 @@ class SourceUpdateRequest(BaseModel):
     pagination_config: Optional[PaginationConfig] = None
 
 class TaskRequest(BaseModel):
-    source_id: int
-    mapping_id: int  
+    # Web source fields
+    source_id: Optional[int] = None
+    mapping_id: Optional[int] = None
+    
+    # API source fields
+    source_type: str = "web"
+    api_source_id: Optional[int] = None
+    
+    # NEW: Allow specific params for this task execution
+    api_request_config: Optional[ApiRequestTemplate] = None 
+    # Or simpler: api_overrides: Optional[Dict[str, Any]] = None
+
+    # Common fields
     scheduled_time: datetime
-    task_name: Optional[str] = None  # Optional custom task name
+    task_name: Optional[str] = None
     max_items: Optional[int] = 10
-    repeat: str = "once"  # once, weekly, monthly, yearly
+    repeat: str = "once"
 
-
+# --- UPDATE TaskInfo ---
 class TaskInfo(BaseModel):
     id: int
     task_name: str
-    source_id: int
-    source_name: str
-    mapping_id: int
-    mapping_name: str
+    source_id: Optional[int] = None # Changed to Optional as API tasks might not have it
+    source_name: Optional[str] = None
+    mapping_id: Optional[int] = None
+    mapping_name: Optional[str] = None
     entity_name: str
     scheduled_time: datetime
     created_at: datetime
     repeat: str
     last_executed_at: Optional[datetime] = None
     max_items: Optional[int]
+    source_type: str = "web"
+    api_source_id: Optional[int] = None
+    # NEW: Return the config so UI can show it
+    api_request_config: Optional[Dict[str, Any]] = None
+
+# class TaskRequest(BaseModel):
+#     # Web source fields (existing - for backward compatibility)
+#     source_id: Optional[int] = None
+#     mapping_id: Optional[int] = None
+    
+#     # API source fields (new)
+#     source_type: str = "web"  # "web" or "api"
+#     api_source_id: Optional[int] = None
+    
+#     # Common fields
+#     scheduled_time: datetime
+#     task_name: Optional[str] = None  # Optional custom task name
+#     max_items: Optional[int] = 10
+#     repeat: str = "once"  # once, weekly, monthly, yearly
+
+
+# class TaskInfo(BaseModel):
+#     id: int
+#     task_name: str
+#     source_id: int
+#     source_name: str
+#     mapping_id: int
+#     mapping_name: str
+#     entity_name: str
+#     scheduled_time: datetime
+#     created_at: datetime
+#     repeat: str
+#     last_executed_at: Optional[datetime] = None
+#     max_items: Optional[int]
+#     source_type: str = "web"
+#     api_source_id: Optional[int] = None
 
 class TasksListResponse(BaseModel):
     total_tasks: int

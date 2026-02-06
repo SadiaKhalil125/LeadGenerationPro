@@ -1,14 +1,97 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle, List, ArrowLeft } from "lucide-react";
+import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle, List, ArrowLeft, Download, FileText } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import API_BASE from "./api_base";
 import { useNavigate } from "react-router-dom";
+
+// Helper: Fetch all entity data (across all pages)
+const fetchAllEntityData = async (entityName) => {
+  let allRows = [];
+  let page = 1;
+  let hasMore = true;
+  const pageSize = 100; // Fetch in chunks of 100
+
+  while (hasMore) {
+    const res = await fetch(
+      `${API_BASE}/entity/entity-data/${entityName}?page=${page}&page_size=${pageSize}`,
+      {
+        method: "GET",
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      }
+    );
+
+    if (!res.ok) throw new Error("Failed to fetch data");
+    const json = await res.json();
+    
+    if (json.rows && json.rows.length > 0) {
+      allRows = [...allRows, ...json.rows];
+      hasMore = json.rows.length === pageSize;
+      page++;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allRows;
+};
+
+// Helper: Export data as CSV
+const exportToCSV = (columns, rows, entityName) => {
+  // Create CSV header
+  const header = columns.map(col => `"${col}"`).join(",");
+  
+  // Create CSV rows
+  const csvRows = rows.map(row => {
+    return row.map(cell => {
+      const value = cell === null || cell === undefined ? "" : String(cell);
+      // Escape quotes and wrap in quotes
+      return `"${value.replace(/"/g, '""')}"`;
+    }).join(",");
+  });
+
+  // Combine header and rows
+  const csv = [header, ...csvRows].join("\n");
+  
+  // Create blob and download
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.setAttribute("href", URL.createObjectURL(blob));
+  link.setAttribute("download", `${entityName}_export_${new Date().toISOString().split('T')[0]}.csv`);
+  link.click();
+};
+
+// Helper: Export data as Excel (using XLSX-style CSV with .xls extension, or simple format)
+const exportToExcel = (columns, rows, entityName) => {
+  // For simplicity, we'll create a tab-separated format that Excel understands
+  // Alternatively, users can open CSV in Excel directly
+  
+  const header = columns.join("\t");
+  const excelRows = rows.map(row => 
+    row.map(cell => {
+      const value = cell === null || cell === undefined ? "" : String(cell);
+      // Replace problematic characters
+      return value.replace(/\t/g, " ").replace(/\n/g, " ");
+    }).join("\t")
+  );
+
+  const tsv = [header, ...excelRows].join("\n");
+  
+  const blob = new Blob([tsv], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.setAttribute("href", URL.createObjectURL(blob));
+  link.setAttribute("download", `${entityName}_export_${new Date().toISOString().split('T')[0]}.xls`);
+  link.click();
+};
+
 const EntityDataScreen = () => {
   const [searchParams] = useSearchParams();
   const [selectedEntity, setSelectedEntity] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);  // or make it adjustable
+  const [exporting, setExporting] = useState(false);
   const navigate = useNavigate();
   // Get entity from query parameter if provided
   const entityFromParam = searchParams.get('entity');
@@ -66,6 +149,36 @@ const EntityDataScreen = () => {
 
   const error = queryError?.message || null;
   const entities = entitiesData || [];
+
+  // Export handler for CSV
+  const handleExportCSV = async () => {
+    if (!selectedEntity || !data) return;
+    
+    try {
+      setExporting(true);
+      const allRows = await fetchAllEntityData(selectedEntity);
+      exportToCSV(data.columns, allRows, selectedEntity);
+    } catch (err) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Export handler for Excel
+  const handleExportExcel = async () => {
+    if (!selectedEntity || !data) return;
+    
+    try {
+      setExporting(true);
+      const allRows = await fetchAllEntityData(selectedEntity);
+      exportToExcel(data.columns, allRows, selectedEntity);
+    } catch (err) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div style={{
@@ -322,28 +435,54 @@ const EntityDataScreen = () => {
               alignItems: 'center',
               marginTop: '30px',
               paddingTop: '20px',
-              borderTop: '1px solid rgba(0, 54, 74, 0.1)'
+              borderTop: '1px solid rgba(0, 54, 74, 0.1)',
+              flexWrap: 'wrap',
+              gap: '20px'
             }}>
-              <StyledButton
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                icon={<ChevronLeft size={18} />}
-              >
-                Previous
-              </StyledButton>
-              
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#00364A' }}>
-                Page {page}
-              </span>
-              
-              <StyledButton
-                onClick={() => setPage((p) => p + 1)}
-                disabled={data.rows.length < pageSize}
-                icon={<ChevronRight size={18} />}
-                iconPos="right"
-              >
-                Next
-              </StyledButton>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <StyledButton
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  icon={<ChevronLeft size={18} />}
+                >
+                  Previous
+                </StyledButton>
+                
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', alignSelf: 'center', padding: '0 15px' }}>
+                  Page {page}
+                </span>
+                
+                <StyledButton
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={data.rows.length < pageSize}
+                  icon={<ChevronRight size={18} />}
+                  iconPos="right"
+                >
+                  Next
+                </StyledButton>
+              </div>
+
+              {/* Export Buttons */}
+              {data.rows.length > 0 && (
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <ExportButton
+                    onClick={handleExportCSV}
+                    disabled={exporting}
+                    icon={<Download size={18} />}
+                    title="Export All as CSV"
+                  >
+                    {exporting ? 'Exporting...' : 'CSV'}
+                  </ExportButton>
+                  <ExportButton
+                    onClick={handleExportExcel}
+                    disabled={exporting}
+                    icon={<FileText size={18} />}
+                    title="Export All as Excel"
+                  >
+                    {exporting ? 'Exporting...' : 'Excel'}
+                  </ExportButton>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -380,6 +519,39 @@ const StyledButton = ({ onClick, disabled, icon, children, iconPos = "left" }) =
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'all 0.3s',
         flexDirection: iconPos === 'right' ? 'row-reverse' : 'row'
+      }}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+};
+
+// Export Button Component
+const ExportButton = ({ onClick, disabled, icon, children, title }) => {
+  const [hover, setHover] = useState(false);
+  
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '10px 16px',
+        backgroundColor: hover && !disabled ? '#10B981' : '#059669',
+        color: 'white',
+        border: 'none',
+        borderRadius: '10px',
+        fontWeight: '600',
+        fontSize: '14px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'all 0.3s',
+        opacity: disabled ? 0.6 : 1
       }}
     >
       {icon}
