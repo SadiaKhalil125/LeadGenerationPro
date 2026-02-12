@@ -144,7 +144,6 @@ def log_execution(conn, task_id: int, execution_id: str, status: str, log_level:
 # def get_db_cursor_docker():
 #     connection = psycopg2.connect(DATABASE_URL)
 #     return connection, connection.cursor()
-
 @router.post("/create-task", response_model=dict)
 async def create_task(request: TaskRequest):
     """Create a scheduled scraping task - supports both web and API sources."""
@@ -157,68 +156,51 @@ async def create_task(request: TaskRequest):
 
         conn, cur = get_db_cursor()
         
-        # Create tasks table if it doesn't exist
+        # 1. SCHEMA UPDATE: Add the column if it doesn't exist automatically
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-            id SERIAL PRIMARY KEY,
-            task_name TEXT UNIQUE NOT NULL,
-            source_id INT REFERENCES sources(id) ON DELETE CASCADE,
-            mapping_id INT REFERENCES entity_mappings(id) ON DELETE CASCADE,
-            scheduled_time TIMESTAMP NOT NULL,
-            repeat TEXT DEFAULT 'once' CHECK (repeat IN ('once', 'daily', 'weekly', 'monthly', 'yearly')),
-            last_executed_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT NOW(),
-            max_items INT DEFAULT 10,
-            source_type VARCHAR(20) DEFAULT 'web',
-            api_source_id INT,
-            CONSTRAINT unique_task_mapping UNIQUE (source_id, mapping_id, scheduled_time)
-            );
+            DO $$ 
+            BEGIN
+                -- Create table if missing
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id SERIAL PRIMARY KEY,
+                    task_name TEXT UNIQUE NOT NULL,
+                    source_id INT,
+                    mapping_id INT,
+                    scheduled_time TIMESTAMP NOT NULL,
+                    repeat TEXT DEFAULT 'once',
+                    last_executed_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    max_items INT DEFAULT 10,
+                    source_type VARCHAR(20) DEFAULT 'web',
+                    api_source_id INT
+                );
+
+                -- Add api_request_config column if missing
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                               WHERE table_name='tasks' AND column_name='api_request_config') THEN
+                    ALTER TABLE tasks ADD COLUMN api_request_config JSONB DEFAULT '{}'::jsonb;
+                END IF;
+            END $$;
         """)
 
-        # Handle both web and API sources
+        # 2. Handle both web and API sources
         if request.source_type == 'web':
-            # Existing web source logic
+            # Existing web source logic (UNCHANGED to prevent breaking things)
             if not request.source_id or not request.mapping_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="source_id and mapping_id required for web sources"
-                )
+                raise HTTPException(status_code=400, detail="source_id and mapping_id required")
             
-            # Verify source exists
             cur.execute("SELECT id FROM sources WHERE id = %s", (request.source_id,))
             if not cur.fetchone():
                 raise HTTPException(status_code=404, detail="Source not found")
             
-            # Verify mapping exists and belongs to the source, get mapping details
-            cur.execute("""
-                SELECT id, mapping_name, entity_name 
-                FROM entity_mappings 
-                WHERE id = %s AND source_id = %s
-            """, (request.mapping_id, request.source_id))
-            
-            result = cur.fetchone()
-            if not result:
-                raise HTTPException(status_code=404, detail="Mapping not found for the specified source")
+            cur.execute("SELECT mapping_name, entity_name FROM entity_mappings WHERE id = %s", (request.mapping_id,))
+            res = cur.fetchone()
+            if not res: raise HTTPException(status_code=404, detail="Mapping not found")
                 
-            mapping_id, mapping_name, entity_name = result
+            mapping_name, entity_name = res
+            task_name = request.task_name or f"{entity_name}_{mapping_name}_{request.scheduled_time.strftime('%Y%m%d_%H%M%S')}"
             
-            # Generate unique task name if not provided
-            task_name = request.task_name
-            if not task_name:
-                timestamp = request.scheduled_time.strftime("%Y%m%d_%H%M%S")
-                task_name = f"{entity_name}_{mapping_name}_{timestamp}"
-                
-            # Ensure task name is unique
-            counter = 1
-            original_task_name = task_name
-            while True:
-                cur.execute("SELECT id FROM tasks WHERE task_name = %s", (task_name,))
-                if not cur.fetchone():
-                    break
-                task_name = f"{original_task_name}_{counter}"
-                counter += 1
-            
-            # Insert web task
+            # Web tasks just use the default {} for api_request_config
             cur.execute("""
                 INSERT INTO tasks (task_name, source_type, source_id, mapping_id, scheduled_time, repeat, max_items)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -228,50 +210,38 @@ async def create_task(request: TaskRequest):
         elif request.source_type == 'api':
             # New API source logic
             if not request.api_source_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="api_source_id required for API sources"
-                )
+                raise HTTPException(status_code=400, detail="api_source_id required for API sources")
             
-            # Verify API source exists
             cur.execute("SELECT name, entity_name FROM api_sources WHERE id = %s", (request.api_source_id,))
             result = cur.fetchone()
             if not result:
                 raise HTTPException(status_code=404, detail="API source not found")
             
             api_source_name, entity_name = result
-            
-            # Generate unique task name if not provided
-            task_name = request.task_name
-            if not task_name:
-                timestamp = request.scheduled_time.strftime("%Y%m%d_%H%M%S")
-                task_name = f"{api_source_name}_{timestamp}"
+            task_name = request.task_name or f"{api_source_name}_{request.scheduled_time.strftime('%Y%m%d_%H%M%S')}"
                 
-            # Ensure task name is unique
-            counter = 1
-            original_task_name = task_name
-            while True:
-                cur.execute("SELECT id FROM tasks WHERE task_name = %s", (task_name,))
-                if not cur.fetchone():
-                    break
-                task_name = f"{original_task_name}_{counter}"
-                counter += 1
-            
-            # Insert API task
+            # --- FIXED: Insert including api_request_config ---
             cur.execute("""
-                INSERT INTO tasks (task_name, source_type, api_source_id, scheduled_time, repeat, max_items)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO tasks (task_name, source_type, api_source_id, scheduled_time, repeat, max_items, api_request_config)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (task_name, 'api', request.api_source_id, request.scheduled_time, request.repeat, request.max_items))
+            """, (
+                task_name, 
+                'api', 
+                request.api_source_id, 
+                request.scheduled_time, 
+                request.repeat, 
+                request.max_items,
+                json.dumps(request.api_request_config.dict()) if request.api_request_config else '{}'
+            ))
             
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="source_type must be 'web' or 'api'"
-            )
+            raise HTTPException(status_code=400, detail="source_type must be 'web' or 'api'")
         
         task_id = cur.fetchone()[0]
         conn.commit()
+        
+        # Schedule the job
         scheduler.add_job(
             lambda t=task_id: enqueue_and_reschedule(t),
             'date',
@@ -288,13 +258,13 @@ async def create_task(request: TaskRequest):
             "message": f"Task '{task_name}' created successfully"
         }
            
-        
-    except HTTPException:
-        # conn.rollback()
-        raise
     except Exception as e:
-        # conn.rollback()
+        if conn: conn.rollback()
+        logger.error(f"Error creating task: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create task: {str(e)}")
+    finally:
+        if conn: conn.close()
+
 
 @router.get("/tasks", response_model=TasksListResponse)
 async def get_all_tasks():

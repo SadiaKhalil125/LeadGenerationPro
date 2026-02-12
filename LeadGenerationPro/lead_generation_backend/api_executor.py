@@ -15,8 +15,7 @@ logger = logging.getLogger(__name__)
 async def execute_api_task(task_id: int) -> Dict:
     """
     Execute API-based task with Dynamic Parameter Merging.
-    Fixed: Null-safe dictionary handling, JSONPath syntax cleaning, 
-    and deleted task protection.
+    Fixed: Null-safe merging, automated path cleaning, and verbose debug logging.
     """
     execution_id = str(uuid.uuid4())
     execution_start = datetime.now()
@@ -25,7 +24,7 @@ async def execute_api_task(task_id: int) -> Dict:
     try:
         conn, cur = get_db_cursor()
         
-        # 1. Fetch Task Details
+        # 1. Fetch Task + Config + Source Details
         cur.execute("""
             SELECT 
                 t.id, t.task_name, t.api_source_id, t.max_items, t.api_request_config,
@@ -39,34 +38,29 @@ async def execute_api_task(task_id: int) -> Dict:
         
         task_data = cur.fetchone()
         
-        # GUARD: If task was deleted from DB but picked up from queue
         if not task_data:
-            logger.warning(f"⚠️ Task {task_id} not found in database (likely deleted). Skipping execution.")
-            return {
-                "success": False,
-                "task_id": task_id,
-                "message": "Task no longer exists",
-                "execution_id": execution_id
-            }
+            logger.warning(f"⚠️ Task {task_id} not found (likely deleted).")
+            return {"success": False, "message": "Task no longer exists"}
         
         (task_id_db, task_name, api_source_id, max_items, task_config_json,
          source_id, source_name, api_url, api_key,
          source_template_json, data_extraction_path,
          entity_name, field_mappings_json) = task_data
         
-        # Initialize log
-        try:
-            log_execution(conn, task_id, execution_id, 'processing', 'info', f'Executing API task: {task_name}')
-        except:
-            pass
+        log_execution(conn, task_id, execution_id, 'processing', 'info', f'Executing API task: {task_name}')
         
         # 2. Parse JSON Configurations safely
-        source_template = source_template_json if isinstance(source_template_json, dict) else (json.loads(source_template_json) if source_template_json else {})
-        task_config = task_config_json if isinstance(task_config_json, dict) else (json.loads(task_config_json) if task_config_json else {})
-        field_mappings = field_mappings_json if isinstance(field_mappings_json, list) else (json.loads(field_mappings_json) if field_mappings_json else [])
+        # Ensure we are working with dictionaries
+        def to_dict(data):
+            if isinstance(data, dict): return data
+            if isinstance(data, str): return json.loads(data)
+            return {}
+
+        source_template = to_dict(source_template_json)
+        task_config = to_dict(task_config_json)
+        field_mappings = field_mappings_json if isinstance(field_mappings_json, list) else to_dict(field_mappings_json)
         
-        # 3. MERGE LOGIC (Null-Safe)
-        # Fix: Using (get() or {}) handles cases where key exists in DB but is set to null
+        # 3. MERGE LOGIC (Source Defaults + Task Overrides)
         final_headers = (source_template.get('headers') or {}).copy()
         if api_key:
             final_headers['Authorization'] = f"Bearer {api_key}"
@@ -74,6 +68,7 @@ async def execute_api_task(task_id: int) -> Dict:
             final_headers.update(task_config['headers'])
 
         final_params = (source_template.get('params') or {}).copy()
+        # This is where 'q' from the task config gets added to the 'per_page' from the source
         if task_config.get('params'):
             final_params.update(task_config['params'])
 
@@ -82,6 +77,10 @@ async def execute_api_task(task_id: int) -> Dict:
             final_body.update(task_config['body'])
 
         final_method = task_config.get('method') or source_template.get('method', 'GET')
+        
+        # DEBUG LOG: See exactly what is being sent to the API
+        logger.info(f"🚀 TASK {task_id} PREPARING CALL: {api_url}")
+        logger.info(f"🛠️ MERGED PARAMS: {final_params}")
         
         # 4. Call API
         api_start = datetime.now()
@@ -92,125 +91,75 @@ async def execute_api_task(task_id: int) -> Dict:
                     url=api_url,
                     headers=final_headers,
                     params=final_params,
-                    json=final_body if final_body else None,
+                    json=final_body if final_body and final_method != "GET" else None,
                     timeout=source_template.get('timeout', 30)
                 )
         except Exception as e:
-            error_msg = f"Failed to call API: {str(e)}"
+            error_msg = f"Network Error: {str(e)}"
             log_execution(conn, task_id, execution_id, 'failed', 'error', error_msg)
-            return {"success": False, "message": error_msg, "execution_id": execution_id}
-        
-        api_duration = int((datetime.now() - api_start).total_seconds() * 1000)
+            return {"success": False, "message": error_msg}
         
         if response.status_code >= 400:
             error_msg = f"API returned {response.status_code}: {response.text[:200]}"
             log_execution(conn, task_id, execution_id, 'failed', 'error', error_msg)
-            return {"success": False, "message": error_msg, "execution_id": execution_id}
+            return {"success": False, "message": error_msg}
         
-        # 5. Parse Response & Extract Data
-        try:
-            response_data = response.json()
-        except Exception as e:
-            error_msg = f"Invalid JSON response: {str(e)}"
-            log_execution(conn, task_id, execution_id, 'failed', 'error', error_msg)
-            return {"success": False, "message": error_msg, "execution_id": execution_id}
+        # 5. Parse Response & Extract
+        response_data = response.json()
         
-        # Fix: Automatically clean "$. " to "$ " to prevent JSONPath Parse errors
+        # Clean Path Syntax
         clean_path = data_extraction_path.strip() if data_extraction_path else "$"
-        if clean_path == "$." or not clean_path:
-            clean_path = "$"
+        if clean_path in ["$.", ""]: clean_path = "$"
 
         try:
             jsonpath_expr = jsonpath_parse(clean_path)
             matches = jsonpath_expr.find(response_data)
-            
             if not matches:
-                error_msg = f"No data found at path '{clean_path}'"
-                log_execution(conn, task_id, execution_id, 'failed', 'error', error_msg)
-                return {"success": False, "message": error_msg, "execution_id": execution_id}
+                return {"success": False, "message": f"No data at path {clean_path}"}
             
             extracted_data = matches[0].value
-            
-            # Normalize to list
-            if isinstance(extracted_data, dict):
-                extracted_data = [extracted_data]
-                
+            if isinstance(extracted_data, dict): extracted_data = [extracted_data]
             if not isinstance(extracted_data, list):
-                error_msg = f"Data at '{clean_path}' is not a list"
-                log_execution(conn, task_id, execution_id, 'failed', 'error', error_msg)
-                return {"success": False, "message": error_msg, "execution_id": execution_id}
+                return {"success": False, "message": "Extraction did not result in a list"}
                 
         except Exception as e:
-            error_msg = f"JSONPath error ({clean_path}): {str(e)}"
-            log_execution(conn, task_id, execution_id, 'failed', 'error', error_msg)
-            return {"success": False, "message": error_msg, "execution_id": execution_id}
+            return {"success": False, "message": f"JSONPath Error: {str(e)}"}
         
         # 6. Map & Upsert
         items_upserted = 0
-        items_failed = 0
-        
-        for i, item in enumerate(extracted_data[:max_items]):
+        for item in extracted_data[:max_items]:
             try:
                 entity_record = {}
                 for mapping in field_mappings:
+                    # Handle both Dict and Pydantic style mapping objects
                     m = mapping if isinstance(mapping, dict) else mapping.dict()
-                    api_field = m.get('api_field')
-                    db_field = m.get('db_field')
+                    api_f = m.get('api_field')
+                    db_f = m.get('db_field')
                     
-                    try:
-                        # Support nested path mapping within each item
-                        if api_field.startswith('$.'):
-                            field_expr = jsonpath_parse(api_field)
-                            field_matches = field_expr.find(item)
-                            entity_record[db_field] = field_matches[0].value if field_matches else None
-                        else:
-                            entity_record[db_field] = item.get(api_field)
-                    except:
-                        entity_record[db_field] = None
+                    if api_f.startswith('$.'):
+                        f_expr = jsonpath_parse(api_f)
+                        f_match = f_expr.find(item)
+                        entity_record[db_f] = f_match[0].value if f_match else None
+                    else:
+                        entity_record[db_f] = item.get(api_f)
                 
-                # Perform DB upsert
-                await upsert_entity_record(
-                    cur, 
-                    entity_name, 
-                    f"api_{source_name.lower().replace(' ', '_')}", 
-                    entity_record
-                )
+                await upsert_entity_record(cur, entity_name, f"api_{source_name.lower()}", entity_record)
                 items_upserted += 1
-                
-            except Exception as e:
-                items_failed += 1
+            except:
                 continue
         
         conn.commit()
-        
-        # Update last execution time
         cur.execute("UPDATE tasks SET last_executed_at = NOW() WHERE id = %s", (task_id,))
         conn.commit()
         
-        execution_duration = int((datetime.now() - execution_start).total_seconds() * 1000)
-        log_execution(conn, task_id, execution_id, 'completed', 'info',
-                     f'Processed {items_upserted} items successfully',
-                     {'items_upserted': items_upserted, 'duration_ms': execution_duration})
-        
-        return {
-            "success": True,
-            "task_id": task_id,
-            "items_extracted": len(extracted_data),
-            "items_upserted": items_upserted,
-            "execution_id": execution_id
-        }
+        log_execution(conn, task_id, execution_id, 'completed', 'info', f'Processed {items_upserted} items')
+        return {"success": True, "items_upserted": items_upserted}
         
     except Exception as e:
         logger.error(f"❌ API Executor Error: {str(e)}\n{traceback.format_exc()}")
-        if conn:
-            try:
-                log_execution(conn, task_id, execution_id, 'failed', 'error', f"Critical: {str(e)}")
-                conn.commit()
-            except:
-                pass
-        return {"success": False, "message": str(e), "execution_id": execution_id}
-        
+        if conn: conn.rollback()
+        return {"success": False, "message": str(e)}
     finally:
-        if conn: 
+        if conn:
             cur.close()
             conn.close()
