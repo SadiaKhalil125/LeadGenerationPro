@@ -10,7 +10,7 @@ const fetchAllEntityData = async (entityName) => {
   let allRows = [];
   let page = 1;
   let hasMore = true;
-  const pageSize = 100; // Fetch in chunks of 100
+  const pageSize = 100;
 
   while (hasMore) {
     const res = await fetch(
@@ -40,22 +40,17 @@ const fetchAllEntityData = async (entityName) => {
 
 // Helper: Export data as CSV
 const exportToCSV = (columns, rows, entityName) => {
-  // Create CSV header
   const header = columns.map(col => `"${col}"`).join(",");
   
-  // Create CSV rows
   const csvRows = rows.map(row => {
     return row.map(cell => {
       const value = cell === null || cell === undefined ? "" : String(cell);
-      // Escape quotes and wrap in quotes
       return `"${value.replace(/"/g, '""')}"`;
     }).join(",");
   });
 
-  // Combine header and rows
   const csv = [header, ...csvRows].join("\n");
   
-  // Create blob and download
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   link.setAttribute("href", URL.createObjectURL(blob));
@@ -63,16 +58,12 @@ const exportToCSV = (columns, rows, entityName) => {
   link.click();
 };
 
-// Helper: Export data as Excel (using XLSX-style CSV with .xls extension, or simple format)
+// Helper: Export data as Excel
 const exportToExcel = (columns, rows, entityName) => {
-  // For simplicity, we'll create a tab-separated format that Excel understands
-  // Alternatively, users can open CSV in Excel directly
-  
   const header = columns.join("\t");
   const excelRows = rows.map(row => 
     row.map(cell => {
       const value = cell === null || cell === undefined ? "" : String(cell);
-      // Replace problematic characters
       return value.replace(/\t/g, " ").replace(/\n/g, " ");
     }).join("\t")
   );
@@ -86,14 +77,67 @@ const exportToExcel = (columns, rows, entityName) => {
   link.click();
 };
 
+// Tooltip Component for long text
+const TextWithTooltip = ({ text, maxLength = 50 }) => {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const displayText = text && String(text).length > maxLength 
+    ? String(text).substring(0, maxLength) + "..." 
+    : text;
+  const needsTooltip = text && String(text).length > maxLength;
+
+  if (!needsTooltip) {
+    return <span>{text}</span>;
+  }
+
+  return (
+    <div 
+      style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      <span style={{ cursor: 'help' }}>{displayText}</span>
+      {showTooltip && (
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          left: '0',
+          marginBottom: '8px',
+          padding: '12px',
+          backgroundColor: '#00364A',
+          color: 'white',
+          borderRadius: '8px',
+          fontSize: '13px',
+          maxWidth: '400px',
+          wordWrap: 'break-word',
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(0, 54, 74, 0.3)',
+          whiteSpace: 'normal'
+        }}>
+          {text}
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: '20px',
+            width: 0,
+            height: 0,
+            borderLeft: '6px solid transparent',
+            borderRight: '6px solid transparent',
+            borderTop: '6px solid #00364A'
+          }} />
+        </div>
+      )}
+    </div>
+  );
+};
+
 const EntityDataScreen = () => {
   const [searchParams] = useSearchParams();
   const [selectedEntity, setSelectedEntity] = useState(null);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);  // or make it adjustable
-  const [exporting, setExporting] = useState(false);
+  const [pageSize] = useState(10);
+  const [exportingCSV, setExportingCSV] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const navigate = useNavigate();
-  // Get entity from query parameter if provided
   const entityFromParam = searchParams.get('entity');
 
   // Fetch entities list
@@ -144,24 +188,32 @@ const EntityDataScreen = () => {
     enabled: !!selectedEntity,
   });
 
-  // Only show loading on initial load, not on background refetches
   const loading = isLoadingData && !data;
-
   const error = queryError?.message || null;
   const entities = entitiesData || [];
+
+  // Filter out modified_at column
+  const filteredColumns = data?.columns?.filter(col => col !== 'modified_at') || [];
+  const modifiedAtIndex = data?.columns?.indexOf('modified_at');
+  const filteredRows = data?.rows?.map(row => {
+    if (modifiedAtIndex !== -1) {
+      return row.filter((_, idx) => idx !== modifiedAtIndex);
+    }
+    return row;
+  }) || [];
 
   // Export handler for CSV
   const handleExportCSV = async () => {
     if (!selectedEntity || !data) return;
     
     try {
-      setExporting(true);
+      setExportingCSV(true);
       const allRows = await fetchAllEntityData(selectedEntity);
       exportToCSV(data.columns, allRows, selectedEntity);
     } catch (err) {
       alert(`Export failed: ${err.message}`);
     } finally {
-      setExporting(false);
+      setExportingCSV(false);
     }
   };
 
@@ -170,13 +222,13 @@ const EntityDataScreen = () => {
     if (!selectedEntity || !data) return;
     
     try {
-      setExporting(true);
+      setExportingExcel(true);
       const allRows = await fetchAllEntityData(selectedEntity);
       exportToExcel(data.columns, allRows, selectedEntity);
     } catch (err) {
       alert(`Export failed: ${err.message}`);
     } finally {
-      setExporting(false);
+      setExportingExcel(false);
     }
   };
 
@@ -235,47 +287,45 @@ const EntityDataScreen = () => {
                 color: '#00364A',
                 opacity: 0.7,
                 margin: '5px 0 0 0'
-              }}>Browse and inspect your database entities</p>
+              }}></p>
             </div>
-            
           </div>
-           <div
-          style={{
-          padding: '10px 10px',
-          display: 'flex',
-          justifyContent: 'right',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '20px'
-        }}>
-          <button
-             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 24px',
-              backgroundColor: 'white',
-              color: '#00364A',
-              borderRadius: '12px',
-              border: '2px solid #00364A',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#00364A';
-              e.target.style.color = 'white';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = 'white';
-              e.target.style.color = '#00364A';
-            }}
-            onClick={() => navigate('/dashboard')}
-          >
-          <ArrowLeft size={18} />
-            Dashboard
+          <div style={{
+            padding: '10px 10px',
+            display: 'flex',
+            justifyContent: 'right',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '20px'
+          }}>
+            <button
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 24px',
+                backgroundColor: 'white',
+                color: '#00364A',
+                borderRadius: '12px',
+                border: '2px solid #00364A',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#00364A';
+                e.target.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = 'white';
+                e.target.style.color = '#00364A';
+              }}
+              onClick={() => navigate('/dashboard')}
+            >
+              <ArrowLeft size={18} />
+              Dashboard
             </button>
-            </div>
+          </div>
         </div>
 
         <div style={{ padding: '50px' }}>
@@ -355,7 +405,7 @@ const EntityDataScreen = () => {
           )}
 
           {/* No Data */}
-          {!loading && data && data.rows && data.rows.length === 0 && (
+          {!loading && data && filteredRows && filteredRows.length === 0 && (
             <div style={{
               textAlign: 'center',
               padding: '60px',
@@ -365,12 +415,12 @@ const EntityDataScreen = () => {
             }}>
               <List size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />
               <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#00364A', marginBottom: '5px' }}>No Data Found</h3>
-              <p style={{ color: '#00364A', opacity: 0.6 }}>This table has no records to display.</p>
+              <p style={{ color: '#00364A', opacity: 0.6 }}></p>
             </div>
           )}
 
           {/* Data Table */}
-          {!loading && data && data.rows && data.rows.length > 0 && (
+          {!loading && data && filteredRows && filteredRows.length > 0 && (
             <div style={{
               overflowX: 'auto',
               borderRadius: '15px',
@@ -380,7 +430,7 @@ const EntityDataScreen = () => {
               <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white' }}>
                 <thead style={{ backgroundColor: '#F8FBFF' }}>
                   <tr>
-                    {data.columns.map((col, idx) => (
+                    {filteredColumns.map((col, idx) => (
                       <th key={idx} style={{
                         padding: '16px 20px',
                         textAlign: 'left',
@@ -397,29 +447,22 @@ const EntityDataScreen = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.rows.map((row, ridx) => (
+                  {filteredRows.map((row, ridx) => (
                     <tr key={ridx} style={{ 
                       backgroundColor: ridx % 2 === 0 ? 'white' : '#FAFAFA',
                       transition: 'background-color 0.2s'
                     }}>
-                      {row.map((cell, cidx) => {
-                        const colName = data.columns[cidx];
-                        const displayValue = colName === 'modified_at' && cell
-                            ? new Date(cell).toLocaleString()
-                            : cell;
-
-                        return (
-                          <td key={cidx} style={{
-                            padding: '16px 20px',
-                            fontSize: '14px',
-                            color: '#00364A',
-                            borderBottom: '1px solid rgba(0, 54, 74, 0.05)',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {displayValue}
-                          </td>
-                        );
-                      })}
+                      {row.map((cell, cidx) => (
+                        <td key={cidx} style={{
+                          padding: '16px 20px',
+                          fontSize: '14px',
+                          color: '#00364A',
+                          borderBottom: '1px solid rgba(0, 54, 74, 0.05)',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          <TextWithTooltip text={cell} maxLength={50} />
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
@@ -428,7 +471,7 @@ const EntityDataScreen = () => {
           )}
 
           {/* Pagination */}
-          {data && data.rows && (
+          {data && filteredRows && (
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -463,23 +506,23 @@ const EntityDataScreen = () => {
               </div>
 
               {/* Export Buttons */}
-              {data.rows.length > 0 && (
+              {filteredRows.length > 0 && (
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <ExportButton
                     onClick={handleExportCSV}
-                    disabled={exporting}
+                    disabled={exportingCSV}
                     icon={<Download size={18} />}
                     title="Export All as CSV"
                   >
-                    {exporting ? 'Exporting...' : 'CSV'}
+                    {exportingCSV ? 'Exporting...' : 'CSV'}
                   </ExportButton>
                   <ExportButton
                     onClick={handleExportExcel}
-                    disabled={exporting}
+                    disabled={exportingExcel}
                     icon={<FileText size={18} />}
                     title="Export All as Excel"
                   >
-                    {exporting ? 'Exporting...' : 'Excel'}
+                    {exportingExcel ? 'Exporting...' : 'Excel'}
                   </ExportButton>
                 </div>
               )}

@@ -18,6 +18,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
 import { useNavigate } from "react-router-dom";
+
 function shortDate(ts) {
   if (!ts) return "-";
   try {
@@ -42,13 +43,10 @@ const MappingManager = () => {
   const [expandedId, setExpandedId] = useState(null);
   const [search, setSearch] = useState("");
   const [filterSource, setFilterSource] = useState("all");
-  const [editModal, setEditModal] = useState(null);
-  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Fetch mappings
   const { data: mappingsData, isLoading: isLoadingMappings, error: queryError } = useQuery({
     queryKey: ['mappings'],
     queryFn: async () => {
@@ -64,9 +62,7 @@ const MappingManager = () => {
     },
   });
 
-  // Only show loading on initial load, not on background refetches
   const loading = isLoadingMappings && !mappingsData;
-
   const mappings = mappingsData || [];
   const error = queryError?.message || "";
 
@@ -112,13 +108,11 @@ const MappingManager = () => {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
       
-      // Update cache directly - remove deleted mapping
       queryClient.setQueryData(['mappings'], (oldMappings) => {
         if (!oldMappings) return oldMappings;
         return oldMappings.filter(m => m.mapping_name !== mappingName);
       });
       
-      // Mark as stale but don't refetch immediately
       queryClient.invalidateQueries({ queryKey: ['mappings'] }, { refetchType: 'none' });
     } catch (err) {
       console.error("Delete failed:", err);
@@ -143,7 +137,6 @@ const MappingManager = () => {
       
       const data = await res.json();
       
-      // Update cache directly - update mapping status
       queryClient.setQueryData(['mappings'], (oldMappings) => {
         if (!oldMappings) return oldMappings;
         return oldMappings.map(m => 
@@ -151,7 +144,6 @@ const MappingManager = () => {
         );
       });
       
-      // Mark as stale but don't refetch immediately
       queryClient.invalidateQueries({ queryKey: ['mappings'] }, { refetchType: 'none' });
     } catch (err) {
       console.error("Toggle status failed:", err);
@@ -160,122 +152,23 @@ const MappingManager = () => {
   };
 
   const onOpenEdit = (mapping) => {
-    const fieldMappingsArray = Object.entries(mapping.field_mappings || {}).map(([key, value]) => ({
-      id: Math.random().toString(36).substr(2, 9),
-      field_name: key,
-      selector: value.selector || "",
-      extract: value.extract || "text"
-    }));
-
-    setEditModal({
-      originalName: mapping.mapping_name,
-      mapping: {
-        id: mapping.id,
-        mapping_name: mapping.mapping_name,
-        entity_name: mapping.entity_name,
-        container_selector: mapping.container_selector ?? "",
-        enabled: mapping.enabled ?? true,
-        source_id: mapping.source_id,
-        source_name: mapping.source_name,
-      },
-      fieldMappingsArray: fieldMappingsArray
+    navigate('/entitymappingform', { 
+      state: { 
+        editMode: true,
+        mappingData: {
+          id: mapping.id,
+          mapping_name: mapping.mapping_name,
+          source_name: mapping.source_name,
+          source_id: mapping.source_id,
+          url: mapping.url,
+          entity_name: mapping.entity_name,
+          container_selector: mapping.container_selector,
+          field_mappings: mapping.field_mappings,
+          follow_links: mapping.follow_links || [],
+          enabled: mapping.enabled
+        }
+      } 
     });
-  };
-  const addFieldMapping = () => {
-    if (!editModal) return;
-    const newField = {
-      id: Math.random().toString(36).substr(2, 9),
-      field_name: "",
-      selector: "",
-      extract: "text"
-    };
-    setEditModal({
-      ...editModal,
-      fieldMappingsArray: [...editModal.fieldMappingsArray, newField]
-    });
-  };
-
-  const removeFieldMapping = (id) => {
-    if (!editModal) return;
-    setEditModal({
-      ...editModal,
-      fieldMappingsArray: editModal.fieldMappingsArray.filter(field => field.id !== id)
-    });
-  };
-
-  const updateFieldMapping = (id, field, value) => {
-    if (!editModal) return;
-    setEditModal({
-      ...editModal,
-      fieldMappingsArray: editModal.fieldMappingsArray.map(mapping => 
-        mapping.id === id ? { ...mapping, [field]: value } : mapping
-      )
-    });
-  };
-
-  const onSaveEdit = async () => {
-    if (!editModal) return;
-
-    const invalidFields = editModal.fieldMappingsArray.filter(
-      field => !field.field_name.trim() || !field.selector.trim()
-    );
-
-    if (invalidFields.length > 0) {
-      alert("Please fill in all field names and selectors before saving.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const fieldMappingsObject = {};
-      editModal.fieldMappingsArray.forEach(field => {
-        fieldMappingsObject[field.field_name] = {
-          selector: field.selector,
-          extract: field.extract
-        };
-      });
-
-      const payload = {
-        mapping_name: editModal.mapping.mapping_name,
-        container_selector: editModal.mapping.container_selector,
-        field_mappings: fieldMappingsObject,
-        source_id: editModal.mapping.source_id,
-        enabled: editModal.mapping.enabled,
-      };
-
-      const res = await fetch(`${API_BASE}/mapping/edit-mapping/${encodeURIComponent(editModal.originalName)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          "ngrok-skip-browser-warning": "true"
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-
-      // Update cache directly - update edited mapping
-      queryClient.setQueryData(['mappings'], (oldMappings) => {
-        if (!oldMappings) return oldMappings;
-        return oldMappings.map(m =>
-          m.mapping_name === editModal.originalName 
-            ? { ...m, ...editModal.mapping, field_mappings: fieldMappingsObject } 
-            : m
-        );
-      });
-      
-      // Mark as stale but don't refetch immediately
-      queryClient.invalidateQueries({ queryKey: ['mappings'] }, { refetchType: 'none' });
-
-      setEditModal(null);
-    } catch (err) {
-      console.error("Save edit failed:", err);
-      alert("Failed to save mapping. See console for details.");
-    } finally {
-      setSaving(false);
-    }
   };
 
   return (
@@ -297,7 +190,6 @@ const MappingManager = () => {
         boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
         overflow: 'hidden'
       }}>
-        {/* Header */}
         <div style={{
           padding: '40px 50px',
           borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
@@ -363,7 +255,6 @@ const MappingManager = () => {
         </div>
 
         <div style={{ padding: '50px' }}>
-          {/* Stats Cards */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -376,7 +267,6 @@ const MappingManager = () => {
             <StatCard title="Broken" value={stats.broken} color="#D97706" />
           </div>
 
-          {/* Search and Filters */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
             <div style={{ position: 'relative', width: '40%', minWidth: '300px' }}>
               <div style={{ position: 'absolute', top: '50%', left: '15px', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
@@ -432,7 +322,6 @@ const MappingManager = () => {
             </div>
           </div>
 
-          {/* Mapping List */}
           {loading ? (
             <div style={{ textAlign: 'center', padding: '60px', color: '#00364A', opacity: 0.6 }}>Loading mappings...</div>
           ) : error ? (
@@ -547,136 +436,9 @@ const MappingManager = () => {
           )}
         </div>
       </div>
-
-      {/* Edit Modal */}
-      {editModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(0, 54, 74, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 50,
-          backdropFilter: 'blur(3px)'
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            width: '100%',
-            maxWidth: '800px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            borderRadius: '25px',
-            padding: '40px',
-            boxShadow: '0 20px 60px rgba(0, 54, 74, 0.3)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#00364A', margin: 0 }}>Edit Mapping</h2>
-              <button onClick={() => setEditModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00364A', opacity: 0.5 }}>
-                <Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /> {/* Using Trash icon as close for now, ideally use X icon */}
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <StyledInput 
-                  label="Mapping Name" 
-                  value={editModal.mapping.mapping_name}
-                  onChange={(e) => setEditModal({ ...editModal, mapping: { ...editModal.mapping, mapping_name: e.target.value } })}
-                />
-                <StyledInput 
-                  label="Source" 
-                  value={editModal.mapping.source_name || ""}
-                  disabled={true}
-                />
-                <div style={{ gridColumn: 'span 2' }}>
-                  <StyledInput 
-                    label="Container Selector" 
-                    value={editModal.mapping.container_selector}
-                    onChange={(e) => setEditModal({ ...editModal, mapping: { ...editModal.mapping, container_selector: e.target.value } })}
-                    placeholder="e.g., .item, .product"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', margin: 0 }}>Field Mappings</h3>
-                  <StyledButton onClick={addFieldMapping} icon={<Edit3 size={16} />} variant="success">+ Add Field</StyledButton>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                  {editModal.fieldMappingsArray.map((field) => (
-                    <div key={field.id} style={{
-                      padding: '20px',
-                      backgroundColor: '#F8FBFF',
-                      borderRadius: '15px',
-                      border: '1px solid rgba(0, 54, 74, 0.1)',
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr 0.8fr 0.5fr',
-                      gap: '15px',
-                      alignItems: 'end'
-                    }}>
-                      <StyledInput 
-                        label="Field Name" 
-                        value={field.field_name}
-                        onChange={(e) => updateFieldMapping(field.id, 'field_name', e.target.value)}
-                      />
-                      <StyledInput 
-                        label="CSS Selector" 
-                        value={field.selector}
-                        onChange={(e) => updateFieldMapping(field.id, 'selector', e.target.value)}
-                      />
-                      <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '6px' }}>Extract</label>
-                        <select
-                          value={field.extract}
-                          onChange={(e) => updateFieldMapping(field.id, 'extract', e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '12px 16px',
-                            borderRadius: '10px',
-                            border: '1px solid rgba(0, 54, 74, 0.15)',
-                            backgroundColor: 'white',
-                            color: '#00364A',
-                            fontSize: '14px',
-                            outline: 'none'
-                          }}
-                        >
-                          <option value="text">Text</option>
-                          <option value="href">Href</option>
-                          <option value="src">Src</option>
-                          <option value="value">Value</option>
-                          <option value="title">Title</option>
-                          <option value="alt">Alt</option>
-                        </select>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: '2px' }}>
-                        <IconButton 
-                          onClick={() => removeFieldMapping(field.id)}
-                          icon={<Trash2 size={18} />}
-                          color="#EF4444"
-                          title="Remove Field"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', marginTop: '20px' }}>
-                <StyledButton onClick={() => setEditModal(null)} variant="secondary">Cancel</StyledButton>
-                <StyledButton onClick={onSaveEdit} disabled={saving}>{saving ? "Saving..." : "Save Changes"}</StyledButton>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
-
-// Helper Components
 
 const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled }) => {
   const [hover, setHover] = useState(false);
@@ -750,12 +512,10 @@ const StatCard = ({ title, value, color }) => (
 const IconButton = ({ onClick, icon, color, disabled, title }) => {
   const [hover, setHover] = useState(false);
   
-  // Use a hex code to ensure background opacity logic works
   const effectiveColor = disabled ? '#cccccc' : color;
   
   const getBgColor = () => {
     if (disabled) return '#f5f5f5';
-    // If hovering, add transparency to hex color, or fallback to gray
     if (hover) {
         if (effectiveColor.startsWith('#')) return `${effectiveColor}15`; 
         return '#f0f0f0';
@@ -777,7 +537,7 @@ const IconButton = ({ onClick, icon, color, disabled, title }) => {
         borderRadius: '10px',
         border: `1px solid ${disabled ? '#eee' : 'rgba(0,54,74,0.1)'}`,
         backgroundColor: getBgColor(),
-        color: effectiveColor, // This text color is inherited by the Icon via currentColor
+        color: effectiveColor,
         cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -787,47 +547,9 @@ const IconButton = ({ onClick, icon, color, disabled, title }) => {
         padding: 0
       }}
     >
-      {/* Icon renders here, inheriting text color */}
       {icon}
     </button>
   );
 };
-
-const StyledInput = ({ label, value, onChange, placeholder, disabled }) => (
-  <div>
-    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '6px' }}>{label}</label>
-    <input
-      type="text"
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      disabled={disabled}
-      style={{
-        width: '100%',
-        padding: '12px 16px',
-        borderRadius: '10px',
-        border: '1px solid rgba(0, 54, 74, 0.15)',
-        backgroundColor: disabled ? '#F3F4F6' : 'white',
-        color: '#00364A',
-        fontSize: '14px',
-        outline: 'none',
-        transition: 'all 0.3s',
-        boxSizing: 'border-box'
-      }}
-      onFocus={(e) => {
-        if (!disabled) {
-          e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
-          e.target.style.borderColor = '#49A3C4';
-        }
-      }}
-      onBlur={(e) => {
-        if (!disabled) {
-          e.target.style.backgroundColor = 'white';
-          e.target.style.borderColor = 'rgba(0, 54, 74, 0.15)';
-        }
-      }}
-    />
-  </div>
-);
 
 export default MappingManager;

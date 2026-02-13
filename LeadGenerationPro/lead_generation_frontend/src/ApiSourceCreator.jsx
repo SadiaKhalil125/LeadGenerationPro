@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Save, X, AlertTriangle, CheckCircle, Loader2, Plus, List, ArrowLeft, Trash2, Settings, Database, Info } from 'lucide-react';
+import { Globe, Save, X, AlertTriangle, CheckCircle, Loader2, Plus, List, ArrowLeft, Trash2, Settings, Database, Info, Lock } from 'lucide-react';
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
 
-// Styling Components
+// Styling Components (Kept exactly as provided)
 const StyledInput = (props) => (
   <input
     {...props}
@@ -71,12 +71,13 @@ const ApiSourceCreator = () => {
     name: '',
     api_url: '',
     api_key: '',
+    api_key_name: 'Authorization', // Logic kept intact
     entity_name: '',
     request_template: {
       method: 'GET',
       headers: {},
-      params: {}, // RESTORED: Query Params
-      body: null,
+      params: {}, 
+      body: {}, // Support for POST body
       timeout: 30
     },
     response_structure: {
@@ -140,7 +141,6 @@ const ApiSourceCreator = () => {
     setFormData(prev => ({ ...prev, field_mappings: updatedMappings }));
   };
 
-  // --- Header Management ---
   const addHeader = () => {
     if (!newHeader.key) return;
     setFormData(prev => ({
@@ -156,7 +156,6 @@ const ApiSourceCreator = () => {
     setFormData(prev => ({ ...prev, request_template: { ...prev.request_template, headers: newHeaders } }));
   };
 
-  // --- Parameter Management (RESTORED) ---
   const addParam = () => {
     if (!newParam.key) return;
     setFormData(prev => ({
@@ -229,7 +228,7 @@ const ApiSourceCreator = () => {
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
             
-            {/* Section 1: Basic Info */}
+            {/* Section 1: Target Entity */}
             <section>
               <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Database size={20} /> 1. Target Database Entity
@@ -253,26 +252,60 @@ const ApiSourceCreator = () => {
               </div>
             </section>
 
-            {/* Section 2: Request Configuration */}
+            {/* Section 2: Request Config */}
             <section>
-              <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px' }}>2. Request Configuration</h2>
+              <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Settings size={20} /> 2. Request Configuration
+              </h2>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
                   <div>
                     <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>HTTP Method</label>
                     <StyledSelect value={formData.request_template.method} onChange={(e) => handleNestedChange('request_template', 'method', e.target.value)}>
-                      <option>GET</option><option>POST</option>
+                      <option value="GET">GET</option>
+                      <option value="POST">POST</option>
+                      <option value="PUT">PUT</option>
                     </StyledSelect>
                   </div>
                   <div>
-                    <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>API Key (if required)</label>
-                    <StyledInput type="password" value={formData.api_key} onChange={(e) => handleInputChange('api_key', e.target.value)} placeholder="Key" />
+                    <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>Request Timeout (sec)</label>
+                    <StyledInput type="number" value={formData.request_template.timeout} onChange={(e) => handleNestedChange('request_template', 'timeout', e.target.value)} />
                   </div>
+              </div>
+
+              {/* POST BODY INPUT (Visible only for non-GET methods) */}
+              {formData.request_template.method !== 'GET' && (
+                <div style={{ marginBottom: '25px' }}>
+                   <label style={{ fontSize: '13px', fontWeight: '700', color: '#00364A', marginBottom: '8px', display: 'block' }}>Request JSON Body (Required for Apollo)</label>
+                   <textarea 
+                    style={{ width: '100%', height: '100px', borderRadius: '12px', border: '2px solid rgba(0, 54, 74, 0.15)', padding: '15px', fontFamily: 'monospace', color: '#00364A', outline: 'none' }}
+                    placeholder='{ "key": "value" }'
+                    onChange={(e) => {
+                      try { handleNestedChange('request_template', 'body', JSON.parse(e.target.value)); }
+                      catch(err) { /* silent fail on parsing during typing */ }
+                    }}
+                   />
+                </div>
+              )}
+
+              {/* AUTH SECTION */}
+              <div style={{ backgroundColor: '#F8FBFE', padding: '25px', borderRadius: '15px', marginBottom: '25px', border: '1px solid #49A3C4' }}>
+                <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Lock size={18} color="#49A3C4" /> Authentication Configuration</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div>
+                    <label style={{ fontSize: '13px', fontWeight: '600', opacity: 0.8, marginBottom: '5px', display: 'block' }}>Auth Header/Param Name</label>
+                    <StyledInput value={formData.api_key_name} onChange={(e) => handleInputChange('api_key_name', e.target.value)} placeholder="e.g., x-api-key or Authorization" />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '13px', fontWeight: '600', opacity: 0.8, marginBottom: '5px', display: 'block' }}>API Key Value</label>
+                    <StyledInput type="password" value={formData.api_key} onChange={(e) => handleInputChange('api_key', e.target.value)} placeholder="Enter API Key" />
+                  </div>
+                </div>
               </div>
 
               {/* Headers UI */}
               <div style={{ backgroundColor: '#F8FBFE', padding: '20px', borderRadius: '15px', marginBottom: '20px', border: '1px solid rgba(0,54,74,0.05)' }}>
-                 <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Settings size={18} color="#49A3C4" /> Custom Headers (e.g., Accept, Version)</label>
+                 <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Settings size={18} color="#49A3C4" /> Additional Static Headers</label>
                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
                     <StyledInput placeholder="Key" value={newHeader.key} onChange={e => setNewHeader({...newHeader, key: e.target.value})} />
                     <StyledInput placeholder="Value" value={newHeader.value} onChange={e => setNewHeader({...newHeader, value: e.target.value})} />
@@ -287,9 +320,9 @@ const ApiSourceCreator = () => {
                  </div>
               </div>
 
-              {/* Query Params UI (RESTORED) */}
+              {/* Query Params UI */}
               <div style={{ backgroundColor: '#F8FBFE', padding: '20px', borderRadius: '15px', marginBottom: '20px', border: '1px solid rgba(0,54,74,0.05)' }}>
-                 <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Globe size={18} color="#49A3C4" /> Default Query Parameters (e.g., per_page=100)</label>
+                 <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Globe size={18} color="#49A3C4" /> Default Query Parameters</label>
                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
                     <StyledInput placeholder="Param Key" value={newParam.key} onChange={e => setNewParam({...newParam, key: e.target.value})} />
                     <StyledInput placeholder="Value" value={newParam.value} onChange={e => setNewParam({...newParam, value: e.target.value})} />
@@ -309,73 +342,42 @@ const ApiSourceCreator = () => {
             <section>
               <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px' }}>3. Data Handling</h2>
               <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>JSONPath to Results Array *</label>
-              <StyledInput value={formData.response_structure.data_path} onChange={(e) => handleNestedChange('response_structure', 'data_path', e.target.value)} placeholder="e.g., $ for root list, or $.items for nested list" required />
-              <div style={{ marginTop: '10px', padding: '12px', backgroundColor: '#E0F2FE', borderRadius: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                 <Info size={18} color="#0369A1" />
-                 <p style={{ fontSize: '13px', color: '#0369A1', margin: 0 }}>Use <b>$</b> if the API returns a list directly. Use <b>$.results</b> if it's nested.</p>
-              </div>
+              <StyledInput value={formData.response_structure.data_path} onChange={(e) => handleNestedChange('response_structure', 'data_path', e.target.value)} placeholder="e.g., $ or $.items" required />
             </section>
 
-            {/* Section 4: Attribute Mapping (Auto-Attributes) */}
+            {/* Section 4: Attribute Mapping */}
             <section>
               <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <List size={20} /> 4. Field Mapping
               </h2>
               
-              {!formData.entity_name ? (
-                <div style={{ textAlign: 'center', padding: '40px', background: '#F8FBFE', borderRadius: '15px', border: '2px dashed #CBD5E1' }}>
-                  <Database size={32} color="#94A3B8" style={{ marginBottom: '10px' }} />
-                  <p style={{ color: '#64748B' }}>Please select an <b>Entity</b> above to define mappings.</p>
-                </div>
-              ) : (
+              {formData.field_mappings.length > 0 ? (
                 <div style={{ display: 'grid', gap: '15px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '20px', padding: '0 10px', opacity: 0.6 }}>
                      <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Database Attribute</span>
                      <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>API JSON Field Name</span>
-                     <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Transform (Optional)</span>
+                     <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Transform</span>
                   </div>
 
                   {formData.field_mappings.map((m, i) => (
                     <div key={m.db_field} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '20px', background: '#F8FBFE', padding: '15px', borderRadius: '15px', border: '1px solid rgba(0,54,74,0.05)', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#49A3C4' }}></div>
-                        <span style={{ fontWeight: '700', color: '#00364A' }}>{m.db_field}</span>
-                      </div>
-                      <StyledInput 
-                        placeholder={`Field name in API response`} 
-                        value={m.api_field} 
-                        onChange={(e) => handleMappingUpdate(i, 'api_field', e.target.value)} 
-                        style={{ border: '1px solid #CBD5E1' }}
-                      />
-                      <StyledInput 
-                        placeholder="e.g., lowercase" 
-                        value={m.transform} 
-                        onChange={(mVal) => handleMappingUpdate(i, 'transform', mVal.target.value)} 
-                        style={{ border: '1px solid #CBD5E1' }}
-                      />
+                      <div style={{ fontWeight: '700', color: '#00364A' }}>{m.db_field}</div>
+                      <StyledInput placeholder={`e.g., user.id`} value={m.api_field} onChange={(e) => handleMappingUpdate(i, 'api_field', e.target.value)} style={{ border: '1px solid #CBD5E1' }} />
+                      <StyledInput placeholder="Optional" value={m.transform} onChange={(mVal) => handleMappingUpdate(i, 'transform', mVal.target.value)} style={{ border: '1px solid #CBD5E1' }} />
                     </div>
                   ))}
-                  <p style={{ fontSize: '13px', color: '#666', fontStyle: 'italic', marginTop: '10px' }}>* Blank fields will be ignored.</p>
                 </div>
+              ) : (
+                <p style={{ textAlign: 'center', opacity: 0.5 }}>Select an Entity to see attributes.</p>
               )}
             </section>
 
             <button type="submit" disabled={loading} style={{ 
-              padding: '18px', 
-              background: loading ? '#94A3B8' : '#00364A', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '15px', 
-              fontSize: '18px', 
-              fontWeight: '800', 
-              cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '12px'
+              padding: '18px', background: '#00364A', color: 'white', border: 'none', borderRadius: '15px', 
+              fontSize: '18px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' 
             }}>
                {loading ? <Loader2 size={22} className="spin" /> : <Save size={22} />}
-               {loading ? 'Saving Source...' : 'Save API Source'}
+               Save API Source
             </button>
           </form>
         </div>
