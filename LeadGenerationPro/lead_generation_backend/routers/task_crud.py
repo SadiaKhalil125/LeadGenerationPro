@@ -648,6 +648,8 @@ async def _execute_task_internal(task_id: int):
                 s.pagination_config,
                 s.is_captcha_protected,
                 s.captcha_params,
+                s.auth_config,
+                s.is_auth_protected,
                 t.mapping_id,
                 t.repeat,
                 t.max_items,
@@ -670,7 +672,7 @@ async def _execute_task_internal(task_id: int):
         
         
         # Extract task information
-        (task_id_db, task_name, source_id, source_name, source_url, pagination_config, is_captcha_protected, captcha_params,
+        (task_id_db, task_name, source_id, source_name, source_url, pagination_config, is_captcha_protected, captcha_params, auth_config, is_auth_protected,
          mapping_id, repeat, max_items, mapping_name, entity_name, container_selector, field_mappings, follow_links) = task_data
 
         log_execution(conn, task_id, execution_id, 'processing', 'info', 
@@ -789,7 +791,8 @@ async def _execute_task_internal(task_id: int):
                 follow_links=validated_follow_links,
                 max_items=max_items,
                 timeout=30,
-                captcha_params=captcha_params if is_captcha_protected else None
+                captcha_params=captcha_params if is_captcha_protected else None,
+                auth_config=auth_config if is_auth_protected else None
             )
         except Exception as scrape_req_error:
             log_execution(conn, task_id, execution_id, 'processing', 'error',

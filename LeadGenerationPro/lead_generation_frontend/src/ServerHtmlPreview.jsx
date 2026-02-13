@@ -1,4 +1,4 @@
-// SmartWebsitePreview.jsx - UPDATED WITH BETTER SELECTOR GENERATION
+// SmartWebsitePreview.jsx - MODIFIED: Never uses IDs, only tag.class(es)
 import React, { useState, useEffect, useRef } from "react";
 import { Code, AlertTriangle } from "lucide-react";
 import API_BASE from "./api_base";
@@ -98,35 +98,33 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
     return str.replace(/[!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~]/g, '\\$&');
   };
 
-  // Add click detection to HTML
+  // Add click detection to HTML - MODIFIED: Never uses IDs, only tag.class(es)
   const addClickDetection = (html) => {
     const clickScript = `
       <script>
-        // CSS selector generation for scraping
+        // CSS selector generation for scraping - NEVER uses IDs, only tag.class(es)
         function generateSelector(element) {
           if (!element || !(element instanceof Element)) return '';
           
-          // 1. If element has ID - use it (most specific)
-          if (element.id) {
-            return '#' + cssEscape(element.id);
-          }
-          
-          // 2. Element with all classes
+          // START WITH TAG NAME (ALWAYS)
           let selector = element.tagName.toLowerCase();
           
-          // Get original classes (excluding our preview classes)
+          // ADD ALL VALID CLASSES (filtering out preview classes)
           if (element.className && typeof element.className === 'string') {
-            // Filter out our preview classes
-            const classes = element.className.trim().split(/\\s+/).filter(c => c);
+            // Get classes, filter empty strings and preview classes
+            const classes = element.className.trim().split(/\\s+/).filter(c => c && c.trim());
             const filteredClasses = classes.filter(cls => 
               cls !== 'preview-hover' && cls !== 'preview-clicked'
             );
             
+            // Add ALL filtered classes (if any)
             if (filteredClasses.length > 0) {
-              // Add ALL filtered classes
               selector += '.' + filteredClasses.map(cssEscape).join('.');
             }
           }
+          
+          // COMPLETELY IGNORE IDS - they are NEVER included in the selector
+          // No ID check, no ID usage, no fallback to ID
           
           return selector;
         }
@@ -202,7 +200,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
               lastHovered = el;
               el.classList.add('preview-hover');
               
-              // Show selector preview in tooltip (excluding our classes)
+              // Show selector preview in tooltip (tag.classes only, NO IDS)
               const selector = generateSelector(el);
               const tooltip = createTooltip();
               tooltip.textContent = selector;
@@ -254,7 +252,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
           element.classList.add('preview-clicked');
           lastSelected = element;
           
-          // Generate selector (excluding our classes)
+          // Generate selector - NO IDS, ONLY tag.class(es)
           const selector = generateSelector(element);
           
           // Get text content for context
@@ -268,13 +266,13 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
             textContent = '';
           }
           
-          // Send selector to parent
+          // Send selector to parent (ID is explicitly set to empty string)
           window.parent.postMessage({
             type: 'SELECTOR_SELECTED',
             selector: selector,
             tagName: element.tagName,
             className: element.className,
-            id: element.id,
+            id: '', // Explicitly send empty string, never send ID
             text: textContent
           }, '*');
         });
@@ -289,7 +287,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
           }
         });
         
-        console.log('Preview with hover & click detection loaded');
+        console.log('Preview with hover & click detection loaded - IDs are NEVER used in selectors');
       </script>
     `;
 
@@ -313,7 +311,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
         if (selectedCallbackRef.current) {
           selectedCallbackRef.current(selector, {
             tagName: event.data.tagName,
-            id: event.data.id,
+            id: "", // Always empty string, never use ID
             className: event.data.className,
             text: event.data.text || "",
             attributes: []
