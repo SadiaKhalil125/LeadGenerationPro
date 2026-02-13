@@ -17,44 +17,27 @@ import {
   RefreshCw, 
   Shield, 
   Type,
-  ArrowLeft
+  ArrowLeft,
+  FileText,
+  FileSpreadsheet,
+  Eye
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import API_BASE from "./api_base";
+
 const EntityList = () => {
   const [expandedEntity, setExpandedEntity] = useState(null);
   const [editingEntity, setEditingEntity] = useState(null);
   const [editAttributes, setEditAttributes] = useState([]);
   const [response, setResponse] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [exportLoading, setExportLoading] = useState({ csv: null, excel: null });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const fetchEntityInfo = async (entityName) => {
-    try {
-      const response = await fetch(`${API_BASE}/entity/entity-info/${entityName}`, {
-        headers: {
-          "ngrok-skip-browser-warning": "true"
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      if (data.success) {
-        return data;
-      }
-    } catch (error) {
-      console.error("Error fetching entity info:", error);
-    }
-    return null;
-  };
-
-  // Fetch entities list
-  const { data: entitiesData, isLoading: isLoadingEntities, isFetching: isFetchingEntities } = useQuery({
+  // Fetch entities list only (lightweight)
+  const { data: entities, isLoading: isLoadingEntities } = useQuery({
     queryKey: ['entities'],
     queryFn: async () => {
       const response = await fetch(`${API_BASE}/entity/entities`, {
@@ -72,37 +55,120 @@ const EntityList = () => {
     },
   });
 
-  // Fetch entity details for all entities
-  const { data: entities, isLoading: isLoadingDetails, isFetching: isFetchingDetails } = useQuery({
-    queryKey: ['entities', 'details', entitiesData],
+  // Fetch entity details only when expanded (lazy loading)
+  const { data: entityDetails } = useQuery({
+    queryKey: ['entity-details', expandedEntity],
     queryFn: async () => {
-      if (!entitiesData || entitiesData.length === 0) return [];
+      if (!expandedEntity) return null;
       
-      const entitiesWithDetails = await Promise.all(
-        entitiesData.map(async (entity) => {
-          const detailResponse = await fetchEntityInfo(entity.name);
-          if (detailResponse) {
-            return {
-              name: entity.name,
-              columns: detailResponse.columns,
-              row_count: detailResponse.row_count
-            };
-          } else {
-            return {
-              name: entity.name,
-              columns: entity.columns?.map(col => ({ name: col, type: "unknown", nullable: "YES" })) || [],
-              row_count: 0
-            };
-          }
-        })
-      );
-      return entitiesWithDetails;
+      const response = await fetch(`${API_BASE}/entity/entity-info/${expandedEntity}`, {
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      if (data.success) {
+        return {
+          name: expandedEntity,
+          columns: data.columns,
+          row_count: data.row_count
+        };
+      }
+      return null;
     },
-    enabled: !!entitiesData && entitiesData.length > 0,
+    enabled: !!expandedEntity,
   });
 
-  // Only show loading on initial load, not on background refetches
-  const loading = (isLoadingEntities && !entitiesData) || (isLoadingDetails && !entities);
+  // CSV Export Handler
+  const handleCSVExport = async (e, entityName) => {
+    e.stopPropagation();
+    setExportLoading(prev => ({ ...prev, csv: entityName }));
+    
+    try {
+      const response = await fetch(`${API_BASE}/export/csv/${entityName}`, {
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${entityName}_export.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      setResponse({ 
+        type: "success", 
+        message: `Successfully exported ${entityName} as CSV` 
+      });
+    } catch (error) {
+      console.error("CSV Export error:", error);
+      setResponse({ 
+        type: "error", 
+        message: `Failed to export ${entityName} as CSV: ${error.message}` 
+      });
+    } finally {
+      setExportLoading(prev => ({ ...prev, csv: null }));
+    }
+    
+    setTimeout(() => setResponse(null), 5000);
+  };
+
+  // Excel Export Handler
+  const handleExcelExport = async (e, entityName) => {
+    e.stopPropagation();
+    setExportLoading(prev => ({ ...prev, excel: entityName }));
+    
+    try {
+      const response = await fetch(`${API_BASE}/export/excel/${entityName}`, {
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${entityName}_export.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      setResponse({ 
+        type: "success", 
+        message: `Successfully exported ${entityName} as Excel` 
+      });
+    } catch (error) {
+      console.error("Excel Export error:", error);
+      setResponse({ 
+        type: "error", 
+        message: `Failed to export ${entityName} as Excel: ${error.message}` 
+      });
+    } finally {
+      setExportLoading(prev => ({ ...prev, excel: null }));
+    }
+    
+    setTimeout(() => setResponse(null), 5000);
+  };
 
   const toggleExpand = (entityName) => {
     setExpandedEntity(expandedEntity === entityName ? null : entityName);
@@ -112,7 +178,7 @@ const EntityList = () => {
   const startEditing = (entity) => {
     setEditingEntity(entity.name);
     const editableAttrs = entity.columns
-      .filter(col => col.name !== "id")
+      .filter(col => col.name !== "id" && col.name !== "modified_at")
       .map(col => ({
         name: col.name,
         originalName: col.name,
@@ -258,8 +324,7 @@ const EntityList = () => {
       }
 
       setEditingEntity(null);
-      // Update cache directly - refetch in background silently
-      queryClient.refetchQueries({ queryKey: ['entities'] }, { cancelRefetch: false });
+      queryClient.invalidateQueries({ queryKey: ['entity-details', editingEntity] });
 
     } catch (error) {
       console.error("Error saving changes:", error);
@@ -287,17 +352,10 @@ const EntityList = () => {
         setResponse({ type: "success", message: data.message });
         setExpandedEntity(null);
         setEditingEntity(null);
-        // Update cache directly - remove deleted entity
         queryClient.setQueryData(['entities'], (oldData) => {
           if (!oldData) return oldData;
           return oldData.filter(entity => entity.name !== entityName);
         });
-        // Also update the details cache
-        queryClient.setQueryData(['entities', 'details'], (oldDetails) => {
-          if (!oldDetails) return oldDetails;
-          return oldDetails.filter(entity => entity.name !== entityName);
-        });
-        // Mark as stale but don't refetch immediately - will refetch in background when needed
         queryClient.invalidateQueries({ queryKey: ['entities'] }, { refetchType: 'none' });
       } else {
         setResponse({ type: "error", message: "Failed to delete entity" });
@@ -316,9 +374,10 @@ const EntityList = () => {
   };
 
   const filteredEntities = (entities || []).filter(entity => 
-    entity.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entity.columns.some(col => col.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    entity.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const loading = isLoadingEntities;
 
   if (loading) {
     return (
@@ -403,71 +462,94 @@ const EntityList = () => {
               }}>View and manage your database entities</p>
             </div>
           </div>
-          <div
-          style={{
-          padding: '10px 10px',
-          display: 'flex',
-          justifyContent: 'right',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '20px'
-        }}>
-          <button
-             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 24px',
-              backgroundColor: 'white',
-              color: '#00364A',
-              borderRadius: '12px',
-              border: '2px solid #00364A',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#00364A';
-              e.target.style.color = 'white';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = 'white';
-              e.target.style.color = '#00364A';
-            }}
-            onClick={() => navigate('/dashboard')}
-          >
-          <ArrowLeft size={18} />
-            Dashboard
+          <div style={{
+            padding: '10px 10px',
+            display: 'flex',
+            justifyContent: 'right',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '20px'
+          }}>
+            <button
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 24px',
+                backgroundColor: '#004e6b'  ,
+                color: 'white',
+                borderRadius: '12px',
+                border: 'none',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#004e6b';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#004e6b';
+              }}
+              onClick={() => navigate('/entityform')}
+            >
+              <Plus size={18} />
+              Create Entity
             </button>
-          <button 
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['entities'] })}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 24px',
-              backgroundColor: 'white',
-              color: '#00364A',
-              borderRadius: '12px',
-              border: '2px solid #00364A',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#00364A';
-              e.target.style.color = 'white';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = 'white';
-              e.target.style.color = '#00364A';
-            }}
-          >
-        
-            <RefreshCw size={18} />
-            Refresh
-          </button>
-        </div>
+            <button
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 24px',
+                backgroundColor: 'white',
+                color: '#00364A',
+                borderRadius: '12px',
+                border: '2px solid #00364A',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#00364A';
+                e.target.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = 'white';
+                e.target.style.color = '#00364A';
+              }}
+              onClick={() => navigate('/dashboard')}
+            >
+              <ArrowLeft size={18} />
+              Dashboard
+            </button>
+            <button 
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['entities'] })}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 24px',
+                backgroundColor: 'white',
+                color: '#00364A',
+                borderRadius: '12px',
+                border: '2px solid #00364A',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#00364A';
+                e.target.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = 'white';
+                e.target.style.color = '#00364A';
+              }}
+            >
+              <RefreshCw size={18} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         <div style={{ padding: '50px' }}>
@@ -479,7 +561,7 @@ const EntityList = () => {
               </div>
               <input
                 type="text"
-                placeholder="Search entities or columns..."
+                placeholder="Search entities..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{
@@ -598,24 +680,49 @@ const EntityList = () => {
                         }}>
                           {entity.name}
                         </h3>
-                        <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#00364A', opacity: 0.6, marginTop: '5px' }}>
-                          <Columns size={14} style={{ marginRight: '5px', flexShrink: 0 }} />
-                          <span style={{ marginRight: '15px', whiteSpace: 'nowrap' }}>{entity.columns?.length || 0} columns</span>
-                          <span style={{ whiteSpace: 'nowrap' }}>{entity.row_count || 0} rows</span>
-                        </div>
                       </div>
                     </div>
 
                     {/* Right: Actions */}
                     <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+                      {/* View Data Button */}
                       <IconButton 
-                        onClick={() => startEditing(entity)} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/entity-data?entity=${entity.name}`);
+                        }}
+                        icon={<Eye size={18} />}
+                        color="#8B5CF6"
+                        title="View Entity Data"
+                      />
+                      
+                    
+                      
+                      {/* Edit Button */}
+                      <IconButton 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (expandedEntity !== entity.name) {
+                            setExpandedEntity(entity.name);
+                          }
+                          // Wait for details to load before starting edit
+                          setTimeout(() => {
+                            if (entityDetails && entityDetails.name === entity.name) {
+                              startEditing(entityDetails);
+                            }
+                          }, 100);
+                        }}
                         icon={<Edit3 size={18} />} 
                         color="#49A3C4" 
                         title="Edit Entity"
                       />
+                      
+                      {/* Delete Button */}
                       <IconButton 
-                        onClick={() => deleteEntity(entity.name)} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteEntity(entity.name);
+                        }}
                         icon={<Trash2 size={18} />} 
                         color="#EF4444" 
                         title="Delete Entity"
@@ -630,161 +737,179 @@ const EntityList = () => {
                       padding: '25px',
                       backgroundColor: '#F8FBFF'
                     }}>
-                      <h4 style={{
-                        fontSize: '16px',
-                        fontWeight: '700',
-                        color: '#00364A',
-                        marginBottom: '20px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px'
-                      }}>
-                        <div style={{
-                          padding: '6px',
-                          backgroundColor: 'rgba(73, 163, 196, 0.15)',
-                          borderRadius: '8px',
-                          display: 'flex'
-                        }}>
-                          <Columns size={16} color="#49A3C4" />
-                        </div>
-                        Attributes
-                      </h4>
-                      
-                      {editingEntity === entity.name ? (
-                        /* Editing Mode */
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                          {editAttributes.map((attr, index) => (
-                            <div key={index} style={{
-                              padding: '20px',
-                              borderRadius: '15px',
-                              backgroundColor: attr.action === 'remove' ? '#FEF2F2' : 'white',
-                              border: `1px solid ${attr.action === 'remove' ? '#FCA5A5' : 'rgba(0, 54, 74, 0.1)'}`
+                      {entityDetails ? (
+                        <>
+                          <h4 style={{
+                            fontSize: '16px',
+                            fontWeight: '700',
+                            color: '#00364A',
+                            marginBottom: '20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px'
+                          }}>
+                            <div style={{
+                              padding: '6px',
+                              backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                              borderRadius: '8px',
+                              display: 'flex'
                             }}>
-                              {attr.action === 'remove' ? (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <span style={{ color: '#991B1B', fontWeight: '600' }}>
-                                    Column '{attr.originalName}' will be deleted
-                                  </span>
-                                  <button
-                                    onClick={() => undoRemove(index)}
-                                    style={{
+                              <Columns size={16} color="#49A3C4" />
+                            </div>
+                            Attributes
+                            <span style={{ fontSize: '13px', fontWeight: '500', opacity: 0.6, marginLeft: '10px' }}>
+                              ({entityDetails.row_count || 0} rows)
+                            </span>
+                          </h4>
+                          
+                          {editingEntity === entity.name ? (
+                            /* Editing Mode */
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                              {editAttributes.map((attr, index) => (
+                                <div key={index} style={{
+                                  padding: '20px',
+                                  borderRadius: '15px',
+                                  backgroundColor: attr.action === 'remove' ? '#FEF2F2' : 'white',
+                                  border: `1px solid ${attr.action === 'remove' ? '#FCA5A5' : 'rgba(0, 54, 74, 0.1)'}`
+                                }}>
+                                  {attr.action === 'remove' ? (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <span style={{ color: '#991B1B', fontWeight: '600' }}>
+                                        Column '{attr.originalName}' will be deleted
+                                      </span>
+                                      <button
+                                        onClick={() => undoRemove(index)}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '5px',
+                                          padding: '8px 16px',
+                                          backgroundColor: '#FECACA',
+                                          color: '#991B1B',
+                                          border: 'none',
+                                          borderRadius: '10px',
+                                          fontSize: '13px',
+                                          fontWeight: '600',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        <Undo size={14} /> Undo
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 0.5fr', gap: '20px', alignItems: 'start' }}>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Name</label>
+                                        <input
+                                          type="text"
+                                          value={attr.name}
+                                          onChange={(e) => updateAttribute(index, "name", e.target.value)}
+                                          style={inputStyle}
+                                        />
+                                        {attr.action === 'rename' && <p style={{ fontSize: '11px', color: '#49A3C4', marginTop: '4px' }}>Renaming from '{attr.originalName}'</p>}
+                                        {attr.action === 'add' && <p style={{ fontSize: '11px', color: '#059669', marginTop: '4px' }}>New column</p>}
+                                      </div>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Type</label>
+                                        <select
+                                          value={attr.datatype}
+                                          onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
+                                          style={inputStyle}
+                                        >
+                                          <option value="text">String</option>
+                                          <option value="int">Integer</option>
+                                          <option value="bool">Boolean</option>
+                                          <option value="float">Float</option>
+                                          <option value="datetime">Date/Time</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Constraint</label>
+                                        <select
+                                          value={attr.nullable}
+                                          onChange={(e) => updateAttribute(index, "nullable", e.target.value)}
+                                          style={inputStyle}
+                                        >
+                                          <option value="optional">Optional</option>
+                                          <option value="required">Required</option>
+                                        </select>
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'end', height: '100%', paddingBottom: '2px' }}>
+                                        <IconButton 
+                                          onClick={() => removeAttribute(index)} 
+                                          icon={<Trash2 size={16} />} 
+                                          color="#EF4444" 
+                                          title="Remove"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
+                                <StyledButton onClick={addAttribute} icon={<Plus size={16} />}>Add Attribute</StyledButton>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                  <StyledButton onClick={saveChanges} variant="success" icon={<Save size={16} />}>Save Changes</StyledButton>
+                                  <StyledButton onClick={cancelEditing} variant="secondary" icon={<X size={16} />}>Cancel</StyledButton>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            /* View Mode */
+                            <div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                                {entityDetails.columns?.filter(col => col.name !== 'modified_at').map((column) => (
+                                  <div key={column.name} style={{
+                                    backgroundColor: 'white',
+                                    padding: '15px',
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(0, 54, 74, 0.1)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                  }}>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                                        <Type size={14} color="#49A3C4" style={{ marginRight: '8px' }} />
+                                        <span style={{ fontWeight: '600', color: '#00364A' }}>{column.name}</span>
+                                      </div>
+                                      <span style={{ fontSize: '12px', color: '#00364A', opacity: 0.6, marginLeft: '22px' }}>{column.type}</span>
+                                    </div>
+                                    <span style={{
+                                      fontSize: '11px',
+                                      fontWeight: '700',
+                                      padding: '4px 10px',
+                                      borderRadius: '10px',
+                                      backgroundColor: column.nullable === 'NO' ? '#FEE2E2' : '#ECFDF5',
+                                      color: column.nullable === 'NO' ? '#991B1B' : '#065F46',
                                       display: 'flex',
                                       alignItems: 'center',
-                                      gap: '5px',
-                                      padding: '8px 16px',
-                                      backgroundColor: '#FECACA',
-                                      color: '#991B1B',
-                                      border: 'none',
-                                      borderRadius: '10px',
-                                      fontSize: '13px',
-                                      fontWeight: '600',
-                                      cursor: 'pointer'
-                                    }}
-                                  >
-                                    <Undo size={14} /> Undo
-                                  </button>
-                                </div>
-                              ) : (
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 0.5fr', gap: '20px', alignItems: 'start' }}>
-                                  <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Name</label>
-                                    <input
-                                      type="text"
-                                      value={attr.name}
-                                      onChange={(e) => updateAttribute(index, "name", e.target.value)}
-                                      style={inputStyle}
-                                    />
-                                    {attr.action === 'rename' && <p style={{ fontSize: '11px', color: '#49A3C4', marginTop: '4px' }}>Renaming from '{attr.originalName}'</p>}
-                                    {attr.action === 'add' && <p style={{ fontSize: '11px', color: '#059669', marginTop: '4px' }}>New column</p>}
+                                      gap: '4px'
+                                    }}>
+                                      <Shield size={10} />
+                                      {column.nullable === 'NO' ? 'Required' : 'Optional'}
+                                    </span>
                                   </div>
-                                  <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Type</label>
-                                    <select
-                                      value={attr.datatype}
-                                      onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
-                                      style={inputStyle}
-                                    >
-                                      <option value="text">String</option>
-                                      <option value="int">Integer</option>
-                                      <option value="bool">Boolean</option>
-                                      <option value="float">Float</option>
-                                      <option value="datetime">Date/Time</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Constraint</label>
-                                    <select
-                                      value={attr.nullable}
-                                      onChange={(e) => updateAttribute(index, "nullable", e.target.value)}
-                                      style={inputStyle}
-                                    >
-                                      <option value="optional">Optional</option>
-                                      <option value="required">Required</option>
-                                    </select>
-                                  </div>
-                                  <div style={{ display: 'flex', alignItems: 'end', height: '100%', paddingBottom: '2px' }}>
-                                    <IconButton 
-                                      onClick={() => removeAttribute(index)} 
-                                      icon={<Trash2 size={16} />} 
-                                      color="#EF4444" 
-                                      title="Remove"
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                          
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
-                            <StyledButton onClick={addAttribute} icon={<Plus size={16} />}>Add Attribute</StyledButton>
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                              <StyledButton onClick={saveChanges} variant="success" icon={<Save size={16} />}>Save Changes</StyledButton>
-                              <StyledButton onClick={cancelEditing} variant="secondary" icon={<X size={16} />}>Cancel</StyledButton>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        /* View Mode */
-                        <div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                            {entity.columns?.map((column) => (
-                              <div key={column.name} style={{
-                                backgroundColor: 'white',
-                                padding: '15px',
-                                borderRadius: '12px',
-                                border: '1px solid rgba(0, 54, 74, 0.1)',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                              }}>
-                                <div>
-                                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
-                                    <Type size={14} color="#49A3C4" style={{ marginRight: '8px' }} />
-                                    <span style={{ fontWeight: '600', color: '#00364A' }}>{column.name}</span>
-                                  </div>
-                                  <span style={{ fontSize: '12px', color: '#00364A', opacity: 0.6, marginLeft: '22px' }}>{column.type}</span>
-                                </div>
-                                <span style={{
-                                  fontSize: '11px',
-                                  fontWeight: '700',
-                                  padding: '4px 10px',
-                                  borderRadius: '10px',
-                                  backgroundColor: column.nullable === 'NO' ? '#FEE2E2' : '#ECFDF5',
-                                  color: column.nullable === 'NO' ? '#991B1B' : '#065F46',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}>
-                                  <Shield size={10} />
-                                  {column.nullable === 'NO' ? 'Required' : 'Optional'}
-                                </span>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                          
-                          <div style={{ marginTop: '25px' }}>
-                            <StyledButton onClick={() => startEditing(entity)} icon={<Edit3 size={16} />}>Edit Entity</StyledButton>
-                          </div>
+                              
+                              <div style={{ marginTop: '25px' }}>
+                                <StyledButton onClick={() => startEditing(entityDetails)} icon={<Edit3 size={16} />}>Edit Entity</StyledButton>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
+                          <div style={{
+                            width: '24px',
+                            height: '24px',
+                            border: '3px solid #49A3C4',
+                            borderTop: '3px solid transparent',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite'
+                          }} />
                         </div>
                       )}
                     </div>
@@ -795,6 +920,12 @@ const EntityList = () => {
           )}
         </div>
       </div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };
@@ -804,12 +935,10 @@ const EntityList = () => {
 const IconButton = ({ onClick, icon, color, disabled, title }) => {
   const [hover, setHover] = useState(false);
   
-  // Use a hex code to ensure background opacity logic works
   const effectiveColor = disabled ? '#cccccc' : color;
   
   const getBgColor = () => {
     if (disabled) return '#f5f5f5';
-    // If hovering, add transparency to hex color, or fallback to gray
     if (hover) {
         if (effectiveColor.startsWith('#')) return `${effectiveColor}15`; 
         return '#f0f0f0';
@@ -831,7 +960,7 @@ const IconButton = ({ onClick, icon, color, disabled, title }) => {
         borderRadius: '10px',
         border: `1px solid ${disabled ? '#eee' : 'rgba(0,54,74,0.1)'}`,
         backgroundColor: getBgColor(),
-        color: effectiveColor, // This text color is inherited by the Icon via currentColor
+        color: effectiveColor,
         cursor: disabled ? 'not-allowed' : 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -841,11 +970,11 @@ const IconButton = ({ onClick, icon, color, disabled, title }) => {
         padding: 0
       }}
     >
-      {/* Icon renders here, inheriting text color */}
       {icon}
     </button>
   );
 };
+
 const StyledButton = ({ onClick, icon, children, variant = 'primary' }) => {
   const [hover, setHover] = useState(false);
   

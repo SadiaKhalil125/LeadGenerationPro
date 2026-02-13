@@ -45,6 +45,7 @@ class ApiSourceRequest(BaseModel):
     response_structure: ApiResponseStructure = Field(default_factory=ApiResponseStructure)
     entity_name: str  # Which entity table to store results
     field_mappings: List[FieldMappingItem]
+    api_key_name: Optional[str] = "Authorization"  # Header name for API key, default
 
 
 class ApiSourceInfo(BaseModel):

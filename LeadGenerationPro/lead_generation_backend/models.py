@@ -112,10 +112,10 @@ class MappingInfo(BaseModel):
     field_mappings: Dict[str, Any]
     follow_links: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
-    source_id: int
-    enabled:Optional[bool] = True
-    source_name: str
-    url: str
+    source_id: Optional[int] = None
+    enabled: Optional[bool] = True
+    source_name: Optional[str] = "Unknown Source"
+    url: Optional[str] = ""
 
 class MappingsListResponse(BaseModel):
     total_mappings: int

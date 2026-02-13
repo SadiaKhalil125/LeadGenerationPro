@@ -193,22 +193,13 @@ async def save_entity_mapping(mapping: MappingFormRequest):
 
 @router.get("/mappings", response_model=MappingsListResponse)
 async def get_all_mappings():
-    """Get all saved entity mappings including enabled status."""
+    """Get all saved entity mappings. Uses LEFT JOIN to ensure broken mappings still show."""
     try:
         conn, cur = get_db_cursor()
         
-        # Add the enabled column if it doesn't exist
-        cur.execute("""
-            ALTER TABLE entity_mappings 
-            ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT TRUE;
-        """)
-        
-        # Update any NULL values to TRUE
-        cur.execute("""
-            UPDATE entity_mappings 
-            SET enabled = TRUE 
-            WHERE enabled IS NULL;
-        """)
+        # Add column if missing (Safety check)
+        cur.execute("ALTER TABLE entity_mappings ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT TRUE;")
+        cur.execute("UPDATE entity_mappings SET enabled = TRUE WHERE enabled IS NULL;")
         
         cur.execute("""
             SELECT em.id,
@@ -220,10 +211,10 @@ async def get_all_mappings():
                    COALESCE(em.enabled, TRUE) as enabled,
                    em.created_at,
                    em.source_id,
-                   s.name AS source_name,
-                   s.url AS source_url
+                   COALESCE(s.name, 'Unknown Source') AS source_name,
+                   COALESCE(s.url, '') AS source_url
             FROM entity_mappings em
-            JOIN sources s ON em.source_id = s.id
+            LEFT JOIN sources s ON em.source_id = s.id
             ORDER BY em.created_at DESC;
         """)
 
@@ -237,8 +228,8 @@ async def get_all_mappings():
                 mapping_name=row[2],
                 container_selector=row[3],
                 field_mappings=row[4],
-                follow_links=row[5],  # follow_links JSONB
-                enabled=row[6],  # This should now always be True/False, not None
+                follow_links=row[5],
+                enabled=row[6],
                 created_at=row[7],
                 source_id=row[8],
                 source_name=row[9],
@@ -246,86 +237,71 @@ async def get_all_mappings():
             ))
         
         cur.close()
-        
-        return MappingsListResponse(
-            total_mappings=len(mappings),
-            mappings=mappings
-        )
+        return MappingsListResponse(total_mappings=len(mappings), mappings=mappings)
         
     except Exception as e:
         print(f"Error fetching mappings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch mappings: {str(e)}")
-
+    
 @router.put("/edit-mapping/{mapping_name}", response_model=dict)
 async def edit_mapping(mapping_name: str, payload: dict = Body(...)):
     """
-    Edit an existing entity mapping by mapping_name.
-    Payload can include: mapping_name, container_selector, field_mappings, source_id, enabled
+    Edit an existing entity mapping.
+    Maps source_name string to source_id integer automatically.
     """
     connection = None
     try:
         connection, cur = get_db_cursor()
         mapping_name = mapping_name.strip()
-        if not mapping_name:
-            raise HTTPException(status_code=400, detail="Mapping name is required.")
+        
+        # 1. Extract the actual data from the frontend's nested structure
+        entity_list = payload.get("entity_mappings", [])
+        if not entity_list:
+            raise HTTPException(status_code=400, detail="No mapping data found in payload.")
+        
+        data = entity_list[0] 
+        source_name = payload.get("source") # Example: "Google Maps"
 
-        # Check if mapping exists
-        cur.execute("SELECT id FROM entity_mappings WHERE mapping_name = %s;", (mapping_name,))
-        mapping = cur.fetchone()
-        if not mapping:
-            raise HTTPException(status_code=404, detail=f"Mapping '{mapping_name}' not found.")
+        # 2. Convert Source Name back to Source ID
+        cur.execute("SELECT id FROM sources WHERE name = %s", (source_name,))
+        source_row = cur.fetchone()
+        
+        # Logic: If source exists, use ID. If not, keep current or set Null.
+        source_id = source_row[0] if source_row else None
 
-        # Get the values from payload, with fallbacks
-        new_mapping_name = payload.get("mapping_name", mapping_name)
-        container_selector = payload.get("container_selector")
-        field_mappings = payload.get("field_mappings", {})
-        follow_links = payload.get("follow_links")
-        source_id = payload.get("source_id")
-        enabled = payload.get("enabled", True)  # Default to True if not provided
-
-        # Update the mapping
+        # 3. Update the database
         cur.execute("""
             UPDATE entity_mappings
-            SET mapping_name = %s,
-                container_selector = %s,
+            SET container_selector = %s,
                 field_mappings = %s,
                 follow_links = %s,
                 source_id = %s,
                 enabled = %s
             WHERE mapping_name = %s;
         """, (
-            new_mapping_name,
-            container_selector,
-            Json(field_mappings),
-            Json(follow_links) if follow_links else None,
-            source_id,
-            enabled,
+            data.get("container_selector"),
+            Json(data.get("field_mappings", {})),
+            Json(data.get("follow_links")) if data.get("follow_links") else None,
+            source_id, 
+            data.get("enabled", True),
             mapping_name
         ))
 
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Mapping not found")
+
         connection.commit()
-        cur.close()
-        connection.close()
+        return {"success": True, "message": f"Mapping '{mapping_name}' updated successfully."}
 
-        return {
-            "success": True,
-            "message": f"Mapping '{mapping_name}' updated successfully.",
-            "updated_mapping": {
-                "mapping_name": new_mapping_name,
-                "container_selector": container_selector,
-                "field_mappings": field_mappings,
-                "source_id": source_id,
-                "enabled": enabled
-            }
-        }
-
-    except HTTPException:
-        raise
     except Exception as e:
+        if connection: connection.rollback()
+        print(f"Update failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
         if connection:
-            connection.rollback()
+            cur.close()
             connection.close()
-        raise HTTPException(status_code=500, detail=f"Failed to update mapping: {str(e)}")
+
 
 @router.put("/toggle-mapping-status/{mapping_name}", response_model=dict)
 async def toggle_mapping_status(mapping_name: str):

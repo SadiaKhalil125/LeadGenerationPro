@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef} from "react";
 import { Eye, ArrowRight, ArrowLeft, ArrowRightCircle, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, Info, AlertTriangle, Code, RefreshCw } from "lucide-react";
 import SmartWebsitePreview from "./ServerHtmlPreview";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import API_BASE from "./api_base";
 
 // Point this to your new Python API URL
@@ -24,8 +24,6 @@ const GOOGLE_MAPS_FIELDS = {
 const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoading = false }) => {
   if (!data) return null;
   
-  // Dynamically get all headers from all rows (not just the first row)
-  // This ensures we capture all columns even when following links or pagination changes columns
   const getAllHeaders = () => {
     if (!data.data || data.data.length === 0) return [];
     const headerSet = new Set();
@@ -46,7 +44,6 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
         className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header Section (Title and Close 'X' button) */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-2xl font-bold text-teal-700">
@@ -62,7 +59,6 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
           </button>
         </div>
 
-        {/* Content Body (Message and Table) */}
         <div className="px-6 py-3 overflow-y-auto flex-grow">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-64">
@@ -73,10 +69,7 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
           ) : (
             <>
               <div className="mb-4 p-4 bg-teal-50 border border-teal-200 rounded-lg">
-                <p className="font-semibold text-teal-800">{data.message}</p>
-                <p className="text-sm text-teal-600 mt-1">
-                  Showing {data.data?.length || 0} items of {data.total_items} total.
-                </p>
+               
               </div>
 
               {data.data && data.data.length > 0 ? (
@@ -113,10 +106,8 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
           )}
         </div>
         
-        {/* Footer - Buttons grouped and aligned to the Far Right */}
         <div className="flex justify-end px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
           <div className="flex gap-2">
-            {/* Previous Button */}
             <button
               onClick={onPrevious}
               disabled={currentStep <= 1 || isLoading}
@@ -130,7 +121,6 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
               Prev
             </button>
             
-            {/* Next Button */}
             <button
               onClick={onNext}
               disabled={isLoading}
@@ -150,7 +140,6 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
   );
 };
 
-// Reusable Input with Dropdown for Metadata
 const MetadataInput = ({ value, onChange, options }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -203,84 +192,11 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
-// Add this function to EntityMappingScreen component
-const handleSelectorFromPreview = (selector, elementInfo) => {
-  if (!previewEntity) {
-    // If no specific entity is being previewed, ask user which field to fill
-    const selectedEntity = selectedEntities[0]; // Default to first selected entity
-    
-    if (selectedEntity && entityData[selectedEntity]) {
-      const fields = entityData[selectedEntity].fields;
-      if (fields.length > 0) {
-        // Show a dialog or auto-fill the first empty field
-        const firstEmptyField = fields.find(f => !f.selector);
-        if (firstEmptyField) {
-          handleFieldChange(selectedEntity, firstEmptyField.attribute, "selector", selector);
-          alert(`Selector "${selector}" added to ${firstEmptyField.attribute} field`);
-        } else {
-          // Let user choose which field to fill
-          const fieldNames = fields.map(f => f.attribute).join(", ");
-          const choice = prompt(
-            `Which field should receive this selector?\nAvailable fields: ${fieldNames}\n\nEnter field name:`
-          );
-          if (choice && fields.find(f => f.attribute === choice)) {
-            handleFieldChange(selectedEntity, choice, "selector", selector);
-          }
-        }
-      }
-    }
-  } else {
-    // If we're in preview mode for a specific entity
-    const fields = entityData[previewEntity]?.fields || [];
-    
-    if (fields.length > 0) {
-      // Auto-suggest based on element info
-      const suggestions = fields
-        .filter(f => {
-          const fieldLower = f.attribute.toLowerCase();
-          const tagLower = elementInfo?.tagName?.toLowerCase() || '';
-          
-          // Simple heuristic matching
-          if (fieldLower.includes('name') && tagLower.includes('h1')) return true;
-          if (fieldLower.includes('title') && (tagLower.includes('h1') || tagLower.includes('h2'))) return true;
-          if (fieldLower.includes('desc') && tagLower.includes('p')) return true;
-          if (fieldLower.includes('link') && tagLower.includes('a')) return true;
-          if (fieldLower.includes('image') && tagLower.includes('img')) return true;
-          return false;
-        });
-
-      if (suggestions.length === 1) {
-        // Auto-fill if only one suggestion
-        handleFieldChange(previewEntity, suggestions[0].attribute, "selector", selector);
-      } else if (suggestions.length > 1) {
-        // Let user choose from suggestions
-        const fieldNames = suggestions.map(f => f.attribute).join(", ");
-        const choice = prompt(
-          `Multiple fields match this element:\n${fieldNames}\n\nEnter field name to fill:`
-        );
-        if (choice && suggestions.find(f => f.attribute === choice)) {
-          handleFieldChange(previewEntity, choice, "selector", selector);
-        }
-      } else {
-        // No suggestions, let user choose any field
-        const fieldNames = fields.map(f => f.attribute).join(", ");
-        const choice = prompt(
-          `Select a field for selector "${selector}":\nAvailable fields: ${fieldNames}\n\nEnter field name:`
-        );
-        if (choice && fields.find(f => f.attribute === choice)) {
-          handleFieldChange(previewEntity, choice, "selector", selector);
-        }
-      }
-    }
-  }
-  
-  console.log("Selector received from preview:", selector, elementInfo);
-};
-// New Component: CSS Selector Input with Autocomplete from Backend
-// Update the SelectorInput component in EntityMappingScreen.jsx
 const SelectorInput = ({ value, onChange, placeholder, options = [], entity, attribute, onQuickFill }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
   const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -292,52 +208,112 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 1500);
+      return true;
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopyFeedback(true);
+        setTimeout(() => setCopyFeedback(false), 1500);
+        document.body.removeChild(textArea);
+        return true;
+      } catch (err2) {
+        console.error('Fallback copy failed:', err2);
+        document.body.removeChild(textArea);
+        return false;
+      }
+    }
+  };
+
+  const handleDoubleClick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const textToCopy = value && value.trim();
+    if (!textToCopy) return;
+    
+    await copyToClipboard(textToCopy);
+  };
+
   const filteredOptions = options.filter(opt => 
     opt.toLowerCase().includes(value?.toLowerCase() || "")
   );
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <input
-          type="text"
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => setIsOpen(true)}
-          className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400 font-mono text-sm"
-          style={{ flex: 1 }}
-        />
-        {onQuickFill && (
+      <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder={placeholder}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onDoubleClick={handleDoubleClick}
+            title="Double-click to copy selector"
+            className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400 font-mono text-sm"
+            style={{ 
+              width: '100%',
+              cursor: 'text',
+              userSelect: 'text',
+              paddingRight: '35px'
+            }}
+          />
           <button
             type="button"
-            onClick={() => onQuickFill(entity, attribute)}
-            title="Click to select from preview"
-            style={{
-              padding: '0 16px',
-              backgroundColor: '#49A3C4',
-              color: 'white',
-              borderRadius: '12px',
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsOpen(!isOpen);
+            }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+            style={{ 
+              pointerEvents: 'auto',
+              zIndex: 10,
+              background: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: '600',
-              fontSize: '12px'
+              padding: '4px'
             }}
           >
-            <MousePointer size={16} />
+            {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </button>
+        </div>
+        {copyFeedback && (
+          <div style={{
+            position: 'absolute',
+            top: '-35px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#059669',
+            color: 'white',
+            padding: '6px 14px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: '600',
+            whiteSpace: 'nowrap',
+            zIndex: 1000,
+            boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
+            animation: 'fadeInOut 1.5s ease',
+            pointerEvents: 'none'
+          }}>
+            ✓ Copied!
+          </div>
         )}
       </div>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-      >
-        {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-      </button>
 
       {isOpen && options.length > 0 && (
         <div className="absolute mt-2 w-full bg-white border rounded-xl shadow-lg z-10 max-h-60 overflow-y-auto">
@@ -348,7 +324,13 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
                 onChange(option);
                 setIsOpen(false);
               }}
+              onDoubleClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                await copyToClipboard(option);
+              }}
               className="px-4 py-2 hover:bg-teal-50 cursor-pointer font-mono text-xs border-b border-gray-50 last:border-0"
+              title="Click to select, Double-click to copy"
             >
               {option}
             </div>
@@ -360,16 +342,13 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
     </div>
   );
 };
-// Add this function to EntityMappingScreen component
+
+const handleSelectorFromPreview = (selector, elementInfo) => {
+  console.log("Selector received from preview:", selector, elementInfo);
+};
+
 const handleQuickFillClick = (entity, attribute) => {
-  // Set this entity as the preview entity
-  setPreviewEntity(entity);
-  
-  // Show instructions
   alert(`Now click "Select Elements" in the preview pane, then click on the ${attribute} element you want to capture.`);
-  
-  // Optionally, scroll to preview pane
-  document.querySelector('[style*="Right Panel"]')?.scrollIntoView({ behavior: 'smooth' });
 };
 
 export default function EntityMappingScreen() {
@@ -387,19 +366,23 @@ export default function EntityMappingScreen() {
   
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1); // Track current preview step
+  const [currentStep, setCurrentStep] = useState(1);
   const [previewEntity, setPreviewEntity] = useState(null);
-  const [previewCache, setPreviewCache] = useState({}); // entity_name: {step1: data, step2: data, ...}
+  const [previewCache, setPreviewCache] = useState({});
   const [isSubPreviewLoading, setIsSubPreviewLoading] = useState(false);
-  const navigate = useNavigate();
-  // New State for Selectors Scanning
-  const [scanningSelectors, setScanningSelectors] = useState({}); // { entityName: boolean }
-  const [availableSelectors, setAvailableSelectors] = useState({}); // { entityName: string[] }
-
-  const [isGoogleMaps, setIsGoogleMaps] = useState(false);
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
   
-  // State for multi-page scraping (follow_links)
-  const [followLinksConfig, setFollowLinksConfig] = useState({}); // { entityName: [{ name, selectorField, fieldMappings }] }
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  const [scanningSelectors, setScanningSelectors] = useState({});
+  const [availableSelectors, setAvailableSelectors] = useState({});
+  const [isGoogleMaps, setIsGoogleMaps] = useState(false);
+  const [followLinksConfig, setFollowLinksConfig] = useState({});
+  
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [originalMappingName, setOriginalMappingName] = useState(null);
 
   useEffect(() => {
     const urlLower = url.toLowerCase();
@@ -454,6 +437,52 @@ export default function EntityMappingScreen() {
     fetchSources();
   }, []);
 
+  // Handle edit mode
+  useEffect(() => {
+    if (location.state?.editMode && location.state?.mappingData) {
+      const mapping = location.state.mappingData;
+      
+      setIsEditMode(true);
+      setOriginalMappingName(mapping.mapping_name);
+      
+      setSource(mapping.source_name);
+      setUrl(mapping.url || "");
+      
+      setSelectedEntities([mapping.entity_name]);
+      
+      const fieldsArray = Object.entries(mapping.field_mappings || {}).map(([key, value]) => ({
+        attribute: key,
+        selector: value.selector || "",
+        metadata: value.extract || "text"
+      }));
+      
+      setEntityData(prev => ({
+        ...prev,
+        [mapping.entity_name]: {
+          enabled: mapping.enabled ?? true,
+          containerSelector: mapping.container_selector || "",
+          fields: fieldsArray
+        }
+      }));
+      
+      if (mapping.follow_links && mapping.follow_links.length > 0) {
+        const followLinksData = mapping.follow_links.map(fl => ({
+          name: fl.name,
+          selectorField: fl.selector,
+          fieldMappings: Object.entries(fl.field_mappings || {}).map(([key, value]) => ({
+            attribute: key,
+            selector: value.selector,
+            extract: value.extract || "text"
+          }))
+        }));
+        
+        setFollowLinksConfig({
+          [mapping.entity_name]: followLinksData
+        });
+      }
+    }
+  }, [location.state]);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (sourcesDropdownRef.current && !sourcesDropdownRef.current.contains(e.target)) {
@@ -466,6 +495,10 @@ export default function EntityMappingScreen() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const handleReloadPreview = () => {
+    setPreviewReloadKey(prev => prev + 1);
+  };
 
   const handleEntityToggle = (entity) => {
     setSelectedEntities((prev) =>
@@ -483,7 +516,6 @@ export default function EntityMappingScreen() {
     });
   };
   
-  // Add follow link configuration
   const handleAddFollowLink = (entity) => {
     setFollowLinksConfig((prev) => {
       const entityLinks = prev[entity] || [];
@@ -501,7 +533,6 @@ export default function EntityMappingScreen() {
     });
   };
   
-  // Remove follow link configuration
   const handleRemoveFollowLink = (entity, index) => {
     setFollowLinksConfig((prev) => {
       const entityLinks = prev[entity] || [];
@@ -512,7 +543,6 @@ export default function EntityMappingScreen() {
     });
   };
   
-  // Update follow link configuration
   const handleFollowLinkChange = (entity, index, key, value) => {
     setFollowLinksConfig((prev) => {
       const entityLinks = prev[entity] || [];
@@ -522,7 +552,6 @@ export default function EntityMappingScreen() {
     });
   };
   
-  // Update follow link field mapping
   const handleUpdateFollowLinkField = (entity, linkIndex, fieldIndex, key, value) => {
     setFollowLinksConfig((prev) => {
       const entityLinks = prev[entity] || [];
@@ -530,7 +559,6 @@ export default function EntityMappingScreen() {
       const fieldMappings = [...(updated[linkIndex].fieldMappings || [])];
       const currentField = fieldMappings[fieldIndex] || {};
       
-      // If attribute is being changed, auto-fill selector and extract from main field mappings
       if (key === 'attribute' && value) {
         const mainField = entityData[entity]?.fields.find(f => f.attribute === value);
         if (mainField) {
@@ -554,7 +582,6 @@ export default function EntityMappingScreen() {
     });
   };
   
-  // Remove field mapping from follow link
   const handleRemoveFollowLinkField = (entity, linkIndex, fieldIndex) => {
     setFollowLinksConfig((prev) => {
       const entityLinks = prev[entity] || [];
@@ -580,7 +607,6 @@ export default function EntityMappingScreen() {
     );
   };
 
-  // --- NEW FUNCTION: Fetch Child Selectors ---
   const handleScanSelectors = async (entity) => {
     const container = entityData[entity]?.containerSelector;
     
@@ -612,7 +638,6 @@ export default function EntityMappingScreen() {
                 ...prev,
                 [entity]: data.selectors
             }));
-            // alert(`Found ${data.selectors.length} unique elements inside the container.`);
         } else {
             alert("Failed to extract selectors.");
         }
@@ -630,9 +655,8 @@ export default function EntityMappingScreen() {
       alert("Source and URL are required!");
       return;
     }
-    console.log("Previewing entity:", entity, "at step:", step);
+    
     if (previewCache[entity]?.[step]) {
-      console.log("Using cached preview data for", entity, "step", step);
       setPreviewData(previewCache[entity][step]);
       setCurrentStep(step);
       return;
@@ -669,9 +693,8 @@ export default function EntityMappingScreen() {
     setPreviewEntity(entity);
 
     try {
-      // Build follow_links from configuration
       const follow_links = (followLinksConfig[entity] || [])
-        .filter((fl) => fl.name && fl.name.trim() && fl.selectorField && fl.selectorField.trim()) // Only include valid follow links
+        .filter((fl) => fl.name && fl.name.trim() && fl.selectorField && fl.selectorField.trim())
         .map((fl) => ({
           name: fl.name.trim(),
           selector: fl.selectorField.trim(),
@@ -685,7 +708,7 @@ export default function EntityMappingScreen() {
             return acc;
           }, {})
         }))
-        .filter((fl) => Object.keys(fl.field_mappings).length > 0); // Only include if it has field mappings
+        .filter((fl) => Object.keys(fl.field_mappings).length > 0);
 
       const res = await fetch(`${API_BASE}/task/preview-mapping`, {
         method: "POST",
@@ -699,7 +722,7 @@ export default function EntityMappingScreen() {
           container_selector: entityInfo.containerSelector || null,
           field_mappings,
           follow_links: follow_links.length > 0 ? follow_links : [],
-          preview_step: step, // Send the step parameter
+          preview_step: step,
         }),
       });
 
@@ -713,8 +736,6 @@ export default function EntityMappingScreen() {
       const data = await res.json();
 
       if (data.success) {
-        // Cache the result
-        console.log("Caching preview data for", entity, "step", step);
         setPreviewCache(prev => ({
           ...prev,
           [entity]: {
@@ -723,7 +744,7 @@ export default function EntityMappingScreen() {
           }
         }));
         setPreviewData(data);
-        setCurrentStep(step); // Update current step
+        setCurrentStep(step);
       } else {
         alert(`Preview failed: ${data.message}`);
       }
@@ -734,25 +755,24 @@ export default function EntityMappingScreen() {
     }
   };
   
-  // Update handleNextStep and handlePreviousStep
   const handleNextStep = async () => {
     setIsSubPreviewLoading(true);
-    await handlePreview(previewEntity, currentStep + 1); // Your existing onNext function
+    await handlePreview(previewEntity, currentStep + 1);
     setIsSubPreviewLoading(false);
   };
 
   const handlePreviousStep = async () => {
     setIsSubPreviewLoading(true);
-    await handlePreview(previewEntity, currentStep - 1); // Your existing onPrevious function
+    await handlePreview(previewEntity, currentStep - 1);
     setIsSubPreviewLoading(false);
   };
 
-  // Update your modal onClose handler
   const handleModalClose = () => {
-    setPreviewCache({}); // Clear all cached preview data
+    setPreviewCache({});
     setPreviewData(null);
     setCurrentStep(1);
   };
+
   const handleSave = async () => {
     if (!source.trim() || !url.trim()) {
       alert("Source and URL required!");
@@ -779,12 +799,11 @@ export default function EntityMappingScreen() {
           }
         });
 
-      // Build follow_links from configuration
       const follow_links = (followLinksConfig[entity] || [])
-        .filter((fl) => fl.name && fl.name.trim() && fl.selectorField && fl.selectorField.trim()) // Only include valid follow links
+        .filter((fl) => fl.name && fl.name.trim() && fl.selectorField && fl.selectorField.trim())
         .map((fl) => ({
           name: fl.name.trim(),
-          selector: fl.selectorField.trim(), // CSS selector for the link element
+          selector: fl.selectorField.trim(),
           field_mappings: (fl.fieldMappings || []).reduce((acc, fm) => {
             if (fm.attribute && fm.selector && fm.selector.trim()) {
               acc[fm.attribute] = {
@@ -795,7 +814,7 @@ export default function EntityMappingScreen() {
             return acc;
           }, {})
         }))
-        .filter((fl) => Object.keys(fl.field_mappings).length > 0); // Only include if it has field mappings
+        .filter((fl) => Object.keys(fl.field_mappings).length > 0);
 
       return {
         entity_name: entity,
@@ -807,17 +826,41 @@ export default function EntityMappingScreen() {
     });
 
     try {
-      const res = await fetch(`${API_BASE}/mapping/save-entity-mapping`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json",
-                   "ngrok-skip-browser-warning": "true"
-         },
-        body: JSON.stringify({ source, url, entity_mappings }),
-      });
+      let res;
+      
+      if (isEditMode && originalMappingName) {
+        const payload = {
+          mapping_name: originalMappingName,
+          source: source,
+          url: url,
+          entity_mappings: entity_mappings
+        };
+        
+        res = await fetch(`${API_BASE}/mapping/edit-mapping/${encodeURIComponent(originalMappingName)}`, {
+          method: 'PUT',
+          headers: { 
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch(`${API_BASE}/mapping/save-entity-mapping`, {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
+          body: JSON.stringify({ source, url, entity_mappings }),
+        });
+      }
       
       const data = await res.json();
       if (data.success) {
-        alert(`✅ ${data.message}`);
+        alert(`✅ ${isEditMode ? 'Mapping updated successfully!' : data.message}`);
+        if (isEditMode) {
+          navigate('/mappingmanager');
+        }
       } else {
         throw new Error(data.detail || "Save failed");
       }
@@ -833,7 +876,6 @@ export default function EntityMappingScreen() {
       backgroundColor: '#C7D8ED',
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     }}>
-      {/* Left Panel - Configuration */}
       <div style={{
         width: '50%',
         height: '100%',
@@ -848,8 +890,7 @@ export default function EntityMappingScreen() {
           padding: '40px',
           borderTop: '8px solid #49A3C4'
         }}>
-          <div
-          style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
           <button
              style={{
               display: 'flex',
@@ -875,7 +916,6 @@ export default function EntityMappingScreen() {
             onClick={() => navigate('/dashboard')}
           >
           <ArrowLeft size={18} />
-         
             </button>
             
           <h1 style={{
@@ -885,9 +925,33 @@ export default function EntityMappingScreen() {
             color: '#00364A',
             marginBottom: '20px'
           }}>
-            Entity Mapping Configuration
+            {isEditMode ? 'Edit Entity Mapping' : 'Entity Mapping Configuration'}
           </h1>
           </div>
+          
+          {isEditMode && (
+            <div style={{
+              marginBottom: '20px',
+              padding: '12px 20px',
+              backgroundColor: '#FEF3C7',
+              borderLeft: '4px solid #F59E0B',
+              borderRadius: '8px',
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'center'
+            }}>
+              <Info size={18} color="#D97706" />
+              <div>
+                <p style={{ fontWeight: '700', color: '#92400E', margin: 0, fontSize: '14px' }}>
+                  Edit Mode: {originalMappingName}
+                </p>
+                <p style={{ fontSize: '13px', color: '#92400E', margin: '4px 0 0 0' }}>
+                  Make your changes and save to update the mapping.
+                </p>
+              </div>
+            </div>
+          )}
+          
           {isGoogleMaps && (
             <div style={{
               marginBottom: '25px',
@@ -1115,7 +1179,6 @@ export default function EntityMappingScreen() {
                       <Eye size={16} />
                       {previewLoading && previewEntity === entity ? 'Loading..' : 'Preview'}
                     </button>
-                    
                   </div>
                 </div>
 
@@ -1212,12 +1275,14 @@ export default function EntityMappingScreen() {
                             }}
                           />
                           
-                          {/* Use the new SelectorInput here */}
                           <SelectorInput
                              placeholder={isSupported ? "Auto (or custom CSS)" : "CSS Selector"}
                              value={field.selector}
                              onChange={(val) => handleFieldChange(entity, field.attribute, "selector", val)}
                              options={availableSelectors[entity] || []}
+                             entity={entity}
+                             attribute={field.attribute}
+                             onQuickFill={handleQuickFillClick}
                           />
 
                           <MetadataInput
@@ -1230,7 +1295,6 @@ export default function EntityMappingScreen() {
                     );
                   })}
                   
-                  {/* Multi-Page Scraping Configuration */}
                   <div style={{ marginTop: '30px', padding: '20px', backgroundColor: '#F0F9FF', borderRadius: '12px', border: '2px solid #49A3C4' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                       <div>
@@ -1258,7 +1322,6 @@ export default function EntityMappingScreen() {
                       </button>
                     </div>
                     
-                    {/* Instructions Box */}
                     <div style={{ 
                       marginBottom: '20px', 
                       padding: '15px', 
@@ -1372,13 +1435,10 @@ export default function EntityMappingScreen() {
                               </select>
 
                               <SelectorInput
-                                placeholder={isSupported ? "Auto (or custom CSS)" : "CSS Selector"}
-                                value={field.selector}
-                                onChange={(val) => handleFieldChange(entity, field.attribute, "selector", val)}
+                                placeholder="CSS Selector"
+                                value={fm.selector || ""}
+                                onChange={(val) => handleUpdateFollowLinkField(entity, flIndex, fmIndex, 'selector', val)}
                                 options={availableSelectors[entity] || []}
-                                entity={entity}
-                                attribute={field.attribute}
-                                onQuickFill={handleQuickFillClick}
                               />
                               <MetadataInput
                                 value={fm.extract || "text"}
@@ -1481,7 +1541,7 @@ export default function EntityMappingScreen() {
                 onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
                 onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
               >
-                Save Configuration
+                {isEditMode ? 'Update Mapping' : 'Save Configuration'}
               </button>
               <button
                 onClick={() => window.location.href = "/mappingmanager"}
@@ -1507,7 +1567,6 @@ export default function EntityMappingScreen() {
         </div>
       </div>
       
-      {/* Right Panel - Preview */}
       <div style={{
         width: '50%',
         height: '100%',
@@ -1522,9 +1581,48 @@ export default function EntityMappingScreen() {
           borderRadius: '25px',
           boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
           borderTop: '8px solid #49A3C4',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          position: 'relative'
         }}>
+          <button
+            onClick={handleReloadPreview}
+            style={{
+              position: 'absolute',
+              top: '6px',
+              left:'135px',
+              zIndex: 100,
+              padding: '7px 10px',
+              backgroundColor: '#49A3C4',
+              color: 'white',
+              border: 'none',
+              borderRadius: '10px',
+              fontWeight: '600',
+              fontSize: '14px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(0, 54, 74, 0.2)',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#00364A';
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 6px 16px rgba(0, 54, 74, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#49A3C4';
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 4px 12px rgba(0, 54, 74, 0.2)';
+            }}
+            title="Reload preview page"
+          >
+            <RefreshCw size={16} />
+            Reload
+          </button>
+          
           <SmartWebsitePreview
+            key={previewReloadKey}
             url={url}
             onSelectorSelected={handleSelectorFromPreview}
           />
@@ -1542,7 +1640,16 @@ export default function EntityMappingScreen() {
         />
       )}
       <style>{`
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes spin { 
+          0% { transform: rotate(0deg); } 
+          100% { transform: rotate(360deg); } 
+        }
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: translate(-50%, -10px); }
+          20% { opacity: 1; transform: translate(-50%, 0); }
+          80% { opacity: 1; transform: translate(-50%, 0); }
+          100% { opacity: 0; transform: translate(-50%, -10px); }
+        }
       `}</style>
     </div>
   );

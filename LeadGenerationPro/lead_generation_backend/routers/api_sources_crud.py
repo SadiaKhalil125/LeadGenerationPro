@@ -62,16 +62,24 @@ async def create_api_source(request: ApiSourceRequest):
 
 @router.put("/{source_id}")
 async def update_api_source(source_id: int, request: ApiSourceRequest):
-    """Update an existing API source"""
+    """Update an existing API source with auto-migration for api_key_name"""
     try:
         conn, cur = get_db_cursor()
         
+        # --- AUTO-MIGRATION: Ensure the new column exists ---
+        # This prevents errors if you haven't manually run the ALTER TABLE command
+        cur.execute("""
+            ALTER TABLE api_sources 
+            ADD COLUMN IF NOT EXISTS api_key_name VARCHAR(255) DEFAULT 'Authorization';
+        """)
+        conn.commit()
+
         # Check if source exists
         cur.execute("SELECT id FROM api_sources WHERE id = %s", (source_id,))
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="API source not found")
 
-        # Update Query
+        # Update Query (Now including api_key_name)
         sql = """
             UPDATE api_sources SET
                 name = %s,
@@ -80,7 +88,8 @@ async def update_api_source(source_id: int, request: ApiSourceRequest):
                 request_template = %s,
                 response_structure = %s,
                 data_extraction_path = %s,
-                field_mappings = %s
+                field_mappings = %s,
+                api_key_name = %s
         """
         params = [
             request.name,
@@ -89,10 +98,11 @@ async def update_api_source(source_id: int, request: ApiSourceRequest):
             json.dumps(request.request_template.dict()),
             json.dumps(request.response_structure.dict()),
             request.response_structure.data_path,
-            json.dumps([m.dict() for m in request.field_mappings])
+            json.dumps([m.dict() for m in request.field_mappings]),
+            request.api_key_name  # <--- NEW FIELD ADDED HERE
         ]
 
-        # Only update API key if provided (allow keeping existing one)
+        # Only update API key if provided
         if request.api_key:
             sql += ", api_key = %s"
             params.append(request.api_key)
@@ -112,6 +122,8 @@ async def update_api_source(source_id: int, request: ApiSourceRequest):
         raise
     except Exception as e:
         logger.error(f"❌ Error updating API source: {str(e)}")
+        if conn:
+            conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update API source: {str(e)}")
 
 @router.get("/")

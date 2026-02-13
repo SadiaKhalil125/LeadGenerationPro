@@ -17,28 +17,39 @@ import {
   List,
   Calendar,
   Settings,
-  ArrowLeft
+  ArrowLeft,
+  Globe,
+  Zap,
+  Code,
+  Lock,
+  Info
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
 
 const SourceManagement = () => {
+  const [sourceType, setSourceType] = useState('web'); // 'web' or 'api'
   const [expandedSource, setExpandedSource] = useState(null);
   const [editingSource, setEditingSource] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [dependencies, setDependencies] = useState({});
+  const [response, setResponse] = useState(null);
+  const [testingSource, setTestingSource] = useState(null);
+  const [testResult, setTestResult] = useState(null);
+  
+  // Web source edit state
   const [editForm, setEditForm] = useState({ name: '', url: '' });
   const [editPaginationType, setEditPaginationType] = useState('');
   const [editPaginationConfig, setEditPaginationConfig] = useState({});
-  const [response, setResponse] = useState(null);
+  
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Fetch sources
-  const { data: sourcesData, isLoading: isLoadingSources } = useQuery({
+  // Fetch web sources
+  const { data: webSourcesData, isLoading: isLoadingWebSources } = useQuery({
     queryKey: ['sources'],
     queryFn: async () => {
       const response = await fetch(`${API_BASE}/source/sources`,{
@@ -49,16 +60,37 @@ const SourceManagement = () => {
       const data = await response.json();
       return data.sources || [];
     },
+    enabled: sourceType === 'web'
   });
 
-  // Only show loading on initial load, not on background refetches
-  const pageLoading = isLoadingSources && !sourcesData;
+  // Fetch API sources
+  const { data: apiSourcesData, isLoading: isLoadingApiSources, refetch: refetchApiSources } = useQuery({
+    queryKey: ['api-sources'],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE}/api-sources/`, {
+        method: "GET",
+        headers: { "ngrok-skip-browser-warning": "true" }
+      });
+      if (!response.ok) throw new Error('Failed to fetch API sources');
+      const payload = await response.json();
+      if (Array.isArray(payload)) return payload;
+      if (payload && Array.isArray(payload.sources)) return payload.sources;
+      return [];
+    },
+    enabled: sourceType === 'api'
+  });
 
-  const sources = sourcesData || [];
+  const pageLoading = sourceType === 'web' 
+    ? (isLoadingWebSources && !webSourcesData)
+    : (isLoadingApiSources && !apiSourcesData);
 
+  const sources = sourceType === 'web' 
+    ? (webSourcesData || [])
+    : (Array.isArray(apiSourcesData) ? apiSourcesData : []);
+
+  // Web source functions
   const fetchDependencies = async (sourceId) => {
     try {
-      // Fetch mappings that use this source
       const mappingsResponse = await fetch(`${API_BASE}/mapping/mappings`,{
         method: "GET",
         headers: { "ngrok-skip-browser-warning": "true" }
@@ -67,7 +99,6 @@ const SourceManagement = () => {
         const mappingsData = await mappingsResponse.json();
         const sourceMappings = mappingsData.mappings?.filter(m => m.source_id === sourceId) || [];
         
-        // Fetch tasks that use this source
         const tasksResponse = await fetch(`${API_BASE}/task/tasks`);
         let sourceTasks = [];
         if (tasksResponse.ok) {
@@ -93,30 +124,32 @@ const SourceManagement = () => {
       setExpandedSource(null);
     } else {
       setExpandedSource(sourceId);
-      if (!dependencies[sourceId]) {
+      if (sourceType === 'web' && !dependencies[sourceId]) {
         fetchDependencies(sourceId);
       }
     }
   };
 
   const handleEdit = (source) => {
-    setEditingSource(source.id);
-    setEditForm({ name: source.name, url: source.url });
-
-    // if pagination config exists in source, prefill
-    if (source.pagination_config) {
-      setEditPaginationType(source.pagination_config.type || '');
-      setEditPaginationConfig(source.pagination_config);
+    if (sourceType === 'web') {
+      setEditingSource(source.id);
+      setEditForm({ name: source.name, url: source.url });
+      if (source.pagination_config) {
+        setEditPaginationType(source.pagination_config.type || '');
+        setEditPaginationConfig(source.pagination_config);
+      } else {
+        setEditPaginationType('');
+        setEditPaginationConfig({});
+      }
     } else {
-      setEditPaginationType('');
-      setEditPaginationConfig({});
+      setEditingSource(source);
+      setExpandedSource(null);
     }
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveWebEdit = async () => {
     try {
       setLoading(true);
-
       const payload = {
         name: editForm.name.trim(),
         url: editForm.url.trim(),
@@ -125,21 +158,20 @@ const SourceManagement = () => {
           : null,
       };
 
-      const response = await fetch(`${API_BASE}/source/source/${editingSource}`, {
+      const apiResponse = await fetch(`${API_BASE}/source/source/${editingSource}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json();
         throw new Error(errorData.detail || 'Failed to update source');
       }
 
-      const data = await response.json();
+      const data = await apiResponse.json();
       setResponse({ type: 'success', message: data.message });
       
-      // Update cache directly
       queryClient.setQueryData(['sources'], (oldSources) => {
         if (!oldSources) return oldSources;
         return oldSources.map(source => 
@@ -147,10 +179,8 @@ const SourceManagement = () => {
         );
       });
       
-      // Mark as stale but don't refetch immediately
       queryClient.invalidateQueries({ queryKey: ['sources'] }, { refetchType: 'none' });
-
-      // reset form state
+      
       setEditingSource(null);
       setEditForm({ name: '', url: '' });
       setEditPaginationType('');
@@ -166,28 +196,42 @@ const SourceManagement = () => {
   const handleDelete = async (sourceId, force = false) => {
     try {
       setLoading(true);
-      const endpoint = force ? 
-        `${API_BASE}/source/source/${sourceId}/force` : 
-        `${API_BASE}/source/source/${sourceId}`;
+      
+      if (sourceType === 'web') {
+        const endpoint = force ? 
+          `${API_BASE}/source/source/${sourceId}/force` : 
+          `${API_BASE}/source/source/${sourceId}`;
 
-      const response = await fetch(endpoint, { method: 'DELETE' , headers: {"ngrok-skip-browser-warning": "true"} });
+        const apiResponse = await fetch(endpoint, { method: 'DELETE' , headers: {"ngrok-skip-browser-warning": "true"} });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to delete source');
+        if (!apiResponse.ok) {
+          const errorData = await apiResponse.json();
+          throw new Error(errorData.detail || 'Failed to delete source');
+        }
+
+        const data = await apiResponse.json();
+        setResponse({ type: 'success', message: data.message });
+        
+        queryClient.setQueryData(['sources'], (oldSources) => {
+          if (!oldSources) return oldSources;
+          return oldSources.filter(source => source.id !== sourceId);
+        });
+        
+        queryClient.invalidateQueries({ queryKey: ['sources'] }, { refetchType: 'none' });
+      } else {
+        const apiResponse = await fetch(`${API_BASE}/api-sources/${sourceId}`, {
+          method: "DELETE",
+          headers: { "ngrok-skip-browser-warning": "true" }
+        });
+        
+        if (!apiResponse.ok) {
+          const data = await apiResponse.json();
+          throw new Error(data.detail || 'Failed to delete');
+        }
+        
+        setResponse({ type: 'success', message: 'API source deleted successfully' });
+        refetchApiSources();
       }
-
-      const data = await response.json();
-      setResponse({ type: 'success', message: data.message });
-      
-      // Update cache directly - remove deleted source
-      queryClient.setQueryData(['sources'], (oldSources) => {
-        if (!oldSources) return oldSources;
-        return oldSources.filter(source => source.id !== sourceId);
-      });
-      
-      // Mark as stale but don't refetch immediately
-      queryClient.invalidateQueries({ queryKey: ['sources'] }, { refetchType: 'none' });
       
       setDeleteConfirm(null);
       setExpandedSource(null);
@@ -199,16 +243,46 @@ const SourceManagement = () => {
     }
   };
 
+  const handleTestConnection = async (sourceId) => {
+    try {
+      setTestingSource(sourceId);
+      setTestResult(null);
+      const apiResponse = await fetch(`${API_BASE}/api-sources/${sourceId}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" }
+      });
+      const data = await apiResponse.json();
+      setTestResult({
+        sourceId: sourceId,
+        success: data.success !== false && apiResponse.ok,
+        message: data.message || data.error || 'Test completed',
+        data: data.sample_item || data.data
+      });
+    } catch (err) {
+      setTestResult({ sourceId: sourceId, success: false, message: 'Failed: ' + err.message });
+    } finally {
+      setTestingSource(null);
+    }
+  };
+
+  const handleCloseEdit = () => {
+    setEditingSource(null);
+    setTestResult(null);
+    setEditForm({ name: '', url: '' });
+    setEditPaginationType('');
+    setEditPaginationConfig({});
+  };
+
   // Calculate stats
-  const totalMappings = sources.reduce((acc, source) => {
+  const totalMappings = sourceType === 'web' ? sources.reduce((acc, source) => {
     const deps = dependencies[source.id];
     return acc + (deps ? deps.mappings.length : 0);
-  }, 0);
+  }, 0) : 0;
 
-  const totalTasks = sources.reduce((acc, source) => {
+  const totalTasks = sourceType === 'web' ? sources.reduce((acc, source) => {
     const deps = dependencies[source.id];
     return acc + (deps ? deps.tasks.length : 0);
-  }, 0);
+  }, 0) : 0;
 
   if (pageLoading) {
     return (
@@ -221,15 +295,31 @@ const SourceManagement = () => {
         flexDirection: 'column',
         gap: '20px'
       }}>
-        <div style={{
-           width: '40px',
-           height: '40px',
-           border: '4px solid #49A3C4',
-           borderTop: '4px solid transparent',
-           borderRadius: '50%',
-           animation: 'spin 1s linear infinite'
-        }} />
-        <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Source Data...</h1>
+        <Loader2 size={40} className="spin" style={{ color: '#49A3C4' }} />
+        <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>
+          Loading {sourceType === 'web' ? 'Web' : 'API'} Sources...
+        </h1>
+      </div>
+    );
+  }
+
+  // API Source Edit Form
+  if (sourceType === 'api' && editingSource && typeof editingSource === 'object') {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#C7D8ED', padding: '40px 20px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+        <div style={{ width: '100%', maxWidth: '1000px' }}>
+          <button onClick={handleCloseEdit} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#49A3C4', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: '600', marginBottom: '24px' }}>
+            <ArrowLeft size={20} /> Back to API Sources
+          </button>
+          <ApiSourceForm 
+            source={editingSource} 
+            onClose={handleCloseEdit} 
+            onSuccess={() => { 
+              refetchApiSources(); 
+              handleCloseEdit(); 
+            }} 
+          />
+        </div>
       </div>
     );
   }
@@ -274,7 +364,7 @@ const SourceManagement = () => {
               justifyContent: 'center',
               color: 'white'
             }}>
-              <Database size={28} />
+              {sourceType === 'web' ? <Database size={28} /> : <Globe size={28} />}
             </div>
             <div>
               <h1 style={{
@@ -289,11 +379,15 @@ const SourceManagement = () => {
                 color: '#00364A',
                 opacity: 0.7,
                 margin: '5px 0 0 0'
-              }}>Manage your web scraping sources and their dependencies</p>
+              }}>
+                {sourceType === 'web' 
+                  ? 'Manage your web scraping sources and their dependencies'
+                  : 'Manage automated API endpoints'}
+              </p>
             </div>
           </div>
           
-          <div style={{ display: 'flex', gap: '15px' }}>
+          <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
             <StyledButton 
               onClick={()=>navigate('/dashboard')} 
               variant="outline"
@@ -302,14 +396,20 @@ const SourceManagement = () => {
               Dashboard
             </StyledButton>
             <StyledButton 
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['sources'] })} 
+              onClick={() => {
+                if (sourceType === 'web') {
+                  queryClient.invalidateQueries({ queryKey: ['sources'] });
+                } else {
+                  refetchApiSources();
+                }
+              }} 
               variant="outline"
               icon={<RefreshCw size={18} />}
             >
               Refresh
             </StyledButton>
             <StyledButton 
-              onClick={() => navigate("/addsource")} 
+              onClick={() => navigate(sourceType === 'web' ? "/addsource" : "/api-source-creator")} 
               variant="primary"
               icon={<Plus size={18} />}
             >
@@ -319,6 +419,70 @@ const SourceManagement = () => {
         </div>
 
         <div style={{ padding: '50px' }}>
+          {/* Source Type Toggle */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            marginBottom: '40px',
+            backgroundColor: '#F8FBFF',
+            borderRadius: '15px',
+            padding: '8px',
+            width: 'fit-content',
+            margin: '0 auto 40px auto',
+            boxShadow: '0 2px 8px rgba(0, 54, 74, 0.08)'
+          }}>
+            <button
+              onClick={() => {
+                setSourceType('web');
+                setExpandedSource(null);
+                setEditingSource(null);
+                setTestResult(null);
+              }}
+              style={{
+                padding: '12px 30px',
+                borderRadius: '10px',
+                border: 'none',
+                backgroundColor: sourceType === 'web' ? '#00364A' : 'transparent',
+                color: sourceType === 'web' ? 'white' : '#00364A',
+                fontWeight: '600',
+                fontSize: '15px',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <Database size={18} />
+              Web Sources
+            </button>
+            <button
+              onClick={() => {
+                setSourceType('api');
+                setExpandedSource(null);
+                setEditingSource(null);
+                setDependencies({});
+              }}
+              style={{
+                padding: '12px 30px',
+                borderRadius: '10px',
+                border: 'none',
+                backgroundColor: sourceType === 'api' ? '#00364A' : 'transparent',
+                color: sourceType === 'api' ? 'white' : '#00364A',
+                fontWeight: '600',
+                fontSize: '15px',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <Globe size={18} />
+              API Sources
+            </button>
+          </div>
+
           {/* Stats Section */}
           <div style={{
             display: 'grid',
@@ -326,9 +490,19 @@ const SourceManagement = () => {
             gap: '20px',
             marginBottom: '40px'
           }}>
-            <StatCard title="Total Sources" value={sources.length} color="#00364A" />
-            <StatCard title="Entity Mappings" value={totalMappings} color="#49A3C4" />
-            <StatCard title="Active Tasks" value={totalTasks} color="#00364A" />
+            <StatCard 
+              title={sourceType === 'web' ? "Total Sources" : "Total API Sources"} 
+              value={sources.length} 
+              color="#00364A" 
+            />
+            {sourceType === 'web' ? (
+              <>
+                <StatCard title="Entity Mappings" value={totalMappings} color="#49A3C4" />
+                <StatCard title="Active Tasks" value={totalTasks} color="#00364A" />
+              </>
+            ) : (
+              <StatCard title="Active Integrations" value={sources.length} color="#49A3C4" />
+            )}
           </div>
 
           {/* Response Messages */}
@@ -357,7 +531,10 @@ const SourceManagement = () => {
                   border: 'none',
                   cursor: 'pointer',
                   color: '#00364A',
-                  opacity: 0.5
+                  opacity: 0.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '4px'
                 }}
               >
                 <X size={20} />
@@ -374,9 +551,13 @@ const SourceManagement = () => {
               borderRadius: '20px',
               border: '2px dashed rgba(0, 54, 74, 0.1)'
             }}>
-              <Database size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />
-              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#00364A', marginBottom: '5px' }}>No Sources Found</h3>
-              <p style={{ color: '#00364A', opacity: 0.6 }}>Add your first source to get started with web scraping.</p>
+              {sourceType === 'web' ? <Database size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} /> : <Globe size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />}
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: '#00364A', marginBottom: '5px' }}>
+                No {sourceType === 'web' ? 'Web' : 'API'} Sources Found
+              </h3>
+              <p style={{ color: '#00364A', opacity: 0.6 }}>
+                Add your first {sourceType === 'web' ? 'web scraping' : 'API'} source to get started.
+              </p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -389,267 +570,47 @@ const SourceManagement = () => {
                   overflow: 'hidden',
                   transition: 'all 0.3s'
                 }}>
-                  {editingSource === source.id ? (
-                    /* Edit Mode */
-                    <div style={{ padding: '30px', backgroundColor: '#F8FBFF' }}>
-                      <h3 style={{
-                        fontSize: '18px',
-                        fontWeight: '700',
-                        color: '#00364A',
-                        marginBottom: '20px'
-                      }}>
-                        Editing: <span style={{ color: '#49A3C4' }}>{source.name}</span>
-                      </h3>
-                      <div style={{ display: 'grid', gap: '20px' }}>
-                        <StyledInput
-                          label="Source Name *"
-                          icon={<Database size={16} />}
-                          value={editForm.name}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                        />
-                        <StyledInput
-                          label="URL *"
-                          icon={<ExternalLink size={16} />}
-                          value={editForm.url}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, url: e.target.value }))}
-                        />
-                        
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          <label style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Settings size={16} color="#49A3C4" /> Pagination Type
-                          </label>
-                          <StyledSelect
-                            value={editPaginationType}
-                            onChange={(e) => {
-                              const selected = e.target.value;
-                              setEditPaginationType(selected);
-                              setEditPaginationConfig({ type: selected });
-                            }}
-                          >
-                            <option value="">None</option>
-                            <option value="query_param">Query Param</option>
-                            <option value="offset">Offset</option>
-                            <option value="path">Path</option>
-                            <option value="button_click">Button Click</option>
-                            <option value="scroll">Scroll</option>
-                            <option value="ajax_click">Ajax Click</option>
-                          </StyledSelect>
-                        </div>
-
-                        {/* Dynamic Fields */}
-                        {editPaginationType && (
-                          <div style={{
-                            padding: '20px',
-                            backgroundColor: 'white',
-                            borderRadius: '15px',
-                            border: '1px solid rgba(0, 54, 74, 0.1)',
-                            display: 'grid',
-                            gap: '15px'
-                          }}>
-                            {(editPaginationType === "query_param" || editPaginationType === "offset") && (
-                              <>
-                                <DynamicField
-                                  label="Param Name"
-                                  placeholder="e.g. page"
-                                  value={editPaginationConfig.param_name || ""}
-                                  onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, param_name: e.target.value }))}
-                                />
-                                <DynamicField
-                                  label="Start Page"
-                                  placeholder="1"
-                                  type="number"
-                                  value={editPaginationConfig.start_page || ""}
-                                  onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, start_page: Number(e.target.value) }))}
-                                />
-                                {editPaginationType === "offset" && (
-                                  <>
-                                    <DynamicField
-                                      label="Page Size"
-                                      placeholder="10"
-                                      type="number"
-                                      value={editPaginationConfig.page_size || ""}
-                                      onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, page_size: Number(e.target.value) }))}
-                                    />
-                                    <DynamicField
-                                      label="Max Pages"
-                                      placeholder="Optional"
-                                      type="number"
-                                      value={editPaginationConfig.max_pages || ""}
-                                      onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, max_pages: Number(e.target.value) }))}
-                                    />
-                                  </>
-                                )}
-                              </>
-                            )}
-
-                            {editPaginationType === "path" && (
-                              <DynamicField
-                                label="Path Pattern"
-                                placeholder="e.g. /page/{page_num}"
-                                value={editPaginationConfig.path_pattern || ""}
-                                onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, path_pattern: e.target.value }))}
-                              />
-                            )}
-
-                            {(editPaginationType === "button_click" || editPaginationType === "ajax_click") && (
-                              <>
-                                <DynamicField
-                                  label="Button Selector"
-                                  placeholder="e.g .load-more-btn"
-                                  value={editPaginationConfig.button_selector || ""}
-                                  onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, button_selector: e.target.value }))}
-                                />
-                                <DynamicField
-                                  label="Wait Selector"
-                                  placeholder="e.g .item-loaded"
-                                  value={editPaginationConfig.wait_selector || ""}
-                                  onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, wait_selector: e.target.value }))}
-                                />
-                              </>
-                            )}
-
-                            {editPaginationType === "scroll" && (
-                              <DynamicField
-                                label="Scroll Steps"
-                                placeholder="5"
-                                type="number"
-                                value={editPaginationConfig.scroll_steps || ""}
-                                onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, scroll_steps: Number(e.target.value) }))}
-                              />
-                            )}
-                          </div>
-                        )}
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', marginTop: '10px' }}>
-                          <StyledButton 
-                            onClick={() => {
-                              setEditingSource(null);
-                              setEditForm({ name: '', url: '' });
-                              setEditPaginationType('');
-                              setEditPaginationConfig({});
-                            }} 
-                            variant="secondary"
-                            icon={<X size={18} />}
-                          >
-                            Cancel
-                          </StyledButton>
-                          <StyledButton 
-                            onClick={handleSaveEdit} 
-                            variant="primary"
-                            disabled={loading}
-                            icon={loading ? <Loader2 size={18} className="spin" /> : <Save size={18} />}
-                          >
-                            Update
-                          </StyledButton>
-                        </div>
-                      </div>
-                    </div>
+                  {sourceType === 'web' && editingSource === source.id ? (
+                    /* Web Source Edit Mode */
+                    <WebSourceEditForm
+                      source={source}
+                      editForm={editForm}
+                      setEditForm={setEditForm}
+                      editPaginationType={editPaginationType}
+                      setEditPaginationType={setEditPaginationType}
+                      editPaginationConfig={editPaginationConfig}
+                      setEditPaginationConfig={setEditPaginationConfig}
+                      loading={loading}
+                      onSave={handleSaveWebEdit}
+                      onCancel={() => {
+                        setEditingSource(null);
+                        setEditForm({ name: '', url: '' });
+                        setEditPaginationType('');
+                        setEditPaginationConfig({});
+                      }}
+                    />
+                  ) : sourceType === 'web' ? (
+                    /* Web Source View Mode */
+                    <WebSourceView
+                      source={source}
+                      expandedSource={expandedSource}
+                      dependencies={dependencies}
+                      onExpand={handleExpand}
+                      onEdit={handleEdit}
+                      onDelete={setDeleteConfirm}
+                    />
                   ) : (
-                    /* View Mode */
-                    <div style={{ padding: '25px 30px' }}>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        gap: '20px',
-                        flexWrap: 'wrap'
-                      }}>
-                        <div style={{ flex: 1, minWidth: '280px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
-                            <button
-                              onClick={() => handleExpand(source.id)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: expandedSource === source.id ? '#49A3C4' : '#00364A',
-                                opacity: expandedSource === source.id ? 1 : 0.4,
-                                padding: '5px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                transition: 'all 0.3s'
-                              }}
-                            >
-                              {expandedSource === source.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                            </button>
-                            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', margin: 0 }}>{source.name}</h3>
-                          </div>
-                          
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', paddingLeft: '40px' }}>
-                            <InfoItem icon={<ExternalLink size={14} />} label="URL">
-                              <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ color: '#49A3C4', textDecoration: 'none' }}>
-                                {source.url}
-                              </a>
-                            </InfoItem>
-                            <InfoItem icon={<Database size={14} />} label="ID">
-                              {source.id}
-                            </InfoItem>
-                            {source.pagination_config && (
-                              <InfoItem icon={<Settings size={14} />} label="Pagination">
-                                {source.pagination_config.type || 'None'}
-                              </InfoItem>
-                            )}
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <IconButton onClick={() => handleEdit(source)} icon={<Edit size={16} />} color="#49A3C4" />
-                          <IconButton onClick={() => setDeleteConfirm(source.id)} icon={<Trash2 size={16} />} color="#EF4444" />
-                        </div>
-                      </div>
-
-                      {/* Expanded Content */}
-                      {expandedSource === source.id && (
-                        <div style={{
-                          marginTop: '25px',
-                          paddingTop: '25px',
-                          borderTop: '1px solid rgba(0, 54, 74, 0.1)',
-                          animation: 'fadeIn 0.3s ease'
-                        }}>
-                          <h4 style={{
-                            fontSize: '16px',
-                            fontWeight: '700',
-                            color: '#00364A',
-                            marginBottom: '20px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px'
-                          }}>
-                            <List size={18} color="#49A3C4" />
-                            Dependencies
-                          </h4>
-                          
-                          {dependencies[source.id] ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '30px' }}>
-                              <DependencySection 
-                                title="Entity Mappings" 
-                                count={dependencies[source.id].mappings.length} 
-                                icon={<Map size={16} color="#49A3C4" />}
-                                items={dependencies[source.id].mappings.map(m => ({
-                                  id: m.id,
-                                  primary: m.mapping_name,
-                                  secondary: `(${m.entity_name})`
-                                }))}
-                              />
-                              <DependencySection 
-                                title="Active Tasks" 
-                                count={dependencies[source.id].tasks.length} 
-                                icon={<Calendar size={16} color="#49A3C4" />}
-                                items={dependencies[source.id].tasks.map(t => ({
-                                  id: t.id,
-                                  primary: t.task_name
-                                }))}
-                              />
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#00364A', opacity: 0.6 }}>
-                              <Loader2 className="spin" size={16} />
-                              <span style={{ fontSize: '14px' }}>Loading dependencies...</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    /* API Source View Mode */
+                    <ApiSourceView
+                      source={source}
+                      expandedSource={expandedSource}
+                      testingSource={testingSource}
+                      testResult={testResult}
+                      onExpand={handleExpand}
+                      onEdit={handleEdit}
+                      onDelete={setDeleteConfirm}
+                      onTestConnection={handleTestConnection}
+                    />
                   )}
                 </div>
               ))}
@@ -658,90 +619,14 @@ const SourceManagement = () => {
 
           {/* Delete Confirmation Modal */}
           {deleteConfirm && (
-            <div style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(0, 54, 74, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-              backdropFilter: 'blur(3px)'
-            }}>
-              <div style={{
-                backgroundColor: 'white',
-                borderRadius: '25px',
-                padding: '40px',
-                width: '100%',
-                maxWidth: '500px',
-                boxShadow: '0 20px 60px rgba(0, 54, 74, 0.3)',
-                animation: 'scaleIn 0.3s ease'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
-                  <div style={{
-                    width: '45px',
-                    height: '45px',
-                    backgroundColor: '#FEF2F2',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <AlertTriangle color="#EF4444" size={24} />
-                  </div>
-                  <h3 style={{ fontSize: '24px', fontWeight: '700', color: '#00364A', margin: 0 }}>Delete Source</h3>
-                </div>
-
-                {(() => {
-                  const source = sources.find(s => s.id === deleteConfirm);
-                  const deps = dependencies[deleteConfirm];
-                  return (
-                    <>
-                      <p style={{ fontSize: '16px', color: '#00364A', opacity: 0.8, marginBottom: '25px', lineHeight: '1.5' }}>
-                        Are you sure you want to delete <strong style={{ color: '#00364A', opacity: 1 }}>"{source?.name}"</strong>?
-                      </p>
-
-                      {deps && (deps.mappings.length > 0 || deps.tasks.length > 0) && (
-                        <div style={{
-                          backgroundColor: '#FFFBEB',
-                          border: '1px solid #FCD34D',
-                          borderRadius: '15px',
-                          padding: '20px',
-                          marginBottom: '30px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400E', fontWeight: '600', marginBottom: '10px' }}>
-                            <AlertTriangle size={16} />
-                            Warning: This will also delete:
-                          </div>
-                          <ul style={{ listStyle: 'disc', paddingLeft: '25px', margin: 0, color: '#92400E', fontSize: '14px' }}>
-                            {deps.mappings.length > 0 && <li>{deps.mappings.length} entity mapping(s)</li>}
-                            {deps.tasks.length > 0 && <li>{deps.tasks.length} task(s)</li>}
-                          </ul>
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', gap: '15px' }}>
-                        <StyledButton 
-                          onClick={() => handleDelete(deleteConfirm, true)} 
-                          variant="danger"
-                          disabled={loading}
-                          style={{ flex: 1 }}
-                        >
-                          {loading ? 'Deleting...' : 'Delete Everything'}
-                        </StyledButton>
-                        <StyledButton 
-                          onClick={() => setDeleteConfirm(null)} 
-                          variant="secondary"
-                          style={{ flex: 1 }}
-                        >
-                          Cancel
-                        </StyledButton>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
+            <DeleteConfirmModal
+              sourceType={sourceType}
+              source={sources.find(s => s.id === deleteConfirm)}
+              dependencies={dependencies[deleteConfirm]}
+              loading={loading}
+              onConfirm={(force) => handleDelete(deleteConfirm, force)}
+              onCancel={() => setDeleteConfirm(null)}
+            />
           )}
         </div>
       </div>
@@ -756,9 +641,575 @@ const SourceManagement = () => {
   );
 };
 
-// Helper Components
+// Web Source Edit Form Component
+const WebSourceEditForm = ({ 
+  source, 
+  editForm, 
+  setEditForm, 
+  editPaginationType, 
+  setEditPaginationType, 
+  editPaginationConfig, 
+  setEditPaginationConfig,
+  loading,
+  onSave,
+  onCancel
+}) => (
+  <div style={{ padding: '30px', backgroundColor: '#F8FBFF' }}>
+    <h3 style={{
+      fontSize: '18px',
+      fontWeight: '700',
+      color: '#00364A',
+      marginBottom: '20px'
+    }}>
+      Editing: <span style={{ color: '#49A3C4' }}>{source.name}</span>
+    </h3>
+    <div style={{ display: 'grid', gap: '20px' }}>
+      <StyledInput
+        label="Source Name *"
+        icon={<Database size={16} />}
+        value={editForm.name}
+        onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+      />
+      <StyledInput
+        label="URL *"
+        icon={<ExternalLink size={16} />}
+        value={editForm.url}
+        onChange={(e) => setEditForm(prev => ({ ...prev, url: e.target.value }))}
+      />
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <label style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Settings size={16} color="#49A3C4" /> Pagination Type
+        </label>
+        <StyledSelect
+          value={editPaginationType}
+          onChange={(e) => {
+            const selected = e.target.value;
+            setEditPaginationType(selected);
+            setEditPaginationConfig({ type: selected });
+          }}
+        >
+          <option value="">None</option>
+          <option value="query_param">Query Param</option>
+          <option value="offset">Offset</option>
+          <option value="path">Path</option>
+          <option value="button_click">Button Click</option>
+          <option value="scroll">Scroll</option>
+          <option value="ajax_click">Ajax Click</option>
+        </StyledSelect>
+      </div>
 
-const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled, style }) => {
+      {editPaginationType && (
+        <div style={{
+          padding: '20px',
+          backgroundColor: 'white',
+          borderRadius: '15px',
+          border: '1px solid rgba(0, 54, 74, 0.1)',
+          display: 'grid',
+          gap: '15px'
+        }}>
+          {(editPaginationType === "query_param" || editPaginationType === "offset") && (
+            <>
+              <DynamicField
+                label="Param Name"
+                placeholder="e.g. page"
+                value={editPaginationConfig.param_name || ""}
+                onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, param_name: e.target.value }))}
+              />
+              <DynamicField
+                label="Start Page"
+                placeholder="1"
+                type="number"
+                value={editPaginationConfig.start_page || ""}
+                onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, start_page: Number(e.target.value) }))}
+              />
+              {editPaginationType === "offset" && (
+                <>
+                  <DynamicField
+                    label="Page Size"
+                    placeholder="10"
+                    type="number"
+                    value={editPaginationConfig.page_size || ""}
+                    onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, page_size: Number(e.target.value) }))}
+                  />
+                  <DynamicField
+                    label="Max Pages"
+                    placeholder="Optional"
+                    type="number"
+                    value={editPaginationConfig.max_pages || ""}
+                    onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, max_pages: Number(e.target.value) }))}
+                  />
+                </>
+              )}
+            </>
+          )}
+
+          {editPaginationType === "path" && (
+            <DynamicField
+              label="Path Pattern"
+              placeholder="e.g. /page/{page_num}"
+              value={editPaginationConfig.path_pattern || ""}
+              onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, path_pattern: e.target.value }))}
+            />
+          )}
+
+          {(editPaginationType === "button_click" || editPaginationType === "ajax_click") && (
+            <>
+              <DynamicField
+                label="Button Selector"
+                placeholder="e.g .load-more-btn"
+                value={editPaginationConfig.button_selector || ""}
+                onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, button_selector: e.target.value }))}
+              />
+              <DynamicField
+                label="Wait Selector"
+                placeholder="e.g .item-loaded"
+                value={editPaginationConfig.wait_selector || ""}
+                onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, wait_selector: e.target.value }))}
+              />
+            </>
+          )}
+
+          {editPaginationType === "scroll" && (
+            <DynamicField
+              label="Scroll Steps"
+              placeholder="5"
+              type="number"
+              value={editPaginationConfig.scroll_steps || ""}
+              onChange={(e) => setEditPaginationConfig((prev) => ({ ...prev, scroll_steps: Number(e.target.value) }))}
+            />
+          )}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', marginTop: '10px' }}>
+        <StyledButton 
+          onClick={onCancel} 
+          variant="secondary"
+          icon={<X size={18} />}
+        >
+          Cancel
+        </StyledButton>
+        <StyledButton 
+          onClick={onSave} 
+          variant="primary"
+          disabled={loading}
+          icon={loading ? <Loader2 size={18} className="spin" /> : <Save size={18} />}
+        >
+          Update
+        </StyledButton>
+      </div>
+    </div>
+  </div>
+);
+
+// Web Source View Component
+const WebSourceView = ({ source, expandedSource, dependencies, onExpand, onEdit, onDelete }) => (
+  <div style={{ padding: '25px 30px' }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: '20px',
+      flexWrap: 'wrap'
+    }}>
+      <div style={{ flex: 1, minWidth: '280px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
+          <button
+            onClick={() => onExpand(source.id)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: expandedSource === source.id ? '#49A3C4' : '#00364A',
+              opacity: expandedSource === source.id ? 1 : 0.4,
+              padding: '5px',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'all 0.3s'
+            }}
+          >
+            {expandedSource === source.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+          </button>
+          <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', margin: 0 }}>{source.name}</h3>
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', paddingLeft: '40px' }}>
+          <InfoItem icon={<ExternalLink size={14} />} label="URL">
+            <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ color: '#49A3C4', textDecoration: 'none' }}>
+              {source.url}
+            </a>
+          </InfoItem>
+          {source.pagination_config && (
+            <InfoItem icon={<Settings size={14} />} label="Pagination">
+              {source.pagination_config.type || 'None'}
+            </InfoItem>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+        <IconButton onClick={() => onEdit(source)} icon={<Edit size={18} />} color="#49A3C4" />
+        <IconButton onClick={() => onDelete(source.id)} icon={<Trash2 size={18} />} color="#EF4444" />
+      </div>
+    </div>
+
+    {expandedSource === source.id && (
+      <div style={{
+        marginTop: '25px',
+        paddingTop: '25px',
+        borderTop: '1px solid rgba(0, 54, 74, 0.1)',
+        animation: 'fadeIn 0.3s ease'
+      }}>
+        <h4 style={{
+          fontSize: '16px',
+          fontWeight: '700',
+          color: '#00364A',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <List size={18} color="#49A3C4" />
+          Dependencies
+        </h4>
+        
+        {dependencies[source.id] ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '30px' }}>
+            <DependencySection 
+              title="Entity Mappings" 
+              count={dependencies[source.id].mappings.length} 
+              icon={<Map size={16} color="#49A3C4" />}
+              items={dependencies[source.id].mappings.map(m => ({
+                id: m.id,
+                primary: m.mapping_name,
+                secondary: `(${m.entity_name})`
+              }))}
+            />
+            <DependencySection 
+              title="Active Tasks" 
+              count={dependencies[source.id].tasks.length} 
+              icon={<Calendar size={16} color="#49A3C4" />}
+              items={dependencies[source.id].tasks.map(t => ({
+                id: t.id,
+                primary: t.task_name
+              }))}
+            />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#00364A', opacity: 0.6 }}>
+            <Loader2 className="spin" size={16} />
+            <span style={{ fontSize: '14px' }}>Loading dependencies...</span>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+);
+
+// API Source View Component
+const ApiSourceView = ({ 
+  source, 
+  expandedSource, 
+  testingSource, 
+  testResult, 
+  onExpand, 
+  onEdit, 
+  onDelete, 
+  onTestConnection 
+}) => (
+  <div style={{ padding: '25px 30px' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '15px' }}>
+          <button onClick={() => onExpand(source.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#49A3C4', padding: '5px', display: 'flex', alignItems: 'center' }}>
+            {expandedSource === source.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+          </button>
+          <h3 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>{source.name}</h3>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', paddingLeft: '40px', marginTop: '10px' }}>
+          <InfoItem icon={<Globe size={14} />} label="Endpoint"><span style={{ wordBreak: 'break-all' }}>{source.api_url}</span></InfoItem>
+          <InfoItem icon={<Database size={14} />} label="Entity">{source.entity_name}</InfoItem>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+        <IconButton onClick={() => onEdit(source)} icon={<Edit size={18} />} color="#49A3C4" title="Edit" />
+        <IconButton onClick={() => onDelete(source.id)} icon={<Trash2 size={18} />} color="#EF4444" title="Delete" />
+      </div>
+    </div>
+
+    {expandedSource === source.id && (
+      <div style={{ marginTop: '25px', paddingTop: '25px', borderTop: '1px solid #eee' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '20px' }}>
+          <div>
+            <SectionTitle icon={<List size={16} />} title={`Field Mappings (${source.field_mappings?.length || 0})`} />
+            <div style={{ padding: '15px', background: '#F8FBFE', borderRadius: '15px', border: '1px solid #E2E8F0', maxHeight: '200px', overflowY: 'auto' }}>
+              {source.field_mappings && source.field_mappings.length > 0 ? (
+                source.field_mappings.map((m, i) => (
+                  <div key={i} style={{ fontSize: '13px', marginBottom: '8px', padding: '8px', backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: '600', color: '#49A3C4' }}>{m.api_field}</span>
+                    <span style={{ color: '#00364A', opacity: 0.5 }}>→</span>
+                    <span style={{ color: '#00364A' }}>{m.db_field}</span>
+                    {m.transform && <span style={{ fontSize: '11px', color: '#059669', marginLeft: 'auto' }}>({m.transform})</span>}
+                  </div>
+                ))
+              ) : (
+                <div style={{ textAlign: 'center', color: '#00364A', opacity: 0.5, padding: '10px' }}>No mappings configured</div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <SectionTitle icon={<Settings size={16} />} title="Request Configuration" />
+            <div style={{ padding: '15px', background: '#F8FBFE', borderRadius: '15px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <InfoItem icon={<Zap size={14}/>} label="Method">{source.request_template?.method || 'GET'}</InfoItem>
+              <InfoItem icon={<Code size={14}/>} label="Data Path">{source.data_extraction_path || '$'}</InfoItem>
+              {source.request_template?.timeout && (
+                <InfoItem icon={<Info size={14}/>} label="Timeout">{source.request_template.timeout}s</InfoItem>
+              )}
+              {source.api_key_name && (
+                <InfoItem icon={<Lock size={14}/>} label="Auth Header">{source.api_key_name}</InfoItem>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <StyledButton 
+          onClick={() => onTestConnection(source.id)} 
+          disabled={testingSource === source.id} 
+          variant="outline" 
+          icon={testingSource === source.id ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
+        >
+          Test Connection
+        </StyledButton>
+
+        {testResult && testResult.sourceId === source.id && (
+          <div style={{ marginTop: '15px', padding: '15px', background: testResult.success ? '#E0F2FE' : '#FEF2F2', borderRadius: '12px', border: `1px solid ${testResult.success ? '#49A3C4' : '#EF4444'}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              {testResult.success ? <CheckCircle size={18} color="#49A3C4" /> : <AlertTriangle size={18} color="#EF4444" />}
+              <b>{testResult.message}</b>
+            </div>
+            {testResult.data && <CodeBlock data={testResult.data} />}
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+);
+
+// Delete Confirmation Modal
+const DeleteConfirmModal = ({ sourceType, source, dependencies, loading, onConfirm, onCancel }) => (
+  <div style={{
+    position: 'fixed',
+    inset: 0,
+    backgroundColor: 'rgba(0, 54, 74, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    backdropFilter: 'blur(3px)'
+  }}>
+    <div style={{
+      backgroundColor: 'white',
+      borderRadius: '25px',
+      padding: '40px',
+      width: '100%',
+      maxWidth: '500px',
+      boxShadow: '0 20px 60px rgba(0, 54, 74, 0.3)',
+      animation: 'scaleIn 0.3s ease'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+        <div style={{
+          width: '45px',
+          height: '45px',
+          backgroundColor: '#FEF2F2',
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <AlertTriangle color="#EF4444" size={24} />
+        </div>
+        <h3 style={{ fontSize: '24px', fontWeight: '700', color: '#00364A', margin: 0 }}>Delete Source</h3>
+      </div>
+
+      <p style={{ fontSize: '16px', color: '#00364A', opacity: 0.8, marginBottom: '25px', lineHeight: '1.5' }}>
+        Are you sure you want to delete <strong style={{ color: '#00364A', opacity: 1 }}>"{source?.name}"</strong>?
+      </p>
+
+      {sourceType === 'web' && dependencies && (dependencies.mappings.length > 0 || dependencies.tasks.length > 0) && (
+        <div style={{
+          backgroundColor: '#FFFBEB',
+          border: '1px solid #FCD34D',
+          borderRadius: '15px',
+          padding: '20px',
+          marginBottom: '30px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400E', fontWeight: '600', marginBottom: '10px' }}>
+            <AlertTriangle size={16} />
+            Warning: This will also delete:
+          </div>
+          <ul style={{ listStyle: 'disc', paddingLeft: '25px', margin: 0, color: '#92400E', fontSize: '14px' }}>
+            {dependencies.mappings.length > 0 && <li>{dependencies.mappings.length} entity mapping(s)</li>}
+            {dependencies.tasks.length > 0 && <li>{dependencies.tasks.length} task(s)</li>}
+          </ul>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: '15px' }}>
+        <StyledButton 
+          onClick={() => onConfirm(true)} 
+          variant="danger"
+          disabled={loading}
+          style={{ flex: 1 }}
+        >
+          {loading ? 'Deleting...' : 'Delete Everything'}
+        </StyledButton>
+        <StyledButton 
+          onClick={onCancel} 
+          variant="secondary"
+          style={{ flex: 1 }}
+        >
+          Cancel
+        </StyledButton>
+      </div>
+    </div>
+  </div>
+);
+
+// API Source Form Component (for editing)
+const ApiSourceForm = ({ source, onClose, onSuccess }) => {
+  const [loading, setLoading] = useState(false);
+  const [entities, setEntities] = useState([]);
+  
+  const [formData, setFormData] = useState({
+    ...source,
+    api_key: '', 
+    api_key_name: source.api_key_name || 'Authorization',
+    request_template: source.request_template || { method: 'GET', headers: {}, params: {}, body: {}, timeout: 30 }
+  });
+  
+  const [newMapping, setNewMapping] = useState({ api_field: '', db_field: '', transform: '' });
+
+  useEffect(() => {
+    const fetchEntities = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/entity/entities`, { headers: { "ngrok-skip-browser-warning": "true" } });
+        const data = await response.json();
+        if (Array.isArray(data.entities)) setEntities(data.entities.map(e => e.name || e));
+      } catch (err) { console.error(err); }
+    };
+    fetchEntities();
+  }, []);
+
+  const handleInputChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+  const handleNestedChange = (parent, field, value) => setFormData(prev => ({ ...prev, [parent]: { ...prev[parent], [field]: value } }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/api-sources/${source.id}`, {
+        method: 'PUT',
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        body: JSON.stringify(formData)
+      });
+      if (response.ok) onSuccess();
+      else alert("Update failed");
+    } catch (err) { alert(err.message); } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={{ backgroundColor: 'white', borderRadius: '25px', padding: '40px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+      <SectionTitle icon={<Edit size={16} />} title="Edit API Source" />
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <FormGroup label="Source Name" value={formData.name} onChange={v => handleInputChange('name', v)} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontSize: '13px', fontWeight: '600', opacity: 0.7 }}>Entity Name</label>
+            <select value={formData.entity_name} onChange={e => handleInputChange('entity_name', e.target.value)} style={{ padding: '12px', borderRadius: '12px', backgroundColor: '#f0f4f8', border: 'none' }}>
+              <option value="">Select Entity</option>
+              {entities.map((e, i) => <option key={i} value={e}>{e}</option>)}
+            </select>
+          </div>
+        </div>
+        <FormGroup label="API URL" value={formData.api_url} onChange={v => handleInputChange('api_url', v)} />
+
+        <section style={{ padding: '20px', backgroundColor: '#F8FBFE', borderRadius: '15px', border: '1px solid #49A3C4' }}>
+          <SectionTitle icon={<Settings size={16} />} title="Request Configuration" />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: 15 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600' }}>HTTP Method</label>
+              <select 
+                value={formData.request_template.method} 
+                onChange={e => handleNestedChange('request_template', 'method', e.target.value)}
+                style={{ padding: '12px', borderRadius: '12px', border: '1.5px solid #49A3C4', backgroundColor: 'white' }}
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+              </select>
+            </div>
+            <FormGroup label="Timeout (sec)" type="number" value={formData.request_template.timeout} onChange={v => handleNestedChange('request_template', 'timeout', v)} />
+          </div>
+
+          {formData.request_template.method !== 'GET' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600' }}>Request Body (JSON)</label>
+              <textarea 
+                value={typeof formData.request_template.body === 'object' ? JSON.stringify(formData.request_template.body, null, 2) : formData.request_template.body}
+                onChange={e => { try { handleNestedChange('request_template', 'body', JSON.parse(e.target.value)); } catch(err) { handleNestedChange('request_template', 'body', e.target.value); } }}
+                style={{ height: '80px', padding: '12px', borderRadius: '12px', border: '1px solid #ddd', fontFamily: 'monospace' }}
+                placeholder='{ "key": "value" }'
+              />
+            </div>
+          )}
+        </section>
+        
+        <section style={{ padding: '20px', backgroundColor: '#F8FBFE', borderRadius: '15px', border: '1px solid #E2E8F0' }}>
+          <SectionTitle icon={<Lock size={16} />} title="Authentication" />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <FormGroup label="Auth Header Name" value={formData.api_key_name} onChange={v => handleInputChange('api_key_name', v)} />
+            <FormGroup label="API Key" type="password" value={formData.api_key} onChange={v => handleInputChange('api_key', v)} placeholder="Keep blank to keep current" />
+          </div>
+        </section>
+
+        <section>
+          <SectionTitle icon={<List size={16} />} title="Mappings" />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '10px', alignItems: 'flex-end' }}>
+             <FormSubGroup label="API Field" value={newMapping.api_field} onChange={v => setNewMapping({...newMapping, api_field: v})} />
+             <FormSubGroup label="DB Field" value={newMapping.db_field} onChange={v => setNewMapping({...newMapping, db_field: v})} />
+             <FormSubGroup label="Transform" value={newMapping.transform} onChange={v => setNewMapping({...newMapping, transform: v})} />
+             <StyledButton type="button" onClick={() => { setFormData(p => ({...p, field_mappings: [...p.field_mappings, newMapping]})); setNewMapping({api_field:'', db_field:'', transform:''}); }} variant="outline" icon={<Plus size={16}/>} />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            {formData.field_mappings.map((m, i) => (
+              <div key={i} style={{ fontSize: '13px', background: '#f8fbfe', padding: '8px', marginBottom: '5px', borderRadius: '8px', display:'flex', justifyContent:'space-between', alignItems: 'center' }}>
+                <span>{m.api_field} → {m.db_field}</span>
+                <button 
+                  type="button"
+                  onClick={() => setFormData(p => ({...p, field_mappings: p.field_mappings.filter((_, idx)=>idx!==i)}))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }}
+                >
+                  <Trash2 size={14} color="#EF4444" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div style={{ display: 'flex', gap: '15px' }}>
+          <StyledButton type="submit" disabled={loading} variant="primary" icon={loading ? <Loader2 size={18} className="spin" /> : <Save size={18} />}>Update Source</StyledButton>
+          <StyledButton type="button" onClick={onClose} variant="secondary">Cancel</StyledButton>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+// Helper Components
+const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled, style, type = "button" }) => {
   const [hover, setHover] = useState(false);
   
   const styles = {
@@ -784,6 +1235,7 @@ const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled, 
 
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       onMouseEnter={() => setHover(true)}
@@ -825,7 +1277,7 @@ const StyledInput = ({ label, icon, value, onChange, placeholder, type = "text" 
         alignItems: 'center',
         gap: '8px'
       }}>
-        {icon && React.cloneElement(icon, { color: '#49A3C4' })}
+        {icon && <span style={{ color: '#49A3C4', display: 'flex', alignItems: 'center' }}>{icon}</span>}
         {label}
       </label>
     )}
@@ -913,6 +1365,26 @@ const DynamicField = ({ label, placeholder, type = "text", value, onChange }) =>
   </div>
 );
 
+const FormGroup = ({ label, value, onChange, type = "text", placeholder = "" }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <label style={{ fontSize: '13px', fontWeight: '600', opacity: 0.7 }}>{label}</label>
+    <input 
+      type={type} 
+      value={value} 
+      onChange={e => onChange(e.target.value)} 
+      placeholder={placeholder}
+      style={{ padding: '12px 16px', borderRadius: '12px', border: 'none', backgroundColor: '#f0f4f8', color: '#00364A', outline: 'none', fontSize: '14px' }} 
+    />
+  </div>
+);
+
+const FormSubGroup = ({ label, value, onChange }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+    <label style={{ fontSize: '11px', fontWeight: '700', opacity: 0.5 }}>{label}</label>
+    <input value={value} onChange={e => onChange(e.target.value)} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px', outline: 'none' }} />
+  </div>
+);
+
 const StatCard = ({ title, value, color }) => (
   <div style={{
     backgroundColor: 'white',
@@ -929,22 +1401,24 @@ const StatCard = ({ title, value, color }) => (
 
 const InfoItem = ({ icon, label, children }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#00364A' }}>
-    <span style={{ color: '#49A3C4' }}>{icon}</span>
-    <span style={{ fontWeight: '600', opacity: 0.9 }}>{label}:</span>
+    <span style={{ color: '#49A3C4', display: 'flex', alignItems: 'center', flexShrink: 0 }}>{icon}</span>
+    <span style={{ fontWeight: '600', opacity: 0.9, flexShrink: 0 }}>{label}:</span>
     <span style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{children}</span>
   </div>
 );
 
-const IconButton = ({ onClick, icon, color }) => {
+const IconButton = ({ onClick, icon, color, title }) => {
   const [hover, setHover] = useState(false);
   return (
     <button
       onClick={onClick}
+      title={title}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        width: '36px',
-        height: '36px',
+        width: '40px',
+        minWidth: '40px',
+        height: '40px',
         borderRadius: '10px',
         border: 'none',
         backgroundColor: hover ? `${color}15` : 'transparent',
@@ -953,7 +1427,9 @@ const IconButton = ({ onClick, icon, color }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        transition: 'all 0.2s'
+        transition: 'all 0.2s',
+        padding: 0,
+        flexShrink: 0
       }}
     >
       {icon}
@@ -964,7 +1440,7 @@ const IconButton = ({ onClick, icon, color }) => {
 const DependencySection = ({ title, count, icon, items }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      {icon}
+      <span style={{ display: 'flex', alignItems: 'center' }}>{icon}</span>
       <span style={{ fontWeight: '600', fontSize: '14px', color: '#00364A' }}>{title}</span>
       <span style={{
         backgroundColor: 'rgba(73, 163, 196, 0.15)',
@@ -983,9 +1459,21 @@ const DependencySection = ({ title, count, icon, items }) => (
           {item.secondary && <span style={{ opacity: 0.6 }}>{item.secondary}</span>}
         </div>
       ))}
-      {items.length === 0 && <span style={{ fontSize: '13px', color: '#00364A', opacity: 0.4 }}>No items found</span>}
+      {items.length === 0 && <span style={{ fontSize: '13px', color: '#00364A', opacity: 0.4 }}></span>}
     </div>
   </div>
+);
+
+const SectionTitle = ({ icon, title }) => (
+  <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#00364A', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <span style={{ color: '#49A3C4', display: 'flex', alignItems: 'center' }}>{icon}</span> {title}
+  </h4>
+);
+
+const CodeBlock = ({ data }) => (
+  <pre style={{ backgroundColor: '#F8FBFE', borderRadius: '12px', padding: '15px', fontSize: '12px', border: '1px solid #eee', overflow: 'auto', maxHeight: '200px', fontFamily: 'monospace', margin: 0 }}>
+    {JSON.stringify(data, null, 2)}
+  </pre>
 );
 
 export default SourceManagement;

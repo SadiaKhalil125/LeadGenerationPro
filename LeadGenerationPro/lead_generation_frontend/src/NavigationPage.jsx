@@ -23,7 +23,7 @@ const NavigationPage = () => {
 
   const menuContent = {
     entity: {
-      label: "Entity",
+      label: "Entities",
       icon: <LayoutGrid size={20} />,
       items: [
         { label: "Entity List", path: "/entitylist", description: "View and manage all entities in the system" },
@@ -32,31 +32,29 @@ const NavigationPage = () => {
       ],
     },
     manager: {
-      label: "Source",
+      label: "Sources",
       icon: <Settings size={20} />,
       items: [
-        { label: "Web Source Manager", path: "/sourcemanagement", description: "Manage web scraping data sources" },
-        { label: "Add Web Source", path: "/addsource", description: "Configure a new web scraping source" },
-        { label: "API Source Manager", path: "/api-sources", description: "Manage API-based data sources" },
-        { label: "Create API Source", path: "/api-source-creator", description: "Configure a new API data source" },
+        { label: "Source Manager", path: "/sourcemanagement", description: "Manage web scraping data sources" },
+        { label: "Add Source", path: "/addsource", description: "Configure a new web scraping source" },
       ],
     },
     mapping: {
-      label: "Mapping",
+      label: "Mappings",
       icon: <ClipboardPlus size={20} />,
       items: [
-        { label: "Create Entity Mapping", path: "/entitymappingform", description: "Define relationships between entities" },
         { label: "Entity Mapping List", path: "/mappingmanager", description: "View all existing entity mappings" },
+        { label: "Create Entity Mapping", path: "/entitymappingform", description: "Define relationships between entities" },
+       
       ],
     },
     task: {
-      label: "Task",
+      label: "Tasks",
       icon: <CalendarCheck size={20} />,
       items: [
         { label: "Schedule a Task", path: "/taskscheduler", description: "Create and schedule new automated tasks" },
         { label: "Task List", path: "/tasksmanagement", description: "View and manage all scheduled tasks" },
-        { label: "Web Task Executor", path: "/taskexecutor", description: "Execute web scraping tasks" },
-        { label: "API Task Executor", path: "/api-task-executor", description: "Execute API-based tasks and fetch data" },
+        { label: "Task Executor", path: "/taskexecutor", description: "Execute web scraping tasks" },
       ],
     },
 

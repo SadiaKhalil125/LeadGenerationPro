@@ -21,7 +21,8 @@ import {
     ArrowLeft,
     Globe,    
     Monitor,
-    Settings 
+    Settings,
+    Play
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -51,6 +52,7 @@ const TaskScheduler = () => {
     const [activeTab, setActiveTab] = useState('create');
     const [repeat, setRepeat] = useState('once');
     const [maxItems, setMaxItems] = useState(30);
+    const [runNow, setRunNow] = useState(false);
 
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -99,7 +101,6 @@ const TaskScheduler = () => {
         },
     });
 
-    // --- FIX: Define pageLoading variable ---
     const pageLoading = isLoadingTasks && !tasksData;
 
     const sources = sourcesData || [];
@@ -124,6 +125,7 @@ const TaskScheduler = () => {
     const handleSourceChange = (sourceId) => {
         setSelectedSourceId(sourceId);
         setSelectedMappingId('');
+        setMappingSearch('');
         const filtered = allMappings.filter(m => m.source_id === parseInt(sourceId));
         setMappings(filtered);
     };
@@ -138,18 +140,38 @@ const TaskScheduler = () => {
     };
 
     const filteredMappings = useMemo(() => {
-        if (!mappingSearch) return [];
-        return allMappings.filter(m =>
+        if (!selectedSourceId) return [];
+        const sourceMappings = allMappings.filter(m => m.source_id === parseInt(selectedSourceId));
+        if (!mappingSearch) return sourceMappings;
+        return sourceMappings.filter(m =>
             m.mapping_name.toLowerCase().includes(mappingSearch.toLowerCase())
         );
-    }, [mappingSearch, allMappings]);
+    }, [mappingSearch, allMappings, selectedSourceId]);
 
     const handleCreateTask = async (e) => {
         e.preventDefault();
         setLoading(true);
         try {
+            // Calculate scheduled time
+            let finalScheduledTime;
+            if (runNow) {
+                // Schedule for next minute
+                const now = new Date();
+                now.setMinutes(now.getMinutes() + 1);
+                now.setSeconds(0);
+                now.setMilliseconds(0);
+                finalScheduledTime = now.toISOString();
+            } else {
+                if (!scheduledTime) {
+                    setResponse({ type: 'error', message: 'Please select a scheduled time or choose "Run Now"' });
+                    setLoading(false);
+                    return;
+                }
+                finalScheduledTime = new Date(scheduledTime).toISOString();
+            }
+
             let requestData = {
-                scheduled_time: new Date(scheduledTime).toISOString(),
+                scheduled_time: finalScheduledTime,
                 repeat: repeat,
                 task_name: taskName || undefined,
                 max_items: maxItems ? parseInt(maxItems) : 30
@@ -173,9 +195,14 @@ const TaskScheduler = () => {
 
             const data = await res.json();
             if (res.ok && data.success) {
-                setResponse({ type: 'success', message: data.message });
-                setActiveTab('manage');
+                setResponse({ type: 'success', message: runNow ? 'Task is going to run next minute!' : data.message });
                 queryClient.invalidateQueries({ queryKey: ['tasks'] });
+                
+                // Reset form
+                setTaskName('');
+                setScheduledTime('');
+                setRunNow(false);
+                setMaxItems(30);
             } else {
                 setResponse({ type: 'error', message: data.detail || 'Failed to create task.' });
             }
@@ -231,13 +258,36 @@ const TaskScheduler = () => {
                     {/* Tabs */}
                     <div style={{ display: 'flex', backgroundColor: '#F3F4F6', padding: '4px', borderRadius: '12px', marginBottom: '40px' }}>
                         <TabButton active={activeTab === 'create'} onClick={() => setActiveTab('create')} icon={<Plus size={16} />}>Create Task</TabButton>
-                        <TabButton active={activeTab === 'manage'} onClick={() => setActiveTab('manage')} icon={<List size={16} />}>Manage Tasks ({tasks.length})</TabButton>
                     </div>
 
                     {response && (
                         <div style={{ marginBottom: '30px', padding: '20px', borderRadius: '15px', backgroundColor: response.type === 'success' ? '#E0F2FE' : '#FEF2F2', border: `2px solid ${response.type === 'success' ? '#49A3C4' : '#EF4444'}`, display: 'flex', alignItems: 'center', gap: '15px' }}>
                             {response.type === 'success' ? <CheckCircle size={20} color="#49A3C4" /> : <AlertCircle size={20} color="#EF4444" />}
                             <span style={{ fontWeight: '500', flex: 1 }}>{response.message}</span>
+                            {response.type === 'success' && (
+                                <button
+                                    onClick={() => navigate('/taskexecutor')}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px 16px',
+                                        backgroundColor: '#49A3C4',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontWeight: '600',
+                                        fontSize: '14px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.target.style.backgroundColor = '#00364A'}
+                                    onMouseLeave={(e) => e.target.style.backgroundColor = '#49A3C4'}
+                                >
+                                    <List size={16} />
+                                    View Tasks
+                                </button>
+                            )}
                             <X size={20} style={{ cursor: 'pointer' }} onClick={() => setResponse(null)} />
                         </div>
                     )}
@@ -257,25 +307,82 @@ const TaskScheduler = () => {
                                 </div>
                             </div>
 
+                            {/* Task Name First */}
+                            <StyledInput label="Task Name" value={taskName} onChange={e => setTaskName(e.target.value)} placeholder="Optional - Auto-generated if empty" icon={<Type size={16} />} />
+
                             {sourceType === 'scraper' ? (
                                 <>
-                                    <div style={{ position: 'relative' }}>
-                                        <StyledInput label="Find Mapping" icon={<Search size={16} />} value={mappingSearch} onChange={(e) => setMappingSearch(e.target.value)} onFocus={() => setIsSearchFocused(true)} onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)} placeholder="Search mappings..." />
-                                        {isSearchFocused && filteredMappings.length > 0 && (
-                                            <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white', border: '1px solid #ddd', borderRadius: '12px', zIndex: 50, padding: '8px', listStyle: 'none', boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}>
-                                                {filteredMappings.map(m => <li key={m.id} onMouseDown={() => handleMappingSelect(m)} style={{ padding: '10px', cursor: 'pointer', borderRadius: '8px' }}>{m.mapping_name}</li>)}
-                                            </ul>
-                                        )}
-                                    </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                                         <StyledSelect label="Source" value={selectedSourceId} onChange={(e) => handleSourceChange(e.target.value)} icon={<Database size={16} />}>
                                             <option value="">Choose source...</option>
                                             {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                         </StyledSelect>
-                                        <StyledSelect label="Mapping" value={selectedMappingId} onChange={(e) => setSelectedMappingId(e.target.value)} disabled={!selectedSourceId} icon={<Map size={16} />}>
-                                            <option value="">Choose mapping...</option>
-                                            {mappings.map(m => <option key={m.id} value={m.id}>{m.mapping_name}</option>)}
-                                        </StyledSelect>
+                                        
+                                        {/* Combined Search + Select Mapping */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, position: 'relative' }}>
+                                            <label style={{ fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <Map size={16} /> Mapping
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                                <input
+                                                    type="text"
+                                                    value={mappingSearch}
+                                                    onChange={(e) => {
+                                                        setMappingSearch(e.target.value);
+                                                        setSelectedMappingId('');
+                                                    }}
+                                                    onFocus={() => setIsSearchFocused(true)}
+                                                    onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                                                    placeholder="Type to search or select..."
+                                                    disabled={!selectedSourceId}
+                                                    style={{
+                                                        padding: '12px 16px',
+                                                        borderRadius: '12px',
+                                                        border: 'none',
+                                                        backgroundColor: selectedSourceId ? '#f0f4f8' : '#e5e7eb',
+                                                        color: '#00364A',
+                                                        outline: 'none',
+                                                        width: '100%',
+                                                        cursor: selectedSourceId ? 'text' : 'not-allowed'
+                                                    }}
+                                                />
+                                                {isSearchFocused && selectedSourceId && filteredMappings.length > 0 && (
+                                                    <ul style={{
+                                                        position: 'absolute',
+                                                        top: '100%',
+                                                        left: 0,
+                                                        right: 0,
+                                                        backgroundColor: 'white',
+                                                        border: '1px solid #ddd',
+                                                        borderRadius: '12px',
+                                                        zIndex: 50,
+                                                        padding: '8px',
+                                                        listStyle: 'none',
+                                                        boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
+                                                        maxHeight: '200px',
+                                                        overflowY: 'auto',
+                                                        margin: '4px 0 0 0'
+                                                    }}>
+                                                        {filteredMappings.map(m => (
+                                                            <li
+                                                                key={m.id}
+                                                                onMouseDown={() => handleMappingSelect(m)}
+                                                                style={{
+                                                                    padding: '10px',
+                                                                    cursor: 'pointer',
+                                                                    borderRadius: '8px',
+                                                                    transition: 'background 0.2s'
+                                                                }}
+                                                                onMouseEnter={(e) => e.target.style.backgroundColor = '#E0F2FE'}
+                                                                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                                                            >
+                                                                {m.mapping_name}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </>
                             ) : (
@@ -307,51 +414,97 @@ const TaskScheduler = () => {
                                 </div>
                             )}
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                                <StyledInput label="Task Name" value={taskName} onChange={e => setTaskName(e.target.value)} placeholder="Optional" icon={<Type size={16} />} />
-                                <StyledInput label="Max Items" type="number" value={maxItems} onChange={e => setMaxItems(e.target.value)} icon={<Maximize size={16} />} />
+                            <StyledInput label="Max Items" type="number" value={maxItems} onChange={e => setMaxItems(e.target.value)} icon={<Maximize size={16} />} />
+
+                            {/* Run Now Toggle */}
+                            <div style={{ 
+                                padding: '15px 20px', 
+                                backgroundColor: runNow ? '#E0F2FE' : '#F3F4F6', 
+                                borderRadius: '12px', 
+                                border: `2px solid ${runNow ? '#49A3C4' : 'rgba(0,54,74,0.1)'}`,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                transition: 'all 0.3s'
+                            }}
+                            onClick={() => setRunNow(!runNow)}
+                            >
+                                <div style={{ 
+                                    width: '20px', 
+                                    height: '20px', 
+                                    borderRadius: '4px', 
+                                    border: `2px solid ${runNow ? '#49A3C4' : '#6B7280'}`,
+                                    backgroundColor: runNow ? '#49A3C4' : 'white',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.3s'
+                                }}>
+                                    {runNow && <Check size={14} color="white" />}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Play size={16} color={runNow ? '#49A3C4' : '#6B7280'} />
+                                        Run Now
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
+                                        Task will be scheduled to run in the next minute
+                                    </div>
+                                </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                                <StyledInput label="Start Time" type="datetime-local" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} icon={<Calendar size={16} />} />
-                                <StyledSelect label="Repeat" value={repeat} onChange={e => setRepeat(e.target.value)} icon={<RotateCw size={16} />}>
-                                    <option value="once">Once</option>
-                                    <option value="daily">Daily</option>
-                                    <option value="weekly">Weekly</option>
-                                </StyledSelect>
-                            </div>
+                            {!runNow && (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                                    <StyledInput label="Start Time" type="datetime-local" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} icon={<Calendar size={16} />} required={!runNow} />
+                                    <StyledSelect label="Repeat" value={repeat} onChange={e => setRepeat(e.target.value)} icon={<RotateCw size={16} />}>
+                                        <option value="once">Once</option>
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                    </StyledSelect>
+                                </div>
+                            )}
 
-                            <StyledButton variant="primary" disabled={loading} icon={loading ? <Loader2 className="spin" /> : <Plus />}>
-                                {loading ? 'Creating...' : 'Create Task'}
+                            <StyledButton variant="primary" disabled={loading} icon={loading ? <Loader2 className="spin" /> : (runNow ? <Play /> : <Plus />)}>
+                                {loading ? 'Creating...' : (runNow ? 'Run Now' : 'Schedule Task')}
                             </StyledButton>
                         </form>
                     )}
-
-                    {activeTab === 'manage' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                            {tasks.map(task => (
-                                <div key={task.id} style={{ padding: '20px', border: '1px solid #eee', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <div style={{ fontWeight: '700' }}>{task.task_name}</div>
-                                        <div style={{ fontSize: '12px', opacity: 0.6 }}>{formatDateTime(task.scheduled_time)}</div>
-                                    </div>
-                                    <Trash2 size={18} color="red" style={{ cursor: 'pointer' }} onClick={() => handleDeleteTask(task.id, task.task_name)} />
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
             </div>
-            <style>{`.spin { animation: rotate 1s linear infinite; } @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            <style>{`
+                .spin { animation: rotate 1s linear infinite; } 
+                @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            `}</style>
         </div>
     );
 };
 
-// --- Sub-components (Styled exactly as before) ---
+// --- Sub-components ---
 const StyledButton = ({ onClick, variant, icon, children, disabled, style }) => {
     const isPrimary = variant === 'primary';
     return (
-        <button onClick={onClick} disabled={disabled} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px 24px', borderRadius: '12px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s', backgroundColor: isPrimary ? '#00364A' : 'white', color: isPrimary ? 'white' : '#00364A', border: '2px solid #00364A', ...style }}>
+        <button 
+            type={onClick ? 'button' : 'submit'}
+            onClick={onClick} 
+            disabled={disabled} 
+            style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: '8px', 
+                padding: '12px 24px', 
+                borderRadius: '12px', 
+                fontWeight: '600', 
+                cursor: disabled ? 'not-allowed' : 'pointer', 
+                transition: 'all 0.3s', 
+                backgroundColor: isPrimary ? '#00364A' : 'white', 
+                color: isPrimary ? 'white' : '#00364A', 
+                border: '2px solid #00364A',
+                opacity: disabled ? 0.6 : 1,
+                ...style 
+            }}
+        >
             {icon} {children}
         </button>
     );
@@ -363,10 +516,19 @@ const TabButton = ({ active, onClick, icon, children }) => (
     </button>
 );
 
-const StyledInput = ({ label, value, onChange, placeholder, type = "text", icon, onFocus, onBlur }) => (
+const StyledInput = ({ label, value, onChange, placeholder, type = "text", icon, onFocus, onBlur, required }) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
         {label && <label style={{ fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>{icon} {label}</label>}
-        <input type={type} value={value} onChange={onChange} onFocus={onFocus} onBlur={onBlur} placeholder={placeholder} style={{ padding: '12px 16px', borderRadius: '12px', border: 'none', backgroundColor: '#f0f4f8', color: '#00364A', outline: 'none' }} />
+        <input 
+            type={type} 
+            value={value} 
+            onChange={onChange} 
+            onFocus={onFocus} 
+            onBlur={onBlur} 
+            placeholder={placeholder} 
+            required={required}
+            style={{ padding: '12px 16px', borderRadius: '12px', border: 'none', backgroundColor: '#f0f4f8', color: '#00364A', outline: 'none' }} 
+        />
     </div>
 );
 
