@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Literal, Optional, Any
 from pydantic import HttpUrl
 from datetime import datetime
 from api_source_models import ApiRequestTemplate, ApiResponseStructure, FieldMappingItem
@@ -53,6 +53,17 @@ class CaptchaParams(BaseModel):
     captcha_type: Optional[str] = None  # e.g., "recaptcha_v2", "recaptcha_v3", "turnstile", etc.
     site_key: Optional[str] = None
     
+class AuthConfig(BaseModel):
+    """Authentication configuration for protected websites"""
+    login_url: str
+    username: str
+    password: str
+    auth_type: Literal["form", "basic"] = "form"
+    username_selector: Optional[str] = None
+    password_selector: Optional[str] = None
+    submit_selector: Optional[str] = None
+    success_indicator: Optional[str] = None
+
 class ScrapeRequest(BaseModel):
     entity_name: str
     url: HttpUrl
@@ -63,6 +74,7 @@ class ScrapeRequest(BaseModel):
     follow_links: Optional[List[FollowLink]] = []
     pagination_config: Optional[PaginationConfig] = None
     captcha_params: Optional[CaptchaParams] = None
+    auth_config: Optional[AuthConfig] = None
 
 class ScrapeResponse(BaseModel):
     entity_name: str
@@ -116,6 +128,7 @@ class SourceInfo(BaseModel):
     pagination_config: Optional[PaginationConfig] = None
     is_captcha_protected: bool = False
     captcha_params: Optional[CaptchaParams] = None
+
 
 class SourcesListResponse(BaseModel):
     total_sources: int

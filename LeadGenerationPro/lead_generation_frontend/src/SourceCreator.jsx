@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Database, ExternalLink, Layers, Save, X, AlertTriangle, Lock , List, ArrowLeft} from "lucide-react";
+import { Database, ExternalLink, Layers, Save, X, AlertTriangle, Lock, List, ArrowLeft, Shield } from "lucide-react";
 import API_BASE from "./api_base";
 import { useNavigate } from "react-router-dom";
+
 export default function SourceCreator() {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -10,12 +11,26 @@ export default function SourceCreator() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [isCaptchaProtected, setIsCaptchaProtected] = useState(false);
+  const [isAuthProtected, setIsAuthProtected] = useState(false);
   const navigate = useNavigate();
+  
   const [captchaParams, setCaptchaParams] = useState({
     api_key: "",
     site_url: "",
     captcha_type: "",
     site_key: ""
+  });
+
+  // NEW: Auth configuration state
+  const [authConfig, setAuthConfig] = useState({
+    login_url: "",
+    username: "",
+    password: "",
+    auth_type: "form",
+    username_selector: "",
+    password_selector: "",
+    submit_selector: "",
+    success_indicator: ""
   });
 
   const paginationTypes = [
@@ -30,8 +45,14 @@ export default function SourceCreator() {
   const handlePaginationChange = (field, value) => {
     setPaginationConfig((prev) => ({ ...prev, [field]: value }));
   };
+
   const handleCaptchaChange = (field, value) => {
     setCaptchaParams((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // NEW: Handle auth config changes
+  const handleAuthChange = (field, value) => {
+    setAuthConfig((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -47,17 +68,22 @@ export default function SourceCreator() {
     // captcha params (sent in body)
     const captchaPayload = isCaptchaProtected ? captchaParams : null;
 
+    // NEW: auth params (sent in body)
+    const authPayload = isAuthProtected ? authConfig : null;
+
     // query params
     const targetUrl =
       `${API_BASE}/source/save-source?` +
       `name=${encodeURIComponent(name)}` +
       `&url=${encodeURIComponent(url)}` +
-      `&is_captcha_protected=${isCaptchaProtected}`;
+      `&is_captcha_protected=${isCaptchaProtected}` +
+      `&is_auth_protected=${isAuthProtected}`;  // Add this
 
-    // build final request body (must match endpoint signature)
+    // build final request body
     const body = {
       pagination_config: paginationPayload,
-      captcha_params: captchaPayload
+      captcha_params: captchaPayload,
+      auth_config: authPayload  // NEW: Add auth config to body
     };
 
     try {
@@ -86,7 +112,18 @@ export default function SourceCreator() {
     setPaginationType("");
     setPaginationConfig({});
     setIsCaptchaProtected(false);
+    setIsAuthProtected(false);
     setCaptchaParams({ api_key: "", site_url: "", captcha_type: "", site_key: "" });
+    setAuthConfig({
+      login_url: "",
+      username: "",
+      password: "",
+      auth_type: "form",
+      username_selector: "",
+      password_selector: "",
+      submit_selector: "",
+      success_indicator: ""
+    });
     setResponse(null);
   };
 
@@ -149,87 +186,86 @@ export default function SourceCreator() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '5px' }}>
-          <button
-            onClick={()=>navigate('/dashboard')}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: 'transparent',
-              color: '#00364A',
-              border: '2px solid rgba(0, 54, 74, 0.2)',
-              borderRadius: '12px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.3s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.borderColor = '#00364A';
-              e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
-              e.target.style.backgroundColor = 'transparent';
-            }}
-          >
-            <ArrowLeft size={15} />
-            
-          </button>
-           <button
-            onClick={()=>navigate('/sourcemanagement')}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: 'transparent',
-              color: '#00364A',
-              border: '2px solid rgba(0, 54, 74, 0.2)',
-              borderRadius: '12px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.3s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.borderColor = '#00364A';
-              e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
-              e.target.style.backgroundColor = 'transparent';
-            }}
-          >
-            <List size={15} />
-            View All
-          </button>
-          <button
-            onClick={resetForm}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: 'transparent',
-              color: '#00364A',
-              border: '2px solid rgba(0, 54, 74, 0.2)',
-              borderRadius: '12px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              transition: 'all 0.3s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.borderColor = '#00364A';
-              e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
-              e.target.style.backgroundColor = 'transparent';
-            }}
-          >
-            <X size={15} />
-            Reset Form
-          </button>
+            <button
+              onClick={() => navigate('/dashboard')}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: 'transparent',
+                color: '#00364A',
+                border: '2px solid rgba(0, 54, 74, 0.2)',
+                borderRadius: '12px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.3s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderColor = '#00364A';
+                e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
+                e.target.style.backgroundColor = 'transparent';
+              }}
+            >
+              <ArrowLeft size={15} />
+            </button>
+            <button
+              onClick={() => navigate('/sourcemanagement')}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: 'transparent',
+                color: '#00364A',
+                border: '2px solid rgba(0, 54, 74, 0.2)',
+                borderRadius: '12px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.3s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderColor = '#00364A';
+                e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
+                e.target.style.backgroundColor = 'transparent';
+              }}
+            >
+              <List size={15} />
+              View All
+            </button>
+            <button
+              onClick={resetForm}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: 'transparent',
+                color: '#00364A',
+                border: '2px solid rgba(0, 54, 74, 0.2)',
+                borderRadius: '12px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'all 0.3s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderColor = '#00364A';
+                e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
+                e.target.style.backgroundColor = 'transparent';
+              }}
+            >
+              <X size={15} />
+              Reset Form
+            </button>
           </div>
         </div>
 
@@ -316,7 +352,6 @@ export default function SourceCreator() {
                 required
               />
             </div>
-
             {/* Pagination Type */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <label style={{
@@ -449,6 +484,152 @@ export default function SourceCreator() {
               </div>
             )}
 
+            {/* NEW: Authentication Checkbox */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '15px',
+              padding: '20px',
+              backgroundColor: 'white',
+              border: '2px solid rgba(0, 54, 74, 0.1)',
+              borderRadius: '15px'
+            }}>
+              <input
+                type="checkbox"
+                checked={isAuthProtected}
+                onChange={(e) => setIsAuthProtected(e.target.checked)}
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  accentColor: '#49A3C4',
+                  cursor: 'pointer'
+                }}
+              />
+              <label style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#00364A',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onClick={() => setIsAuthProtected(!isAuthProtected)}>
+                <Shield size={18} color="#49A3C4" />
+                Requires Login / Authentication?
+              </label>
+            </div>
+
+            {/* NEW: Authentication Configuration */}
+            {isAuthProtected && (
+              <div style={{
+                backgroundColor: '#E0EFFF',
+                padding: '30px',
+                borderRadius: '20px',
+                border: '2px solid rgba(73, 163, 196, 0.3)'
+              }}>
+                <h3 style={{
+                  fontSize: '18px',
+                  fontWeight: '700',
+                  color: '#00364A',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  <Shield size={20} color="#49A3C4" />
+                  Authentication Configuration
+                </h3>
+                
+                <div style={{ display: 'grid', gap: '20px' }}>
+                  {/* Login URL */}
+                  <DynamicField
+                    label="Login Page URL *"
+                    placeholder="https://example.com/login"
+                    onChange={(v) => handleAuthChange("login_url", v)}
+                  />
+                  
+                  {/* Auth Type Selector */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#00364A',
+                      opacity: 0.8
+                    }}>Authentication Type</label>
+                    <StyledSelect
+                      value={authConfig.auth_type}
+                      onChange={(e) => handleAuthChange("auth_type", e.target.value)}
+                      style={{ backgroundColor: 'white' }}
+                    >
+                      <option value="form">Form Login (Username/Password)</option>
+                      <option value="basic">HTTP Basic Auth</option>
+                    </StyledSelect>
+                  </div>
+
+                  {/* Credentials */}
+                  <DynamicField
+                    label="Username *"
+                    placeholder="your_username"
+                    onChange={(v) => handleAuthChange("username", v)}
+                  />
+                  
+                  <DynamicField
+                    label="Password *"
+                    type="password"
+                    placeholder="••••••••"
+                    onChange={(v) => handleAuthChange("password", v)}
+                  />
+
+                  {/* Advanced Selectors - Only show for form auth */}
+                  {authConfig.auth_type === "form" && (
+                    <>
+                      <div style={{
+                        marginTop: '10px',
+                        padding: '15px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+                        borderRadius: '12px'
+                      }}>
+                        <p style={{
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          color: '#00364A',
+                          marginBottom: '15px'
+                        }}>
+                          Advanced CSS Selectors (Optional - auto-detected if left empty)
+                        </p>
+                        
+                        <DynamicField
+                          label="Username Field Selector"
+                          placeholder='input[name="username"]'
+                          onChange={(v) => handleAuthChange("username_selector", v)}
+                        />
+                        
+                        <DynamicField
+                          label="Password Field Selector"
+                          placeholder='input[type="password"]'
+                          onChange={(v) => handleAuthChange("password_selector", v)}
+                        />
+                        
+                        <DynamicField
+                          label="Submit Button Selector"
+                          placeholder='button[type="submit"]'
+                          onChange={(v) => handleAuthChange("submit_selector", v)}
+                        />
+                        
+                        <DynamicField
+                          label="Success Indicator"
+                          placeholder=".dashboard, .welcome-message"
+                          onChange={(v) => handleAuthChange("success_indicator", v)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+
             {/* CAPTCHA Checkbox */}
             <div style={{
               display: 'flex',
@@ -474,9 +655,13 @@ export default function SourceCreator() {
                 fontSize: '16px',
                 fontWeight: '600',
                 color: '#00364A',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
               onClick={() => setIsCaptchaProtected(!isCaptchaProtected)}>
+                <Lock size={18} color="#49A3C4" />
                 Is Captcha Protected?
               </label>
             </div>
@@ -582,7 +767,7 @@ export default function SourceCreator() {
 
               <button
                 type="submit"
-                disabled={loading || !name || !url}
+                disabled={loading || !name || !url || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password))}
                 style={{
                   padding: '16px 36px',
                   backgroundColor: '#00364A',
@@ -591,15 +776,15 @@ export default function SourceCreator() {
                   borderRadius: '12px',
                   fontWeight: '600',
                   fontSize: '16px',
-                  cursor: loading || !name || !url ? 'not-allowed' : 'pointer',
+                  cursor: loading || !name || !url || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password)) ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
-                  opacity: loading || !name || !url ? 0.7 : 1,
+                  opacity: loading || !name || !url || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password)) ? 0.7 : 1,
                   transition: 'all 0.3s'
                 }}
                 onMouseEnter={(e) => {
-                  if (!loading && name && url) {
+                  if (!loading && name && url && (!isAuthProtected || (authConfig.login_url && authConfig.username && authConfig.password))) {
                     e.target.style.backgroundColor = 'white';
                     e.target.style.color = '#00364A';
                     e.target.style.transform = 'translateY(-2px)';
@@ -607,7 +792,7 @@ export default function SourceCreator() {
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!loading && name && url) {
+                  if (!loading && name && url && (!isAuthProtected || (authConfig.login_url && authConfig.username && authConfig.password))) {
                     e.target.style.backgroundColor = '#00364A';
                     e.target.style.color = 'white';
                     e.target.style.transform = 'translateY(0)';
@@ -642,6 +827,8 @@ export default function SourceCreator() {
     </div>
   );
 }
+
+// ... keep all your existing StyledInput, StyledSelect, and DynamicField components exactly as they are ...
 
 function StyledInput({ type = "text", value, onChange, placeholder, required }) {
   return (

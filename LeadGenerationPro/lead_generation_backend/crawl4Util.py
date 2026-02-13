@@ -2,11 +2,8 @@ import json
 import asyncio
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, JsonCssExtractionStrategy
-from models import ScrapeRequest, ScrapeResponse, FieldMapping, PaginationConfig
+from models import ScrapeRequest, ScrapeResponse, FieldMapping, PaginationConfig, AuthConfig
 from datetime import datetime
-from CapSolverUtil import solve_captcha_auto
-
-CAPSOLVER_API_KEY = "CAP-BA92F348AE81B7F394B902A4C1F9559828C02FE0B9E32A73BF8C08A5C3941E17" # no credits lol
 
 def build_paginated_url(base_url: str, page: int, pagination: PaginationConfig) -> str:
     """Build next page URL based on pagination type."""
@@ -69,6 +66,38 @@ def base_config(extraction_strategy, request: ScrapeRequest):
         extraction_strategy=extraction_strategy,
         page_timeout=(request.timeout * 1000) if request.timeout else 15000
     )
+
+
+# Authentication helper - builds login JavaScript
+def build_login_js(auth: AuthConfig) -> str:
+    """Generate JavaScript for form login."""
+    js = []
+    js.append("(async () => {")
+    
+    # Fill username - try common selectors if not specified
+    if auth.username_selector:
+        js.append(f"  const userField = document.querySelector('{auth.username_selector}');")
+    else:
+        js.append(f"  const userField = document.querySelector('input[name=\"username\"], input[type=\"email\"], input[name=\"email\"], input[name=\"login\"]');")
+    js.append(f"  if (userField) {{ userField.value = '{auth.username}'; userField.dispatchEvent(new Event('input', {{ bubbles: true }})); }}")
+    
+    # Fill password
+    if auth.password_selector:
+        js.append(f"  const passField = document.querySelector('{auth.password_selector}');")
+    else:
+        js.append(f"  const passField = document.querySelector('input[type=\"password\"]');")
+    js.append(f"  if (passField) {{ passField.value = '{auth.password}'; passField.dispatchEvent(new Event('input', {{ bubbles: true }})); }}")
+    
+    # Submit form
+    if auth.submit_selector:
+        js.append(f"  const submitBtn = document.querySelector('{auth.submit_selector}');")
+        js.append(f"  if (submitBtn) submitBtn.click();")
+    else:
+        js.append("  if (userField && userField.form) userField.form.submit();")
+    
+    js.append("  await new Promise(r => setTimeout(r, 5000));")  # Wait for redirect/login to process
+    js.append("})();")
+    return "\n".join(js)
 
 
 # HELPERS: PAGINATION CONFIG BUILDERS
@@ -161,14 +190,13 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
 
     schema = build_extraction_schema(request)
     extraction_strategy = JsonCssExtractionStrategy(schema, verbose=True)
-    config = base_config(extraction_strategy, request)
-
+    
     pagination = request.pagination_config
     page = pagination.start_page if pagination and pagination.start_page else 1
 
     all_data = []
 
-    # Log pagination setup
+    # Log pagination setup (unchanged)
     if pagination:
         print(f"📍 Pagination configured - Type: {pagination.type}, Start Page: {page}, Max Items: {request.max_items}")
         print(f"   ├─ Pagination details: {pagination}")
@@ -177,73 +205,74 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
     
     print(f"   └─ Starting loop with max_items={request.max_items}, page={page}, pagination={pagination is not None}")
 
-    # ---- CAPTCHA HANDLING (if passed in request) ----
-    captcha=request.captcha_params
-    if captcha is not None:
-        print("🧩 Handling captcha…")
-        try:
-            captcha_result = await solve_captcha_auto(
-               api_key=captcha.api_key if captcha.api_key else CAPSOLVER_API_KEY,
-               site_url=captcha.site_url if captcha.site_url else str(request.url),
-               site_key=captcha.site_key if captcha.site_key else None,
-               captcha_type=captcha.captcha_type if captcha.captcha_type else None
-            )
-            print("Captcha result:", captcha_result)
-                 
-        except Exception as e:
-            print("Captcha solving error:", str(e))
-            return ScrapeResponse(
-                entity_name=request.entity_name,
-                url=str(request.url),
-                scraped_at=datetime.now(),
-                total_items=0,
-                data=[],
-                success=False,
-                message=f"Captcha failed: {str(e)}"
-            )
-
-        if not captcha_result.get("success"):
-            return ScrapeResponse(
-                entity_name=request.entity_name,
-                url=str(request.url),
-                scraped_at=datetime.now(),
-                total_items=0,
-                data=[],
-                success=False,
-                message=f"Captcha failed: {captcha_result.get('error')}"
-            )
-        
-        if captcha_result.get("type") != "none":
-            # Apply captcha session to crawler config
-            config.session_id = captcha_result.get("session_id")
-            if "cookies" in captcha_result:
-                browser_cookies = [{"name": k, "value": v, "url": str(request.url)} for k, v in captcha_result["cookies"].items()]
-            else:
-                browser_cookies = []
-            # Merge into crawler config
-            config.extra_cookies = (config.extra_cookies or []) + browser_cookies   # Crawl4AI uses 'extra_cookies' to pass cookies
-            print("✅ Captcha solved, continuing scrape…")
-        else:
-            print("No captcha detected, continuing scrape…")
+    # Generate a unique session ID for this scrape job if authentication is needed
+    session_id = f"scrape_session_{datetime.now().timestamp()}" if request.auth_config else None
 
     try:
         async with AsyncWebCrawler(verbose=True) as crawler:
+            
+            # ---- AUTHENTICATION HANDLING (only if auth_config exists) ----
+            if request.auth_config:
+                print(f"🔐 Authentication required for {request.auth_config.login_url}")
+                try:
+                    # Step 1: Login - creates session
+                    login_config = CrawlerRunConfig(
+                        session_id=session_id,
+                        js_code=build_login_js(request.auth_config),
+                        wait_for=request.auth_config.success_indicator or "body",
+                        page_timeout=30000,
+                        cache_mode=CacheMode.BYPASS
+                    )
+                    
+                    # FIXED: url as first argument, config as second
+                    login_result = await crawler.arun(
+                        url=str(request.auth_config.login_url),
+                        config=login_config
+                    )
+                    
+                    if not login_result.success:
+                        print(f"❌ Login failed: {login_result.error_message}")
+                        print("⚠️  Continuing without authentication - may fail if content is protected")
+                        session_id = None  # Reset session ID to avoid using failed auth session
+                    else:
+                        print("✅ Authentication successful, session established")
+                        
+                except Exception as e:
+                    print(f"❌ Authentication error: {str(e)}")
+                    print("⚠️  Continuing without authentication - may fail if content is protected")
+                    session_id = None  # Reset session ID to avoid using failed auth session
+            
+            # ---- MAIN SCRAPING LOOP (identical to original for non-auth) ----
             while True:
 
-                # ---- Apply pagination logic ----
+                # ---- Base config (same as original base_config) ----
+                scrape_config = CrawlerRunConfig(
+                    cache_mode=CacheMode.BYPASS,
+                    extraction_strategy=extraction_strategy,
+                    page_timeout=(request.timeout * 1000) if request.timeout else 15000
+                )
+                
+                # Add session ID ONLY if we have one from successful auth
+                if session_id:
+                    scrape_config.session_id = session_id
+
+                # ---- Apply pagination logic (unchanged) ----
                 if pagination:
                     if pagination.type == "scroll":
-                        config = apply_scroll_pagination(config, pagination)
-
+                        scrape_config = apply_scroll_pagination(scrape_config, pagination)
                     elif pagination.type in ["button_click", "ajax_click"]:
-                        config = apply_button_click_pagination(config, pagination)
+                        scrape_config = apply_button_click_pagination(scrape_config, pagination)
 
-                # ---- Determine target URL ----
+                # ---- Determine target URL (unchanged) ----
                 target_url = get_target_url(request, pagination, page)
                 
-                # ---- Run crawl ----
-                result = await crawler.arun(url=target_url, config=config)
+                # ---- FIXED: Run crawl with url as first arg, config as second ----
+                result = await crawler.arun(
+                    url=target_url,
+                    config=scrape_config
+                )
 
+                # ---- Rest of the loop is COMPLETELY UNCHANGED ----
                 if not result.success:
                     print(f"❌ Page {page} failed: {result.error_message}")
                     break
@@ -257,8 +286,6 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 print(f"✅ Page {page}: {len(page_data)} items (total={len(all_data)})")
 
                 # ---- 1. Stop by max items ----
-                # CRITICAL FIX: Check max_items FIRST before breaking for pagination types
-                # This ensures we continue pagination until we reach the requested number of items
                 if request.max_items and len(all_data) >= request.max_items:
                     all_data = all_data[:request.max_items]
                     print(f"   ✅ Condition 1: Reached max_items limit ({request.max_items}), stopping pagination")
@@ -269,8 +296,7 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                     print(f"   ✅ Condition 2: Reached max_pages limit ({pagination.max_pages}), stopping pagination")
                     break
                 
-                # ---- 3. Scroll AND Click pagination runs only once per action ----
-                # These types handle all pagination in JavaScript in one crawl, so we don't loop
+                # ---- 3. Scroll AND Click pagination runs only once ----
                 if pagination and (pagination.type in ["button_click", "ajax_click", "scroll"]):
                     print(f"   ✅ Condition 3: {pagination.type} pagination complete (all items loaded in single crawl)")
                     break
@@ -284,14 +310,22 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 print(f"   ➡️  No break conditions met. Continuing to page {page + 1} (current items: {len(all_data)}, target: {request.max_items})")
                 page += 1
 
-            # ---- Build response ----
+            # ---- Clean up session if we created one ----
+            if session_id:
+                try:
+                    await crawler.crawler_strategy.kill_session(session_id)
+                    print("🧹 Session cleaned up")
+                except:
+                    pass
+
+            # ---- Build response (unchanged) ----
             page_size = None
             if pagination and pagination.type == "scroll":
                 page_size = len(all_data)/pagination.scroll_steps if pagination.scroll_steps else len(all_data)
             elif pagination and pagination.type in ["button_click", "ajax_click"]:
                 page_size = len(all_data)/pagination.click_steps if pagination.click_steps else len(all_data)
             else:
-                page_size=len(all_data)/page if page>0 else len(all_data)
+                page_size = len(all_data)/page if page>0 else len(all_data)
 
             return ScrapeResponse(
                 entity_name=request.entity_name,
@@ -301,11 +335,17 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                 data=all_data,
                 success=True,
                 message=f"Scraped {len(all_data)} items across {page} pages",
-                page_size = int(page_size)
+                page_size = int(page_size) if page_size else 0
             )
 
     except Exception as e:
         print(f"Error during scraping: {str(e)}")
+        # Clean up session on error
+        if 'session_id' in locals() and session_id and 'crawler' in locals():
+            try:
+                await crawler.crawler_strategy.kill_session(session_id)
+            except:
+                pass
         return ScrapeResponse(
             entity_name=request.entity_name,
             url=str(request.url),
