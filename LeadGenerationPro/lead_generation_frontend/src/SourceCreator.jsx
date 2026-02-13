@@ -14,7 +14,8 @@ import {
   ExternalLink,
   Layers,
   CheckCircle,
-  Info
+  Info,
+  Shield
 } from 'lucide-react';
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
@@ -22,16 +23,6 @@ import { useNavigate } from 'react-router-dom';
 const SourceCreator = () => {
   const navigate = useNavigate();
   const [sourceType, setSourceType] = useState('web'); // 'web' or 'api'
-import React, { useState } from "react";
-import { Database, ExternalLink, Layers, Save, X, AlertTriangle, Lock, List, ArrowLeft, Shield } from "lucide-react";
-import API_BASE from "./api_base";
-import { useNavigate } from "react-router-dom";
-
-export default function SourceCreator() {
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [paginationType, setPaginationType] = useState("");
-  const [paginationConfig, setPaginationConfig] = useState({});
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
 
@@ -42,13 +33,21 @@ export default function SourceCreator() {
   const [paginationConfig, setPaginationConfig] = useState({});
   const [isCaptchaProtected, setIsCaptchaProtected] = useState(false);
   const [isAuthProtected, setIsAuthProtected] = useState(false);
-  const navigate = useNavigate();
-  
   const [captchaParams, setCaptchaParams] = useState({
     api_key: "",
     site_url: "",
     captcha_type: "",
     site_key: ""
+  });
+  const [authConfig, setAuthConfig] = useState({
+    login_url: "",
+    username: "",
+    password: "",
+    auth_type: "form",
+    username_selector: "",
+    password_selector: "",
+    submit_selector: "",
+    success_indicator: ""
   });
 
   // API Source State
@@ -74,17 +73,6 @@ export default function SourceCreator() {
   });
   const [newParam, setNewParam] = useState({ key: '', value: '' });
   const [newHeader, setNewHeader] = useState({ key: '', value: '' });
-  // NEW: Auth configuration state
-  const [authConfig, setAuthConfig] = useState({
-    login_url: "",
-    username: "",
-    password: "",
-    auth_type: "form",
-    username_selector: "",
-    password_selector: "",
-    submit_selector: "",
-    success_indicator: ""
-  });
 
   const paginationTypes = [
     "query_param",
@@ -123,13 +111,11 @@ export default function SourceCreator() {
     setCaptchaParams((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleWebSubmit = async (e) => {
-  // NEW: Handle auth config changes
   const handleAuthChange = (field, value) => {
     setAuthConfig((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleWebSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setResponse(null);
@@ -139,29 +125,19 @@ export default function SourceCreator() {
       : null;
 
     const captchaPayload = isCaptchaProtected ? captchaParams : null;
+    const authPayload = isAuthProtected ? authConfig : null;
 
     const targetUrl =
       `${API_BASE}/source/save-source?` +
       `name=${encodeURIComponent(webName)}` +
       `&url=${encodeURIComponent(webUrl)}` +
-      `&is_captcha_protected=${isCaptchaProtected}`;
-
-    // NEW: auth params (sent in body)
-    const authPayload = isAuthProtected ? authConfig : null;
-
-    // query params
-    const targetUrl =
-      `${API_BASE}/source/save-source?` +
-      `name=${encodeURIComponent(name)}` +
-      `&url=${encodeURIComponent(url)}` +
       `&is_captcha_protected=${isCaptchaProtected}` +
-      `&is_auth_protected=${isAuthProtected}`;  // Add this
+      `&is_auth_protected=${isAuthProtected}`;
 
-    // build final request body
     const body = {
       pagination_config: paginationPayload,
       captcha_params: captchaPayload,
-      auth_config: authPayload  // NEW: Add auth config to body
+      auth_config: authPayload
     };
 
     try {
@@ -332,6 +308,136 @@ export default function SourceCreator() {
       submit_selector: "",
       success_indicator: ""
     });
+  };
+
+  // API Source Handlers
+  const handleEntityChange = (entityName) => {
+    const selectedEntity = entities.find(e => e.name === entityName);
+    setApiFormData(prev => ({
+      ...prev,
+      entity_name: entityName,
+      field_mappings: selectedEntity 
+        ? selectedEntity.columns
+            .filter(col => !['id', 'source', 'modified_at', 'created_at'].includes(col))
+            .map(col => ({
+              api_field: '', 
+              db_field: col, 
+              transform: '' 
+            }))
+        : []
+    }));
+  };
+
+  const handleApiInputChange = (field, value) => {
+    setApiFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleNestedChange = (parent, field, value) => {
+    setApiFormData(prev => ({
+      ...prev,
+      [parent]: { ...prev[parent], [field]: value }
+    }));
+  };
+
+  const handleMappingUpdate = (index, field, value) => {
+    const updatedMappings = [...apiFormData.field_mappings];
+    updatedMappings[index][field] = value;
+    setApiFormData(prev => ({ ...prev, field_mappings: updatedMappings }));
+  };
+
+  const addHeader = () => {
+    if (!newHeader.key) return;
+    setApiFormData(prev => ({
+      ...prev,
+      request_template: { ...prev.request_template, headers: { ...prev.request_template.headers, [newHeader.key]: newHeader.value } }
+    }));
+    setNewHeader({ key: '', value: '' });
+  };
+
+  const removeHeader = (key) => {
+    const newHeaders = { ...apiFormData.request_template.headers };
+    delete newHeaders[key];
+    setApiFormData(prev => ({ ...prev, request_template: { ...prev.request_template, headers: newHeaders } }));
+  };
+
+  const addParam = () => {
+    if (!newParam.key) return;
+    setApiFormData(prev => ({
+      ...prev,
+      request_template: { ...prev.request_template, params: { ...prev.request_template.params, [newParam.key]: newParam.value } }
+    }));
+    setNewParam({ key: '', value: '' });
+  };
+
+  const removeParam = (key) => {
+    const newParams = { ...apiFormData.request_template.params };
+    delete newParams[key];
+    setApiFormData(prev => ({ ...prev, request_template: { ...prev.request_template, params: newParams } }));
+  };
+
+  const handleApiSubmit = async (e) => {
+    e.preventDefault();
+    const activeMappings = apiFormData.field_mappings.filter(m => m.api_field.trim() !== '');
+
+    if (!apiFormData.name || !apiFormData.api_url || !apiFormData.entity_name) {
+      setResponse({ type: 'error', message: 'Basic Info is required' });
+      return;
+    }
+    if (activeMappings.length === 0) {
+      setResponse({ type: 'error', message: 'Please map at least one attribute to an API field' });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setResponse(null);
+      const apiResponse = await fetch(`${API_BASE}/api-sources/`, {
+        method: 'POST',
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+        body: JSON.stringify({ ...apiFormData, field_mappings: activeMappings })
+      });
+      const data = await apiResponse.json();
+      if (!apiResponse.ok) throw new Error(data.detail || 'Failed to create API source');
+
+      setResponse({ type: 'success', message: 'API source created successfully!' });
+      setTimeout(() => navigate('/sourcemanagement'), 1500);
+    } catch (err) {
+      setResponse({ type: 'error', message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetApiForm = () => {
+    setApiFormData({
+      name: '',
+      api_url: '',
+      api_key: '',
+      api_key_name: 'Authorization',
+      entity_name: '',
+      request_template: {
+        method: 'GET',
+        headers: {},
+        params: {}, 
+        body: {},
+        timeout: 30
+      },
+      response_structure: {
+        data_path: '',
+        sample_response: {}
+      },
+      field_mappings: [] 
+    });
+    setNewParam({ key: '', value: '' });
+    setNewHeader({ key: '', value: '' });
+  };
+
+  const resetForm = () => {
+    if (sourceType === 'web') {
+      resetWebForm();
+    } else {
+      resetApiForm();
+    }
     setResponse(null);
   };
 
@@ -625,79 +731,6 @@ export default function SourceCreator() {
                   required
                 />
               </div>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-            
-            {/* Source Name */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <label style={{
-                fontSize: '16px',
-                fontWeight: '600',
-                color: '#00364A',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px'
-              }}>
-                <Database size={18} color="#49A3C4" />
-                Source Name *
-              </label>
-              <StyledInput
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter source name"
-                required
-              />
-            </div>
-
-            {/* URL */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <label style={{
-                fontSize: '16px',
-                fontWeight: '600',
-                color: '#00364A',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px'
-              }}>
-                <ExternalLink size={18} color="#49A3C4" />
-                Source URL *
-              </label>
-              <StyledInput
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com"
-                required
-              />
-            </div>
-            {/* Pagination Type */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <label style={{
-                fontSize: '16px',
-                fontWeight: '600',
-                color: '#00364A',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px'
-              }}>
-                <Layers size={18} color="#49A3C4" />
-                Pagination Type
-              </label>
-              <StyledSelect
-                value={paginationType}
-                onChange={(e) => {
-                  setPaginationType(e.target.value);
-                  setPaginationConfig({});
-                }}
-              >
-                <option value="">Select pagination type</option>
-                {paginationTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </option>
-                ))}
-              </StyledSelect>
-            </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <label style={{
@@ -826,6 +859,146 @@ export default function SourceCreator() {
                 </div>
               )}
 
+              {/* Authentication Checkbox */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '15px',
+                padding: '20px',
+                backgroundColor: 'white',
+                border: '2px solid rgba(0, 54, 74, 0.1)',
+                borderRadius: '15px'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={isAuthProtected}
+                  onChange={(e) => setIsAuthProtected(e.target.checked)}
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    accentColor: '#49A3C4',
+                    cursor: 'pointer'
+                  }}
+                />
+                <label style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#00364A',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+                onClick={() => setIsAuthProtected(!isAuthProtected)}>
+                  <Shield size={18} color="#49A3C4" />
+                  Requires Login / Authentication?
+                </label>
+              </div>
+
+              {/* Authentication Configuration */}
+              {isAuthProtected && (
+                <div style={{
+                  backgroundColor: '#E0EFFF',
+                  padding: '30px',
+                  borderRadius: '20px',
+                  border: '2px solid rgba(73, 163, 196, 0.3)'
+                }}>
+                  <h3 style={{
+                    fontSize: '18px',
+                    fontWeight: '700',
+                    color: '#00364A',
+                    marginBottom: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <Shield size={20} color="#49A3C4" />
+                    Authentication Configuration
+                  </h3>
+                  
+                  <div style={{ display: 'grid', gap: '20px' }}>
+                    <DynamicField
+                      label="Login Page URL *"
+                      placeholder="https://example.com/login"
+                      onChange={(v) => handleAuthChange("login_url", v)}
+                    />
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: '#00364A',
+                        opacity: 0.8
+                      }}>Authentication Type</label>
+                      <StyledSelect
+                        value={authConfig.auth_type}
+                        onChange={(e) => handleAuthChange("auth_type", e.target.value)}
+                        style={{ backgroundColor: 'white' }}
+                      >
+                        <option value="form">Form Login (Username/Password)</option>
+                        <option value="basic">HTTP Basic Auth</option>
+                      </StyledSelect>
+                    </div>
+
+                    <DynamicField
+                      label="Username *"
+                      placeholder="your_username"
+                      onChange={(v) => handleAuthChange("username", v)}
+                    />
+                    
+                    <DynamicField
+                      label="Password *"
+                      type="password"
+                      placeholder="••••••••"
+                      onChange={(v) => handleAuthChange("password", v)}
+                    />
+
+                    {authConfig.auth_type === "form" && (
+                      <div style={{
+                        marginTop: '10px',
+                        padding: '15px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+                        borderRadius: '12px'
+                      }}>
+                        <p style={{
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          color: '#00364A',
+                          marginBottom: '15px'
+                        }}>
+                          Advanced CSS Selectors (Optional - auto-detected if left empty)
+                        </p>
+                        
+                        <DynamicField
+                          label="Username Field Selector"
+                          placeholder='input[name="username"]'
+                          onChange={(v) => handleAuthChange("username_selector", v)}
+                        />
+                        
+                        <DynamicField
+                          label="Password Field Selector"
+                          placeholder='input[type="password"]'
+                          onChange={(v) => handleAuthChange("password_selector", v)}
+                        />
+                        
+                        <DynamicField
+                          label="Submit Button Selector"
+                          placeholder='button[type="submit"]'
+                          onChange={(v) => handleAuthChange("submit_selector", v)}
+                        />
+                        
+                        <DynamicField
+                          label="Success Indicator"
+                          placeholder=".dashboard, .welcome-message"
+                          onChange={(v) => handleAuthChange("success_indicator", v)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* CAPTCHA Checkbox */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -850,9 +1023,13 @@ export default function SourceCreator() {
                   fontSize: '16px',
                   fontWeight: '600',
                   color: '#00364A',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
                 }}
                 onClick={() => setIsCaptchaProtected(!isCaptchaProtected)}>
+                  <Lock size={18} color="#49A3C4" />
                   Is Captcha Protected?
                 </label>
               </div>
@@ -918,190 +1095,6 @@ export default function SourceCreator() {
                 </div>
               )}
 
-            {/* NEW: Authentication Checkbox */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '15px',
-              padding: '20px',
-              backgroundColor: 'white',
-              border: '2px solid rgba(0, 54, 74, 0.1)',
-              borderRadius: '15px'
-            }}>
-              <input
-                type="checkbox"
-                checked={isAuthProtected}
-                onChange={(e) => setIsAuthProtected(e.target.checked)}
-                style={{
-                  width: '20px',
-                  height: '20px',
-                  accentColor: '#49A3C4',
-                  cursor: 'pointer'
-                }}
-              />
-              <label style={{
-                fontSize: '16px',
-                fontWeight: '600',
-                color: '#00364A',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              onClick={() => setIsAuthProtected(!isAuthProtected)}>
-                <Shield size={18} color="#49A3C4" />
-                Requires Login / Authentication?
-              </label>
-            </div>
-
-            {/* NEW: Authentication Configuration */}
-            {isAuthProtected && (
-              <div style={{
-                backgroundColor: '#E0EFFF',
-                padding: '30px',
-                borderRadius: '20px',
-                border: '2px solid rgba(73, 163, 196, 0.3)'
-              }}>
-                <h3 style={{
-                  fontSize: '18px',
-                  fontWeight: '700',
-                  color: '#00364A',
-                  marginBottom: '20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
-                }}>
-                  <Shield size={20} color="#49A3C4" />
-                  Authentication Configuration
-                </h3>
-                
-                <div style={{ display: 'grid', gap: '20px' }}>
-                  {/* Login URL */}
-                  <DynamicField
-                    label="Login Page URL *"
-                    placeholder="https://example.com/login"
-                    onChange={(v) => handleAuthChange("login_url", v)}
-                  />
-                  
-                  {/* Auth Type Selector */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: '#00364A',
-                      opacity: 0.8
-                    }}>Authentication Type</label>
-                    <StyledSelect
-                      value={authConfig.auth_type}
-                      onChange={(e) => handleAuthChange("auth_type", e.target.value)}
-                      style={{ backgroundColor: 'white' }}
-                    >
-                      <option value="form">Form Login (Username/Password)</option>
-                      <option value="basic">HTTP Basic Auth</option>
-                    </StyledSelect>
-                  </div>
-
-                  {/* Credentials */}
-                  <DynamicField
-                    label="Username *"
-                    placeholder="your_username"
-                    onChange={(v) => handleAuthChange("username", v)}
-                  />
-                  
-                  <DynamicField
-                    label="Password *"
-                    type="password"
-                    placeholder="••••••••"
-                    onChange={(v) => handleAuthChange("password", v)}
-                  />
-
-                  {/* Advanced Selectors - Only show for form auth */}
-                  {authConfig.auth_type === "form" && (
-                    <>
-                      <div style={{
-                        marginTop: '10px',
-                        padding: '15px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.5)',
-                        borderRadius: '12px'
-                      }}>
-                        <p style={{
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          color: '#00364A',
-                          marginBottom: '15px'
-                        }}>
-                          Advanced CSS Selectors (Optional - auto-detected if left empty)
-                        </p>
-                        
-                        <DynamicField
-                          label="Username Field Selector"
-                          placeholder='input[name="username"]'
-                          onChange={(v) => handleAuthChange("username_selector", v)}
-                        />
-                        
-                        <DynamicField
-                          label="Password Field Selector"
-                          placeholder='input[type="password"]'
-                          onChange={(v) => handleAuthChange("password_selector", v)}
-                        />
-                        
-                        <DynamicField
-                          label="Submit Button Selector"
-                          placeholder='button[type="submit"]'
-                          onChange={(v) => handleAuthChange("submit_selector", v)}
-                        />
-                        
-                        <DynamicField
-                          label="Success Indicator"
-                          placeholder=".dashboard, .welcome-message"
-                          onChange={(v) => handleAuthChange("success_indicator", v)}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-
-            {/* CAPTCHA Checkbox */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '15px',
-              padding: '20px',
-              backgroundColor: 'white',
-              border: '2px solid rgba(0, 54, 74, 0.1)',
-              borderRadius: '15px'
-            }}>
-              <input
-                type="checkbox"
-                checked={isCaptchaProtected}
-                onChange={(e) => setIsCaptchaProtected(e.target.checked)}
-                style={{
-                  width: '20px',
-                  height: '20px',
-                  accentColor: '#49A3C4',
-                  cursor: 'pointer'
-                }}
-              />
-              <label style={{
-                fontSize: '16px',
-                fontWeight: '600',
-                color: '#00364A',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              onClick={() => setIsCaptchaProtected(!isCaptchaProtected)}>
-                <Lock size={18} color="#49A3C4" />
-                Is Captcha Protected?
-              </label>
-            </div>
-
-            {/* CAPTCHA Params */}
-            {isCaptchaProtected && (
               <div style={{
                 display: 'flex',
                 justifyContent: 'flex-end',
@@ -1140,7 +1133,7 @@ export default function SourceCreator() {
 
                 <button
                   type="submit"
-                  disabled={loading || !webName || !webUrl}
+                  disabled={loading || !webName || !webUrl || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password))}
                   style={{
                     padding: '16px 36px',
                     backgroundColor: '#00364A',
@@ -1149,15 +1142,15 @@ export default function SourceCreator() {
                     borderRadius: '12px',
                     fontWeight: '600',
                     fontSize: '16px',
-                    cursor: loading || !webName || !webUrl ? 'not-allowed' : 'pointer',
+                    cursor: loading || !webName || !webUrl || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password)) ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '10px',
-                    opacity: loading || !webName || !webUrl ? 0.7 : 1,
+                    opacity: loading || !webName || !webUrl || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password)) ? 0.7 : 1,
                     transition: 'all 0.3s'
                   }}
                   onMouseEnter={(e) => {
-                    if (!loading && webName && webUrl) {
+                    if (!loading && webName && webUrl && (!isAuthProtected || (authConfig.login_url && authConfig.username && authConfig.password))) {
                       e.target.style.backgroundColor = 'white';
                       e.target.style.color = '#00364A';
                       e.target.style.transform = 'translateY(-2px)';
@@ -1165,7 +1158,7 @@ export default function SourceCreator() {
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (!loading && webName && webUrl) {
+                    if (!loading && webName && webUrl && (!isAuthProtected || (authConfig.login_url && authConfig.username && authConfig.password))) {
                       e.target.style.backgroundColor = '#00364A';
                       e.target.style.color = 'white';
                       e.target.style.transform = 'translateY(0)';
@@ -1321,50 +1314,6 @@ export default function SourceCreator() {
                       </div>
                     ))}
                   </div>
-              <button
-                type="submit"
-                disabled={loading || !name || !url || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password))}
-                style={{
-                  padding: '16px 36px',
-                  backgroundColor: '#00364A',
-                  color: 'white',
-                  border: '2px solid #00364A',
-                  borderRadius: '12px',
-                  fontWeight: '600',
-                  fontSize: '16px',
-                  cursor: loading || !name || !url || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password)) ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  opacity: loading || !name || !url || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password)) ? 0.7 : 1,
-                  transition: 'all 0.3s'
-                }}
-                onMouseEnter={(e) => {
-                  if (!loading && name && url && (!isAuthProtected || (authConfig.login_url && authConfig.username && authConfig.password))) {
-                    e.target.style.backgroundColor = 'white';
-                    e.target.style.color = '#00364A';
-                    e.target.style.transform = 'translateY(-2px)';
-                    e.target.style.boxShadow = '0 6px 20px rgba(0, 54, 74, 0.3)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!loading && name && url && (!isAuthProtected || (authConfig.login_url && authConfig.username && authConfig.password))) {
-                    e.target.style.backgroundColor = '#00364A';
-                    e.target.style.color = 'white';
-                    e.target.style.transform = 'translateY(0)';
-                    e.target.style.boxShadow = 'none';
-                  }
-                }}
-              >
-                {loading ? (
-                  <div style={{
-                    width: '20px',
-                    height: '20px',
-                    border: '2px solid rgba(255,255,255,0.3)',
-                    borderTop: '2px solid white',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                  }} />
                 ) : (
                   <p style={{ textAlign: 'center', opacity: 0.5 }}>Select an Entity to see attributes.</p>
                 )}
@@ -1394,9 +1343,6 @@ export default function SourceCreator() {
 
 // Helper Components
 function StyledInput({ type = "text", value, onChange, placeholder, required, style }) {
-// ... keep all your existing StyledInput, StyledSelect, and DynamicField components exactly as they are ...
-
-function StyledInput({ type = "text", value, onChange, placeholder, required }) {
   return (
     <input
       type={type}
