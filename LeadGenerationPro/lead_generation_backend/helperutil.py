@@ -1,5 +1,6 @@
 import json
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+import asyncio
 from datetime import datetime
 from crawl4ai import (
     AsyncWebCrawler,
@@ -15,9 +16,6 @@ from models import (
     FollowLink,
     AuthConfig  # NEW: Import AuthConfig
 )
-from CapSolverUtil import solve_captcha_auto
-
-CAPSOLVER_API_KEY = "CAP-BA92F348AE81B7F394B902A4C1F9559828C02FE0B9E32A73BF8C08A5C3941E17"
 
 # ===================================================
 # PAGINATION URL BUILDERS
@@ -118,161 +116,83 @@ def base_config(strategy, request: ScrapeRequest):
 
 
 # ===================================================
-# AUTHENTICATION HELPER (NEW)
+# AUTHENTICATION HELPER (SIMPLIFIED - MATCHES WORKING CODE)
 # ===================================================
 
 def build_login_js(auth: AuthConfig) -> str:
-    """Generate JavaScript for form login with intelligent fuzzy field detection."""
+    """Generate JavaScript for form login - simplified version that matches working test code."""
     js = []
     js.append("(async () => {")
+    js.append("  console.log('🚀 Starting login process...');")
     
-    # Fill username/email field - INTELLIGENT FUZZY DETECTION
+    # Username field
     if auth.username_selector:
         js.append(f"  const userField = document.querySelector('{auth.username_selector}');")
     else:
-        js.append("""
-  // INTELLIGENT USERNAME/EMAIL FIELD DETECTION
-  const userField = (() => {
-    // 1. Try exact common name attributes
-    let field = document.querySelector('input[name="username"], input[name="email"], input[name="login"], input[name="user"], input[type="email"]');
-    if (field) return field;
+        js.append("""  const userField = document.querySelector(
+            'input[name*="user" i], ' +
+            'input[name*="email" i], ' +
+            'input[name*="login" i], ' +
+            'input[name*="name" i], ' +
+            'input[type="email"], ' +
+            'input[placeholder*="email" i], ' +
+            'input[placeholder*="user" i]'
+        );""")
+
+    js.append(f"  if (userField) {{")
+    js.append(f"    userField.value = '{auth.username}';")
+    js.append(f"    userField.dispatchEvent(new Event('input', {{ bubbles: true }}));")
+    js.append(f"    console.log('✅ Username field filled');")
+    js.append(f"  }} else {{")
+    js.append(f"    console.error('❌ Username field not found');")
+    js.append(f"  }}")
     
-    // 2. Try partial attribute matches (contains user/email/login)
-    field = document.querySelector('input[name*="user"], input[name*="email"], input[name*="login"], input[id*="user"], input[id*="email"], input[id*="login"]');
-    if (field) return field;
-    
-    // 3. Try placeholder text (including @ symbol for email)
-    field = document.querySelector('input[placeholder*="email"], input[placeholder*="username"], input[placeholder*="login"], input[placeholder*="user"], input[placeholder*="@"], input[placeholder*="mail"]');
-    if (field) return field;
-    
-    // 4. Try aria labels and labels
-    field = document.querySelector('input[aria-label*="user"], input[aria-label*="email"], input[aria-label*="login"]');
-    if (field) return field;
-    
-    // 5. Try any visible text input that's not password/hidden/submit, prioritizing those near top of form
-    const allInputs = Array.from(document.querySelectorAll('input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"])'));
-    
-    // Filter to only visible inputs
-    const visibleInputs = allInputs.filter(input => {
-      const style = window.getComputedStyle(input);
-      return style.display !== 'none' && style.visibility !== 'hidden' && input.offsetHeight > 0;
-    });
-    
-    // Return first visible text input (usually username/email field)
-    if (visibleInputs.length > 0) return visibleInputs[0];
-    
-    // 6. Last resort: first non-password input in a form
-    return document.querySelector('form input:not([type="password"]):not([type="hidden"])');
-  })();
-        """)
-    
-    js.append("""
-  if (userField) {
-    // Set value and trigger events
-    userField.value = '{auth_username}';
-    userField.dispatchEvent(new Event('input', { bubbles: true }));
-    userField.dispatchEvent(new Event('change', { bubbles: true }));
-    userField.dispatchEvent(new Event('blur', { bubbles: true }));
-    console.log('✅ Username/email field filled:', userField.name || userField.id || userField.placeholder);
-  } else {
-    console.error('❌ Could not find username/email field');
-  }
-    """.replace('{auth_username}', auth.username))
-    
-    # Fill password field - INTELLIGENT DETECTION
+    # Password field
     if auth.password_selector:
         js.append(f"  const passField = document.querySelector('{auth.password_selector}');")
     else:
-        js.append("""
-  // INTELLIGENT PASSWORD FIELD DETECTION
-  const passField = (() => {
-    // 1. Standard password input
-    let field = document.querySelector('input[type="password"]');
-    if (field) return field;
+        js.append("""  const passField = document.querySelector(
+            'input[type="password"], ' +
+            'input[name*="pass" i], ' +
+            'input[name*="pwd" i], ' +
+            'input[id*="pass" i], ' +
+            'input[id*="pwd" i], ' +
+            'input[placeholder*="pass" i], ' +
+            'input[placeholder*="password" i], ' +
+            'input[placeholder*="pwd" i]'
+        );""")
+
+    js.append(f"  if (passField) {{")
+    js.append(f"    passField.value = '{auth.password}';")
+    js.append(f"    passField.dispatchEvent(new Event('input', {{ bubbles: true }}));")
+    js.append(f"    console.log('✅ Password field filled');")
+    js.append(f"  }} else {{")
+    js.append(f"    console.error('❌ Password field not found');")
+    js.append(f"  }}")
     
-    // 2. Try partial matches on name/id
-    field = document.querySelector('input[name*="pass"], input[id*="pass"], input[name*="pwd"], input[id*="pwd"]');
-    if (field) return field;
-    
-    // 3. Try placeholder text
-    field = document.querySelector('input[placeholder*="pass"], input[placeholder*="pwd"]');
-    if (field) return field;
-    
-    // 4. Last resort: find any hidden password-like field
-    return document.querySelector('input[type="password"], input[name*="secret"]');
-  })();
-        """)
-    
-    js.append("""
-  if (passField) {
-    // Set value and trigger events
-    passField.value = '{auth_password}';
-    passField.dispatchEvent(new Event('input', { bubbles: true }));
-    passField.dispatchEvent(new Event('change', { bubbles: true }));
-    passField.dispatchEvent(new Event('blur', { bubbles: true }));
-    console.log('✅ Password field filled');
-  } else {
-    console.error('❌ Could not find password field');
-  }
-    """.replace('{auth_password}', auth.password))
-    
-    # Submit form - INTELLIGENT DETECTION
+    # Submit button
     if auth.submit_selector:
         js.append(f"  const submitBtn = document.querySelector('{auth.submit_selector}');")
+        js.append(f"  if (submitBtn) {{")
+        js.append(f"    submitBtn.click();")
+        js.append(f"    console.log('✅ Submit button clicked');")
+        js.append(f"  }} else {{")
+        js.append(f"    console.error('❌ Submit button not found');")
+        js.append(f"  }}")
     else:
-        js.append("""
-  // INTELLIGENT SUBMIT BUTTON DETECTION
-  const submitBtn = (() => {
-    // 1. Try common submit button types
-    let btn = document.querySelector('button[type="submit"], input[type="submit"], button:contains("Login"), button:contains("Sign in"), button:contains("Log in")');
-    if (btn) return btn;
+        js.append("  if (userField && userField.form) {")
+        js.append("    userField.form.submit();")
+        js.append("    console.log('✅ Form submitted directly');")
+        js.append("  }")
     
-    // 2. Try buttons with login/signin in text
-    const allButtons = Array.from(document.querySelectorAll('button, input[type="button"]'));
-    const loginButton = allButtons.find(btn => {
-      const text = (btn.textContent || btn.value || '').toLowerCase();
-      return text.includes('login') || text.includes('sign in') || text.includes('log in') || 
-             text.includes('submit') || text.includes('signin');
-    });
-    if (loginButton) return loginButton;
-    
-    // 3. Try any button in the same form as userField
-    if (userField && userField.form) {
-      return userField.form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
-    }
-    
-    // 4. Last resort: first button in the form
-    if (userField && userField.form) {
-      return userField.form.querySelector('button, input[type="button"]');
-    }
-    return null;
-  })();
-        """)
-    
-    js.append("""
-  if (submitBtn) {
-    submitBtn.click();
-    console.log('✅ Submit button clicked');
-  } else if (userField && userField.form) {
-    // Fallback: submit the form directly
-    userField.form.submit();
-    console.log('✅ Form submitted directly');
-  } else {
-    console.error('❌ Could not find submit button or form');
-  }
-  
-  // Wait for redirect/login to process
-  await new Promise(r => setTimeout(r, 5000));
-  
-  // Check if login was successful (look for common success indicators)
-  const successIndicators = document.querySelector('.success, .flash, .alert-success, [class*="success"], [class*="welcome"]');
-  if (successIndicators) {
-    console.log('✅ Login appears successful - success message detected');
-  }
-    """)
-    
+    # Simple wait - matches working code's 30 second wait
+    js.append("  console.log('⏳ Waiting 30 seconds for login to complete...');")
+    js.append("  await new Promise(r => setTimeout(r, 30000));")
     js.append("})();")
+    
     return "\n".join(js)
+
+    
 # ===================================================
 # PAGINATION TYPE HANDLERS (from crawl4Util)
 # ===================================================
@@ -282,6 +202,9 @@ def apply_scroll_pagination(config, pagination):
        So that crawler doesn't keep scraping the same items at the top of the page after each scroll'''
     
     print("Handling infinite scroll")
+
+    # Store the original session ID if it exists
+    original_session_id = getattr(config, 'session_id', None)
 
     scroll_steps = pagination.scroll_steps or 15
     scroll_delay = 1
@@ -296,7 +219,10 @@ def apply_scroll_pagination(config, pagination):
         scrollPage();
     """
 
-    config.session_id = "scroll_session"
+    # Only set session_id if no auth session exists
+    if not original_session_id:
+        config.session_id = "scroll_session"
+
     config.js_only = False
     config.wait_for = None
     config.js_code = js_scroll
@@ -309,6 +235,9 @@ def apply_button_click_pagination(config, pagination):
        So that crawler doesn't keep scraping the same items at the top of the page after each scroll'''
     
     print("Handling button/ajax click pagination")
+
+    # Store the original session ID if it exists
+    original_session_id = getattr(config, 'session_id', None)
 
     click_steps = pagination.click_steps if pagination.click_steps else 15     # total number of clicks to perform (hard-coded to avoid infinite loops)
     click_delay = 3      # seconds between clicks
@@ -337,7 +266,10 @@ def apply_button_click_pagination(config, pagination):
         clickButtonLoop();
     """
 
-    config.session_id = "btn_pg_session"
+    # Only set session_id if no auth session exists
+    if not original_session_id:
+        config.session_id = "btn_pg_session"
+        
     config.js_only = False
     config.wait_for = None
     config.js_code = js_click_loop
@@ -425,7 +357,7 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
 
     # Log pagination setup
     if pagination:
-        print(f"🔄 PAGINATION ENABLED: type={pagination.type}, start_page={start_page}, max_pages={pagination.max_pages}, max_items={max_items}")
+        print(f"📄 PAGINATION ENABLED: type={pagination.type}, start_page={start_page}, max_pages={pagination.max_pages}, max_items={max_items}")
     else:
         print(f"📄 NO PAGINATION: Single page extraction, max_items={max_items}")
 
@@ -433,115 +365,69 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
     if request.auth_config:
         print(f"🔐 AUTHENTICATION ENABLED: login_url={request.auth_config.login_url}, type={request.auth_config.auth_type}")
 
-    # ===============================================
-    # CAPTCHA HANDLING (from crawl4Util)
-    # ===============================================
-    captcha = request.captcha_params
-    if captcha is not None:
-        print("🧩 Handling captcha…")
-        try:
-            captcha_result = await solve_captcha_auto(
-               api_key=captcha.api_key if captcha.api_key else CAPSOLVER_API_KEY,
-               site_url=captcha.site_url if captcha.site_url else str(request.url),
-               site_key=captcha.site_key if captcha.site_key else None,
-               captcha_type=captcha.captcha_type if captcha.captcha_type else None
-            )
-            print("Captcha result:", captcha_result)
-                 
-        except Exception as e:
-            print("Captcha solving error:", str(e))
-            return ScrapeResponse(
-                entity_name=request.entity_name,
-                url=str(request.url),
-                scraped_at=datetime.now(),
-                total_items=0,
-                data=[],
-                success=False,
-                message=f"Captcha failed: {str(e)}"
-            )
-
-        if not captcha_result.get("success"):
-            return ScrapeResponse(
-                entity_name=request.entity_name,
-                url=str(request.url),
-                scraped_at=datetime.now(),
-                total_items=0,
-                data=[],
-                success=False,
-                message=f"Captcha failed: {captcha_result.get('error')}"
-            )
-        
-        if captcha_result.get("type") != "none":
-            # Apply captcha session to crawler config (will be applied in the loop)
-            captcha_session_id = captcha_result.get("session_id")
-            if "cookies" in captcha_result:
-                browser_cookies = [{"name": k, "value": v, "url": str(request.url)} for k, v in captcha_result["cookies"].items()]
-            else:
-                browser_cookies = []
-            print("✅ Captcha solved, continuing scrape…")
-        else:
-            captcha_session_id = None
-            browser_cookies = []
-            print("No captcha detected, continuing scrape…")
-    else:
-        captcha_session_id = None
-        browser_cookies = []
-
     async with AsyncWebCrawler(verbose=True) as crawler:
         
         # ===============================================
-        # AUTHENTICATION HANDLING (NEW - only if auth_config exists)
+        # AUTHENTICATION HANDLING (SIMPLIFIED - MATCHES WORKING CODE)
         # ===============================================
         if request.auth_config:
-            print(f"🔐 Authenticating to {request.auth_config.login_url}")
+            print("=" * 60)
+            print(f"🔐 AUTHENTICATION PROCESS STARTED")
+            print(f"🔐 Login URL: {request.auth_config.login_url}")
+            print(f"🔐 Username: {request.auth_config.username}")
+            print(f"🔐 Password: {'*' * len(request.auth_config.password)}")
+            print("=" * 60)
+            
             try:
-                # Step 1: Login - creates session
+                # SIMPLE LOGIN - exactly like working code
+                print(f"\n🔐 Step 1: Logging in...")
+                
                 login_config = CrawlerRunConfig(
                     session_id=session_id,
                     js_code=build_login_js(request.auth_config),
-                    wait_for=f"""() => {{
-                        return window.location.href !== '{request.auth_config.login_url}';
-                    }}""",                 # wait for url to change so its confirmed login happened
-                    page_timeout=30000,
-                    cache_mode=CacheMode.BYPASS
+                    page_timeout=30000,  # 30 second timeout
+                    cache_mode=CacheMode.BYPASS,
+                    verbose=True
                 )
                 
                 login_result = await crawler.arun(
-                    url=str(request.auth_config.login_url),
+                    url=request.auth_config.login_url,
                     config=login_config
                 )
                 
                 if not login_result.success:
-                    print(f"❌ Login failed: {login_result.error_message}")
-                    print("⚠️  Continuing without authentication - may fail if content is protected")
-                    session_id = None  # Reset session ID to avoid using failed auth session
+                    print(f"\n❌ Login failed: {login_result.error_message}")
+                    session_id = None
                 else:
-                    print("✅ Authentication successful, session established")
+                    print(f"\n✅ Login successful")
+                    
+                    # Optional: Quick check for success indicators if provided
+                    if hasattr(request.auth_config, 'success_indicator') and request.auth_config.success_indicator:
+                        print(f"\n🔍 Checking for success indicator: {request.auth_config.success_indicator}")
+                        # We'll check this when navigating to the target URL
                     
             except Exception as e:
                 print(f"❌ Authentication error: {str(e)}")
-                print("⚠️  Continuing without authentication - may fail if content is protected")
-                session_id = None  # Reset session ID to avoid using failed auth session
-        
+                import traceback
+                traceback.print_exc()
+                print("⚠️ Continuing without authentication")
+                session_id = None
+    
         # ===============================================
         # MAIN SCRAPING LOOP
         # ===============================================
         while True:
-            # ===============================================
+
             # STEP 1: BUILD CONFIG AND APPLY PAGINATION/CAPTCHA/AUTH
             # Recreate strategy and config for each page to avoid any caching issues
-            # ===============================================
+
             strategy = JsonCssExtractionStrategy(schema, verbose=True)
             config = base_config(strategy, request)
             
-            # Apply captcha session and cookies if available
-            if captcha_session_id:
-                config.session_id = captcha_session_id
-            if browser_cookies:
-                config.extra_cookies = (config.extra_cookies or []) + browser_cookies
             
             # Apply authentication session if available (overwrites captcha session if both exist - auth takes precedence)
             if session_id:
+                print("Session ID for authentication: ", session_id)
                 config.session_id = session_id
             
             # Apply pagination logic (scroll, button_click, ajax_click)
@@ -576,6 +462,16 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
             if not result.success:
                 print(f"❌ Failed to fetch page {page}: {result.error_message if hasattr(result, 'error_message') else 'Unknown error'}")
                 break
+    
+            # Add success indicator check for authenticated pages
+            if request.auth_config and hasattr(request.auth_config, 'success_indicator') and request.auth_config.success_indicator:
+                if result.success and result.html:
+                    import re
+                    # Simple check if success indicator exists in HTML
+                    if request.auth_config.success_indicator in result.html:
+                        print(f"✅ Success indicator '{request.auth_config.success_indicator}' found - authentication verified")
+                    else:
+                        print(f"⚠️ Success indicator '{request.auth_config.success_indicator}' NOT found - may not be authenticated")
 
             # Debug: Check what we got from the extraction
             extracted_content = result.extracted_content
