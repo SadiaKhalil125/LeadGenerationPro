@@ -16,9 +16,6 @@ from models import (
     FollowLink,
     AuthConfig  # NEW: Import AuthConfig
 )
-from CapSolverUtil import solve_captcha_auto
-
-CAPSOLVER_API_KEY = "CAP-BA92F348AE81B7F394B902A4C1F9559828C02FE0B9E32A73BF8C08A5C3941E17"
 
 # ===================================================
 # PAGINATION URL BUILDERS
@@ -206,6 +203,9 @@ def apply_scroll_pagination(config, pagination):
     
     print("Handling infinite scroll")
 
+    # Store the original session ID if it exists
+    original_session_id = getattr(config, 'session_id', None)
+
     scroll_steps = pagination.scroll_steps or 15
     scroll_delay = 1
 
@@ -219,7 +219,10 @@ def apply_scroll_pagination(config, pagination):
         scrollPage();
     """
 
-    config.session_id = "scroll_session"
+    # Only set session_id if no auth session exists
+    if not original_session_id:
+        config.session_id = "scroll_session"
+
     config.js_only = False
     config.wait_for = None
     config.js_code = js_scroll
@@ -232,6 +235,9 @@ def apply_button_click_pagination(config, pagination):
        So that crawler doesn't keep scraping the same items at the top of the page after each scroll'''
     
     print("Handling button/ajax click pagination")
+
+    # Store the original session ID if it exists
+    original_session_id = getattr(config, 'session_id', None)
 
     click_steps = pagination.click_steps if pagination.click_steps else 15     # total number of clicks to perform (hard-coded to avoid infinite loops)
     click_delay = 3      # seconds between clicks
@@ -260,7 +266,10 @@ def apply_button_click_pagination(config, pagination):
         clickButtonLoop();
     """
 
-    config.session_id = "btn_pg_session"
+    # Only set session_id if no auth session exists
+    if not original_session_id:
+        config.session_id = "btn_pg_session"
+        
     config.js_only = False
     config.wait_for = None
     config.js_code = js_click_loop
