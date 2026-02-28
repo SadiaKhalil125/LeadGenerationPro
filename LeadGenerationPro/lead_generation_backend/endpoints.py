@@ -23,12 +23,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from helperutil import extract_website
 from scraping_router import route_scraping_request
-from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login, leads_service, api_sources_crud
+from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login, leads_service, api_sources_crud, outreach
 
 from routers.leads_service import router as leads_service_router
 from routers.scheduler_config import scheduler, task_lifespan
 from routers.login import create_users_table
-from db_migrations import initialize_api_sources_schema
+#from db_migrations import initialize_api_sources_schema
 from urllib.parse import urljoin
 from playwright.async_api import async_playwright
 import random 
@@ -39,14 +39,14 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def combined_lifespan(app: FastAPI):
-    # Initialize database schema for API sources (safe, backward compatible)
-    try:
-        initialize_api_sources_schema()
-    except Exception as e:
-        logger.warning(f"⚠️  Could not initialize API sources schema: {str(e)}")
+    # # Initialize database schema for API sources (safe, backward compatible)
+    # try:
+    #     initialize_api_sources_schema()
+    # except Exception as e:
+    #     logger.warning(f"⚠️  Could not initialize API sources schema: {str(e)}")
     
     # create users table
-    create_users_table()
+    # create_users_table()
 
     # run task scheduler lifespan
     async with task_lifespan(app):
@@ -68,6 +68,7 @@ app.include_router(entity_mappings_crud.router, prefix="/mapping", tags=["Entity
 app.include_router(task_crud.router, prefix="/task", tags=["Task Management"])
 app.include_router(chat_crud.router, prefix="/chat", tags=["Chat Management"])
 app.include_router(login.router, prefix="/auth", tags=["Authentication"])
+app.include_router(outreach.router, prefix="/outreach", tags=["Outreach Management"])
 app.include_router(leads_service_router, tags=["Leads Service"])
 
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle, List, ArrowLeft, Download, FileText } from "lucide-react";
+import { Database, ChevronLeft, ChevronRight, Loader2, AlertTriangle, List, ArrowLeft, Download, FileText, Menu, ChevronDown, ChevronRight as ChevronRightIcon, LayoutGrid, ClipboardPlus, CalendarCheck, Settings } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import API_BASE from "./api_base";
 import { useNavigate } from "react-router-dom";
@@ -136,9 +136,192 @@ const EntityDataScreen = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
   const [exportingCSV, setExportingCSV] = useState(false);
-  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false); 
+  const [isNavigatingPage, setIsNavigatingPage] = useState(false);
+  const [navigatingDirection, setNavigatingDirection] = useState(null);
+  const [openMenu, setOpenMenu] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const entityFromParam = searchParams.get('entity');
+
+  const toggleMenu = (menu) => {
+    setOpenMenu(openMenu === menu ? null : menu);
+  };
+
+  const menuContent = {
+    entity: {
+      label: "Entities",
+      icon: <LayoutGrid size={20} />,
+      items: [
+        { label: "Entity List", path: "/entitylist" },
+        { label: "Create Entity", path: "/entityform" },
+        { label: "Entity Data Table", path: "/entity-data" },
+      ],
+    },
+    manager: {
+      label: "Sources",
+      icon: <Settings size={20} />,
+      items: [
+        { label: "Source Manager", path: "/sourcemanagement" },
+        { label: "Add Source", path: "/addsource" },
+      ],
+    },
+    mapping: {
+      label: "Mappings",
+      icon: <ClipboardPlus size={20} />,
+      items: [
+        { label: "Entity Mapping List", path: "/mappingmanager" },
+        { label: "Create Entity Mapping", path: "/entitymappingform" },
+      ],
+    },
+    task: {
+      label: "Tasks",
+      icon: <CalendarCheck size={20} />,
+      items: [
+        { label: "Schedule a Task", path: "/taskscheduler" },
+        { label: "Task List", path: "/tasksmanagement" },
+        { label: "Task Executor", path: "/taskexecutor" },
+      ],
+    },
+  };
+
+  const sidebarStyles = {
+    container: {
+      minHeight: "100vh",
+      display: "flex",
+      backgroundColor: "#F1F6FB",
+      color: "#00364A",
+      fontFamily: "'Inter', sans-serif",
+    },
+    sidebar: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      height: "100%",
+      backgroundColor: "#2C5F6F",
+      color: "white",
+      boxShadow: "rgb(0 0 0 / 15%) 10px 0px 20px",
+      zIndex: 40,
+      transition: "all 0.3s ease-in-out",
+      width: sidebarOpen ? "280px" : "80px",
+      overflow: "hidden",
+    },
+    sidebarInner: {
+      padding: "24px 16px",
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+    },
+    sidebarHeader: {
+      fontSize: "36px",
+      fontWeight: "900",
+      textAlign: "center",
+      marginBottom: "40px",
+      opacity: sidebarOpen ? 1 : 0,
+      transition: "opacity 0.3s ease",
+      letterSpacing: "4px",
+      fontFamily: "'Montserrat', 'Arial Black', sans-serif",
+      textTransform: "uppercase",
+      background: "linear-gradient(135deg, #ffffff 0%, #a9d2ff 100%)",
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "white",
+      backgroundClip: "text",
+    },
+    menuButton: (isActive) => ({
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      padding: "14px 16px",
+      borderRadius: "12px",
+      fontSize: "16px",
+      fontWeight: "600",
+      border: "none",
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+      backgroundColor: isActive ? "rgba(255, 255, 255, 0.15)" : "transparent",
+      color: "white",
+      marginBottom: "8px",
+      justifyContent: sidebarOpen ? "flex-start" : "center",
+    }),
+    menuButtonHover: {
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+    },
+    menuLabel: {
+      marginLeft: "16px",
+      flex: 1,
+      textAlign: "left",
+      display: sidebarOpen ? "block" : "none",
+    },
+    submenuContainer: (isOpen) => ({
+      maxHeight: isOpen ? "500px" : "0",
+      overflow: "hidden",
+      transition: "max-height 0.3s ease",
+      marginLeft: sidebarOpen ? "20px" : "0",
+      marginTop: "4px",
+    }),
+    submenuItem: {
+      width: "100%",
+      padding: "12px 16px",
+      backgroundColor: "transparent",
+      border: "none",
+      color: "white",
+      fontSize: "14px",
+      fontWeight: "500",
+      textAlign: "left",
+      cursor: "pointer",
+      borderRadius: "8px",
+      transition: "all 0.2s ease",
+      marginBottom: "4px",
+      display: sidebarOpen ? "block" : "none",
+    },
+    mainContent: {
+      flex: 1,
+      transition: "all 0.3s ease-in-out",
+      marginLeft: sidebarOpen ? "280px" : "80px",
+      minHeight: "100vh",
+      backgroundColor: "#F1F6FB",
+      display: "flex",
+      flexDirection: "column",
+    },
+    header: {
+      width: "100%",
+      background: "#2C5F6F",
+      color: "white",
+      padding: "20px 32px",
+      boxShadow: "0 4px 12px rgba(0, 54, 74, 0.1)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    headerLeft: {
+      display: "flex",
+      alignItems: "center",
+      gap: "16px",
+    },
+    menuToggle: {
+      padding: "10px",
+      backgroundColor: "rgba(255, 255, 255, 0.15)",
+      border: "none",
+      borderRadius: "10px",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "white",
+      transition: "all 0.2s ease",
+    },
+    headerTitle: {
+      fontSize: "28px",
+      fontWeight: "700",
+      color: "white",
+      letterSpacing: "0.5px",
+    },
+    main: {
+      padding: "40px",
+      flex: 1,
+      width: "100%",
+    },
+  };
 
   // Fetch entities list
   const { data: entitiesData } = useQuery({
@@ -188,9 +371,31 @@ const EntityDataScreen = () => {
     enabled: !!selectedEntity,
   });
 
+  // CHANGE THIS - Reset navigation direction when data fetching completes
+  useEffect(() => {
+    if (!isFetchingData) {
+      setNavigatingDirection(null);
+    }
+  }, [isFetchingData]);
+
   const loading = isLoadingData && !data;
   const error = queryError?.message || null;
   const entities = entitiesData || [];
+
+  // CHANGE THESE - Page navigation handlers
+  const handlePreviousPage = () => {
+    if (page > 1) {
+      setNavigatingDirection('prev');
+      setPage((p) => p - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (data?.rows?.length === pageSize) {
+      setNavigatingDirection('next');
+      setPage((p) => p + 1);
+    }
+  };
 
   // Filter out modified_at column
   const filteredColumns = data?.columns?.filter(col => col !== 'modified_at') || [];
@@ -233,101 +438,101 @@ const EntityDataScreen = () => {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#C7D8ED',
-      color: '#00364A',
-      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      padding: '40px 20px',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'flex-start'
-    }}>
+    <div style={sidebarStyles.container}>
+      {/* Sidebar */}
+      <aside style={sidebarStyles.sidebar}>
+        <div style={sidebarStyles.sidebarInner}>
+          <h2 style={sidebarStyles.sidebarHeader}>SCOUT</h2>
+
+          {Object.entries(menuContent).map(([key, { label, icon }]) => (
+            <div key={key}>
+              <button
+                onClick={() => toggleMenu(key)}
+                style={sidebarStyles.menuButton(openMenu === key)}
+                onMouseEnter={(e) => {
+                  if (openMenu !== key) {
+                    e.currentTarget.style.backgroundColor =
+                      sidebarStyles.menuButtonHover.backgroundColor;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (openMenu !== key) {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }
+                }}
+              >
+                {icon}
+                {sidebarOpen && <span style={sidebarStyles.menuLabel}>{label}</span>}
+                {sidebarOpen &&
+                  (openMenu === key ? (
+                    <ChevronDown size={20} />
+                  ) : (
+                    <ChevronRightIcon size={20} />
+                  ))}
+              </button>
+
+              <div style={sidebarStyles.submenuContainer(openMenu === key)}>
+                {menuContent[key].items.map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => navigate(item.path)}
+                    style={sidebarStyles.submenuItem}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor =
+                        "rgba(255, 255, 255, 0.1)";
+                      e.currentTarget.style.paddingLeft = "20px";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.paddingLeft = "16px";
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div style={sidebarStyles.mainContent}>
+        {/* Header */}
+        <header style={sidebarStyles.header}>
+          <div style={sidebarStyles.headerLeft}>
+            <button
+              onClick={() => {
+                setSidebarOpen(!sidebarOpen);
+                if (sidebarOpen) {
+                  setOpenMenu(null);
+                }
+              }}
+              style={sidebarStyles.menuToggle}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.25)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.15)";
+              }}
+            >
+              <Menu size={24} />
+            </button>
+            <h1 style={sidebarStyles.headerTitle}>Entity Data Viewer</h1>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <main style={sidebarStyles.main}>
       <div style={{
         width: '100%',
-        maxWidth: '1200px',
         backgroundColor: 'white',
         borderRadius: '25px',
         boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
         overflow: 'hidden'
       }}>
-        {/* Header */}
-        <div style={{
-          padding: '40px 50px',
-          borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '20px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{
-              width: '56px',
-              height: '56px',
-              backgroundColor: '#49A3C4',
-              borderRadius: '15px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white'
-            }}>
-              <Database size={28} />
-            </div>
-            <div>
-              <h1 style={{
-                fontSize: '32px',
-                fontWeight: '800',
-                color: '#00364A',
-                margin: 0,
-                lineHeight: '1.2'
-              }}>Entity Data Viewer</h1>
-              <p style={{
-                fontSize: '16px',
-                color: '#00364A',
-                opacity: 0.7,
-                margin: '5px 0 0 0'
-              }}></p>
-            </div>
-          </div>
-          <div style={{
-            padding: '10px 10px',
-            display: 'flex',
-            justifyContent: 'right',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '20px'
-          }}>
-            <button
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '12px 24px',
-                backgroundColor: 'white',
-                color: '#00364A',
-                borderRadius: '12px',
-                border: '2px solid #00364A',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#00364A';
-                e.target.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = 'white';
-                e.target.style.color = '#00364A';
-              }}
-              onClick={() => navigate('/dashboard')}
-            >
-              <ArrowLeft size={18} />
-              Dashboard
-            </button>
-          </div>
-        </div>
-
         <div style={{ padding: '50px' }}>
           {/* Entity Selector */}
           <div style={{ marginBottom: '30px', maxWidth: '400px' }}>
@@ -391,7 +596,7 @@ const EntityDataScreen = () => {
           )}
 
           {/* Loading */}
-          {loading && (
+          {(loading || (isFetchingData && page > 1)) && (
             <div style={{
               display: 'flex',
               justifyContent: 'center',
@@ -400,12 +605,14 @@ const EntityDataScreen = () => {
               color: '#00364A'
             }}>
               <Loader2 size={32} className="spin" style={{ marginRight: '10px' }} />
-              <span style={{ fontSize: '18px', fontWeight: '600' }}>Loading data...</span>
+              <span style={{ fontSize: '18px', fontWeight: '600' }}>
+                {isNavigatingPage ? 'Loading page...' : 'Loading data...'}
+              </span>
             </div>
           )}
 
           {/* No Data */}
-          {!loading && data && filteredRows && filteredRows.length === 0 && (
+          {!loading && !isFetchingData && data && filteredRows && filteredRows.length === 0 && (
             <div style={{
               textAlign: 'center',
               padding: '60px',
@@ -425,7 +632,9 @@ const EntityDataScreen = () => {
               overflowX: 'auto',
               borderRadius: '15px',
               border: '1px solid rgba(0, 54, 74, 0.1)',
-              boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)'
+              boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
+              opacity: isFetchingData ? 0.6 : 1,
+              transition: 'opacity 0.3s ease'
             }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white' }}>
                 <thead style={{ backgroundColor: '#F8FBFF' }}>
@@ -484,42 +693,47 @@ const EntityDataScreen = () => {
             }}>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <StyledButton
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  icon={<ChevronLeft size={18} />}
+                  onClick={handlePreviousPage}
+                  disabled={page === 1 || isFetchingData}
+                  icon={navigatingDirection === 'prev' ? <Loader2 size={18} className="spin" /> : <ChevronLeft size={18} />}
                 >
                   Previous
                 </StyledButton>
-                
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', alignSelf: 'center', padding: '0 15px' }}>
+
+                <span style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#00364A',
+                  alignSelf: 'center',
+                  padding: '0 15px'
+                }}>
                   Page {page}
                 </span>
-                
+
                 <StyledButton
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={data.rows.length < pageSize}
-                  icon={<ChevronRight size={18} />}
+                  onClick={handleNextPage}
+                  disabled={data.rows.length < pageSize || isFetchingData}
+                  icon={navigatingDirection === 'next' ? <Loader2 size={18} className="spin" /> : <ChevronRight size={18} />}
                   iconPos="right"
                 >
                   Next
                 </StyledButton>
               </div>
-
               {/* Export Buttons */}
               {filteredRows.length > 0 && (
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <ExportButton
                     onClick={handleExportCSV}
-                    disabled={exportingCSV}
-                    icon={<Download size={18} />}
+                    disabled={exportingCSV || isFetchingData}
+                    icon={exportingCSV ? <Loader2 size={18} className="spin" /> : <Download size={18} />}
                     title="Export All as CSV"
                   >
                     {exportingCSV ? 'Exporting...' : 'CSV'}
                   </ExportButton>
                   <ExportButton
                     onClick={handleExportExcel}
-                    disabled={exportingExcel}
-                    icon={<FileText size={18} />}
+                    disabled={exportingExcel || isFetchingData}
+                    icon={exportingExcel ? <Loader2 size={18} className="spin" /> : <FileText size={18} />}
                     title="Export All as Excel"
                   >
                     {exportingExcel ? 'Exporting...' : 'Excel'}
@@ -530,6 +744,8 @@ const EntityDataScreen = () => {
           )}
         </div>
       </div>
+        </main>
+      </div>
       <style>{`
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .spin { animation: spin 1s linear infinite; }
@@ -537,7 +753,6 @@ const EntityDataScreen = () => {
     </div>
   );
 };
-
 // Helper Component for Buttons
 const StyledButton = ({ onClick, disabled, icon, children, iconPos = "left" }) => {
   const [hover, setHover] = useState(false);

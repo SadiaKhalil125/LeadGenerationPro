@@ -63,8 +63,7 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
-              <p className="mt-4 text-gray-600 font-medium">Loading next preview data...</p>
-              <p className="text-sm text-gray-500 mt-1">Step {currentStep+1}</p>
+              <p className="mt-4 text-gray-600 font-medium">Loading...</p>
             </div>
           ) : (
             <>

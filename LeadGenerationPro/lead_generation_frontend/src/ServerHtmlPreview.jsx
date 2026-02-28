@@ -1,6 +1,6 @@
-// SmartWebsitePreview.jsx - MODIFIED: Never uses IDs, only tag.class(es)
+// SmartWebsitePreview.jsx - MODIFIED: Auto-copy on double-click + right-click context menu at cursor position
 import React, { useState, useEffect, useRef } from "react";
-import { Code, AlertTriangle } from "lucide-react";
+import { Code, AlertTriangle, Copy, Eye, X } from "lucide-react";
 import API_BASE from "./api_base";
 
 export default function SmartWebsitePreview({ url, onSelectorSelected }) {
@@ -8,13 +8,42 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
   const [htmlContent, setHtmlContent] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [lastSelectedSelector, setLastSelectedSelector] = useState("");
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [currentElementInfo, setCurrentElementInfo] = useState(null);
   const iframeRef = useRef(null);
   const selectedCallbackRef = useRef(null);
+  const contextMenuRef = useRef(null);
+  const containerRef = useRef(null);
 
   // Set the callback for when a selector is selected
   useEffect(() => {
     selectedCallbackRef.current = onSelectorSelected;
   }, [onSelectorSelected]);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target)) {
+        setShowContextMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle escape key to close menu
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowContextMenu(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
 
   // -------------------------
   // FETCH LOGIC
@@ -84,7 +113,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
 
       if (!data.success) throw new Error(data.error);
 
-      // Add enhanced click detection
+      // Add enhanced click detection with auto-copy and right-click menu
       const modifiedHtml = addClickDetection(data.content);
       setHtmlContent(modifiedHtml);
       setStatus("success");
@@ -98,7 +127,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
     return str.replace(/[!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~]/g, '\\$&');
   };
 
-  // Add click detection to HTML - MODIFIED: Never uses IDs, only tag.class(es)
+  // Add click detection to HTML - MODIFIED: Auto-copy on double-click + right-click menu
   const addClickDetection = (html) => {
     const clickScript = `
       <script>
@@ -124,8 +153,6 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
           }
           
           // COMPLETELY IGNORE IDS - they are NEVER included in the selector
-          // No ID check, no ID usage, no fallback to ID
-          
           return selector;
         }
         
@@ -133,6 +160,62 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
         function cssEscape(str) {
           if (!str) return '';
           return str.replace(/[!"#$%&'()*+,.\\/:;<=>?@[\\\\\\]^\`{|}~]/g, '\\\\$&');
+        }
+        
+        // Copy text to clipboard
+        async function copyToClipboard(text) {
+          try {
+            await navigator.clipboard.writeText(text);
+            showNotification("✓ Selector copied: " + text, "success");
+            return true;
+          } catch (err) {
+            console.error("Failed to copy:", err);
+            showNotification("✗ Failed to copy to clipboard", "error");
+            return false;
+          }
+        }
+        
+        // Show notification
+        function showNotification(message, type = 'success') {
+          const notification = document.createElement('div');
+          notification.textContent = message;
+          notification.style.cssText = \`
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: \${type === 'success' ? '#10b981' : '#ef4444'};
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            z-index: 1000000;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease;
+          \`;
+          
+          // Add animation style
+          const style = document.createElement('style');
+          style.textContent = \`
+            @keyframes slideIn {
+              from {
+                transform: translateX(100%);
+                opacity: 0;
+              }
+              to {
+                transform: translateX(0);
+                opacity: 1;
+              }
+            }
+          \`;
+          document.head.appendChild(style);
+          
+          document.body.appendChild(notification);
+          
+          setTimeout(() => {
+            notification.style.animation = 'slideIn 0.3s ease reverse';
+            setTimeout(() => notification.remove(), 300);
+          }, 3000);
         }
         
         // Hover highlighting and selector preview
@@ -222,8 +305,67 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
           }
         });
         
-        // Double Click handler
-        document.addEventListener('dblclick', function(e) {
+        // Right-click handler - Show custom context menu
+        document.addEventListener('contextmenu', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const element = e.target;
+          if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+            return;
+          }
+          
+          // Remove hover
+          element.classList.remove('preview-hover');
+          
+          // Hide tooltip
+          if (hoverTooltip) {
+            hoverTooltip.style.display = 'none';
+          }
+          
+          // Generate selector
+          const selector = generateSelector(element);
+          
+          // Get text content for preview
+          let textContent = '';
+          try {
+            textContent = element.textContent ? element.textContent.trim().slice(0, 100) : '';
+            if (element.textContent && element.textContent.trim().length > 100) {
+              textContent += '...';
+            }
+          } catch (e) {
+            textContent = '';
+          }
+          
+          // Get element HTML preview
+          let htmlPreview = '';
+          try {
+            const clone = element.cloneNode(true);
+            if (clone.textContent) {
+              const tempDiv = document.createElement('div');
+              tempDiv.appendChild(clone);
+              let html = tempDiv.innerHTML;
+              htmlPreview = html.length > 150 ? html.substring(0, 150) + '...' : html;
+            }
+          } catch (e) {
+            htmlPreview = '';
+          }
+          
+          // Send context menu data to parent with EXACT mouse coordinates
+          window.parent.postMessage({
+            type: 'CONTEXT_MENU_REQUEST',
+            selector: selector,
+            tagName: element.tagName,
+            className: element.className,
+            text: textContent,
+            htmlPreview: htmlPreview,
+            mouseX: e.clientX,
+            mouseY: e.clientY
+          }, '*');
+        });
+        
+        // Double Click handler - Auto-copy selector to clipboard
+        document.addEventListener('dblclick', async function(e) {
           e.preventDefault();
           e.stopPropagation();
           
@@ -252,8 +394,11 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
           element.classList.add('preview-clicked');
           lastSelected = element;
           
-          // Generate selector - NO IDS, ONLY tag.class(es)
+          // Generate selector
           const selector = generateSelector(element);
+          
+          // AUTO-COPY ON DOUBLE CLICK
+          await copyToClipboard(selector);
           
           // Get text content for context
           let textContent = '';
@@ -266,7 +411,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
             textContent = '';
           }
           
-          // Send selector to parent (ID is explicitly set to empty string)
+          // Send selector to parent
           window.parent.postMessage({
             type: 'SELECTOR_SELECTED',
             selector: selector,
@@ -287,7 +432,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
           }
         });
         
-        console.log('Preview with hover & click detection loaded - IDs are NEVER used in selectors');
+        console.log('Preview with hover & click detection loaded - Auto-copy on double-click, right-click menu available');
       </script>
     `;
 
@@ -317,12 +462,58 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
             attributes: []
           });
         }
+      } else if (event.data.type === "CONTEXT_MENU_REQUEST") {
+        // Get iframe position to calculate correct coordinates
+        if (iframeRef.current) {
+          const iframeRect = iframeRef.current.getBoundingClientRect();
+          
+          // Calculate absolute position relative to viewport
+          const absoluteX = iframeRect.left + event.data.mouseX;
+          const absoluteY = iframeRect.top + event.data.mouseY;
+          
+          // Show custom context menu at exact click position
+          setCurrentElementInfo({
+            selector: event.data.selector,
+            tagName: event.data.tagName,
+            className: event.data.className,
+            text: event.data.text,
+            htmlPreview: event.data.htmlPreview
+          });
+          
+          setContextMenuPosition({ 
+            x: absoluteX, 
+            y: absoluteY 
+          });
+          setShowContextMenu(true);
+        }
       }
     };
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, []);
+
+  // Handle copy selector from context menu
+  const handleCopySelector = () => {
+    if (currentElementInfo?.selector) {
+      navigator.clipboard.writeText(currentElementInfo.selector);
+      setShowContextMenu(false);
+    }
+  };
+
+  // Handle preview in main app
+  const handlePreview = () => {
+    if (currentElementInfo && selectedCallbackRef.current) {
+      selectedCallbackRef.current(currentElementInfo.selector, {
+        tagName: currentElementInfo.tagName,
+        id: "",
+        className: currentElementInfo.className,
+        text: currentElementInfo.text || "",
+        attributes: []
+      });
+      setShowContextMenu(false);
+    }
+  };
 
   // Load HTML into iframe
   useEffect(() => {
@@ -337,7 +528,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
   // -------------------------
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-gray-800">
+    <div ref={containerRef} className="relative w-full h-full flex flex-col bg-gray-800">
       {/* Simple Header */}
       <div className="flex items-center justify-between p-3 bg-gray-900 border-b border-gray-700">
         <div className="flex items-center gap-2">
@@ -348,11 +539,10 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
             Interactive Preview
           </div>
         </div>
-        <div className="text-gray-100 text-sm">
-          Hover to highlight | Double Click to generate selector
+        <div className="text-gray-100 text-sm flex gap-4">
+          <span>Hover to highlight | <strong>Double-click to auto-copy</strong> | Right-click for menu</span>
         </div>
       </div>
-
 
       {/* Last Selected Display */}
       {lastSelectedSelector && (
@@ -375,6 +565,62 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
         </div>
       )}
 
+      {/* Custom Context Menu - Positioned exactly at click location */}
+      {showContextMenu && currentElementInfo && (
+        <>
+          {/* Backdrop to capture clicks */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setShowContextMenu(false)}
+          />
+
+          {/* Context Menu */}
+          <div
+            ref={contextMenuRef}
+            className="fixed z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl min-w-[200px] max-w-[240px]"
+            style={{
+              left: contextMenuPosition.x,
+              top: contextMenuPosition.y,
+              transform: 'translate(0, 0)', // Position exactly at click
+            }}
+          >
+            {/* Minimal Header - Just close icon */}
+            <div className="flex items-center justify-end p-1 border-b border-gray-700">
+              <X
+                size={16}
+                onClick={() => setShowContextMenu(false)}
+                className="cursor-pointer text-white opacity-70 hover:opacity-100"
+                title="Close"
+              />
+            </div>
+
+            {/* Preview Section - With text preview and selector */}
+            <div className="p-3">
+              {currentElementInfo.text && (
+                <div className="text-xs text-gray-300 bg-gray-900 p-2 rounded mb-3">
+                  <span className="text-gray-400 block mb-1">Text preview:</span>
+                  <span className="text-gray-200">{currentElementInfo.text}</span>
+                </div>
+              )}
+              <div className="text-xs mb-1 text-gray-400">Selector:</div>
+              <code className="block text-teal-200 bg-gray-900 p-2 rounded font-mono text-[10px] break-all border border-gray-700">
+                {currentElementInfo.selector}
+              </code>
+            </div>
+
+            {/* Actions - Only Copy button */}
+            <div className="p-2 border-t border-gray-700">
+              <button
+                onClick={handleCopySelector}
+                className="w-full flex items-center gap-2 px-2 py-2 text-left text-sm text-gray-700 hover:bg-gray-700 rounded transition-colors"
+              >
+                <Copy size={14} className="text-gray-900" />
+                Copy Selector
+              </button>
+            </div>
+          </div>
+        </>
+      )}
       {/* Content States */}
       {status === "idle" && (
         <div className="flex-grow flex flex-col items-center justify-center text-gray-400">

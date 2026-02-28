@@ -28,4 +28,6 @@ passlib==1.7.4
 google
 google-generativeai
 jsonpath_ng
-
+sendgrid
+pandas
+python-multipart
