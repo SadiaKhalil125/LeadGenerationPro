@@ -1,13 +1,29 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Save, List, Database, Columns, Sparkles, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Save, List, Database, Columns, Sparkles, ArrowLeft, X, CheckCircle, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import API_BASE from "./api_base";
 
 const EntityForm = () => {
   const [entityName, setEntityName] = useState("");
   const [attributes, setAttributes] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
-  
+
+  // Notification system
+  const addNotification = (type, message) => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, type, message }]);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
+
+  const removeNotification = (id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
   const addAttribute = () => {
     setAttributes([...attributes, { name: "", datatype: "text", check_for_unique: false }]);
   };
@@ -20,15 +36,23 @@ const EntityForm = () => {
 
   const deleteAttribute = (index) => {
     setAttributes(attributes.filter((_, i) => i !== index));
+    addNotification('info', 'Attribute removed');
   };
 
   const submitEntity = async () => {
     if (!entityName.trim()) {
-      alert("Please enter entity name!");
+      addNotification('error', "Please enter entity name!");
       return;
     }
     if (attributes.length === 0) {
-      alert("Please add at least one attribute!");
+      addNotification('error', "Please add at least one attribute!");
+      return;
+    }
+
+    // Validate attribute names
+    const emptyAttribute = attributes.find(attr => !attr.name.trim());
+    if (emptyAttribute) {
+      addNotification('error', "All attributes must have a name!");
       return;
     }
 
@@ -42,25 +66,96 @@ const EntityForm = () => {
     try {
       const response = await fetch(`${API_BASE}/entity/save-entity`, {
         method: "POST",
-        headers: { "Content-Type": "application/json",
-                  "ngrok-skip-browser-warning": "true"
-         },
-
+        headers: { 
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true"
+        },
         body: JSON.stringify(payload),
       });
       const data = await response.json();
       
       if (data.success === true) {
-        alert("Entity saved successfully!");
+        addNotification('success', "Entity saved successfully!");
         setEntityName("");
         setAttributes([]);
       } else {
-        alert("Failed to save entity!");
+        addNotification('error', data.message || "Failed to save entity!");
       }
     } catch (err) {
       console.error("Error:", err);
-      alert("Something went wrong!");
+      addNotification('error', "Something went wrong! Please try again.");
     }
+  };
+
+  // Notification Component
+  const NotificationPanel = ({ notifications, onRemove }) => {
+    if (!notifications.length) return null;
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: '20px',
+        right: '20px',
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        maxWidth: '400px'
+      }}>
+        {notifications.map(notif => (
+          <div
+            key={notif.id}
+            style={{
+              backgroundColor: notif.type === 'success' ? '#10B981' : 
+                             notif.type === 'error' ? '#EF4444' : 
+                             '#3B82F6',
+              color: 'white',
+              padding: '16px 20px',
+              borderRadius: '12px',
+              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              animation: 'slideIn 0.3s ease',
+              border: '1px solid rgba(255, 255, 255, 0.1)'
+            }}
+          >
+            <div style={{ flexShrink: 0, marginTop: '2px' }}>
+              {notif.type === 'success' ? (
+                <CheckCircle size={20} />
+              ) : notif.type === 'error' ? (
+                <AlertCircle size={20} />
+              ) : (
+                <AlertCircle size={20} />
+              )}
+            </div>
+            <div style={{ flex: 1, fontSize: '14px', fontWeight: '500', lineHeight: '1.5' }}>
+              {notif.message}
+            </div>
+            <button
+              onClick={() => onRemove(notif.id)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                opacity: 0.8,
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '4px',
+                flexShrink: 0
+              }}
+              onMouseEnter={(e) => e.target.style.opacity = '1'}
+              onMouseLeave={(e) => e.target.style.opacity = '0.8'}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -72,8 +167,26 @@ const EntityForm = () => {
       padding: '40px 20px',
       display: 'flex',
       justifyContent: 'center',
-      alignItems: 'flex-start'
+      alignItems: 'flex-start',
+      position: 'relative'
     }}>
+      {/* Notification Panel */}
+      <NotificationPanel notifications={notifications} onRemove={removeNotification} />
+
+      {/* Animation Styles */}
+      <style>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
+
       <div style={{
         width: '100%',
         maxWidth: '800px',
@@ -121,58 +234,57 @@ const EntityForm = () => {
                 }}>Define your data structure</p>
               </div>
             </div>
-           <div
-                    style={{
-                    padding: '10px 10px',
-                    display: 'flex',
-                    justifyContent: 'right',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: '10px'
-                  }}>
-                    <button
-                        style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '12px 24px',
-                backgroundColor: 'rgba(73, 163, 196, 0.1)',
-                color: '#00364A',
-                borderRadius: '12px',
-                border: 'none',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.2)'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.1)'}
-                      onClick={() => navigate('/dashboard')}
-                    >
-                    <ArrowLeft size={18} />
-                      Dashboard
-                      </button>
-            <button 
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '12px 24px',
-                backgroundColor: 'rgba(73, 163, 196, 0.1)',
-                color: '#00364A',
-                borderRadius: '12px',
-                border: 'none',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.2)'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.1)'}
-              onClick={() => navigate('/entitylist')}
-            >
-              <List size={18} />
-              View All
-            </button>
-          </div>
+            <div style={{
+              padding: '10px 10px',
+              display: 'flex',
+              justifyContent: 'right',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
+              <button
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '12px 24px',
+                  backgroundColor: 'rgba(73, 163, 196, 0.1)',
+                  color: '#00364A',
+                  borderRadius: '12px',
+                  border: 'none',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.2)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.1)'}
+                onClick={() => navigate('/dashboard')}
+              >
+                <ArrowLeft size={18} />
+                Dashboard
+              </button>
+              <button 
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '12px 24px',
+                  backgroundColor: 'rgba(73, 163, 196, 0.1)',
+                  color: '#00364A',
+                  borderRadius: '12px',
+                  border: 'none',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.2)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.1)'}
+                onClick={() => navigate('/entitylist')}
+              >
+                <List size={18} />
+                View All
+              </button>
+            </div>
           </div>
             
           {/* Entity Name Input */}
@@ -265,122 +377,120 @@ const EntityForm = () => {
                 <p style={{ fontSize: '14px', color: '#00364A', opacity: 0.6 }}>Click "Add Attribute" to get started</p>
               </div>
             ) : (
-                attributes.map((attr, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '20px',
-                      padding: '25px',
-                      backgroundColor: 'white',
-                      border: '2px solid rgba(0, 54, 74, 0.08)',
-                      borderRadius: '20px',
-                      boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
-                      transition: 'all 0.3s'
-                    }}
-                  >
+              attributes.map((attr, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '20px',
+                    padding: '25px',
+                    backgroundColor: 'white',
+                    border: '2px solid rgba(0, 54, 74, 0.08)',
+                    borderRadius: '20px',
+                    boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
+                    transition: 'all 0.3s'
+                  }}
+                >
+                  {/* Left side grid (Name + Datatype + Checkbox) */}
+                  <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', alignItems: 'start' }}>
 
-                    {/* Left side grid (Name + Datatype + Checkbox) */}
-                    <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', alignItems: 'start' }}>
-
-                      {/* Name */}
-                      <div>
-                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>Name</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. name, email"
-                          value={attr.name}
-                          onChange={(e) => updateAttribute(index, "name", e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '12px 16px',
-                            borderRadius: '10px',
-                            border: '1px solid rgba(0, 54, 74, 0.15)',
-                            fontSize: '14px',
-                            color: '#00364A',
-                            outline: 'none',
-                            boxSizing: 'border-box'
-                          }}
-                          onFocus={(e) => e.target.style.borderColor = '#49A3C4'}
-                          onBlur={(e) => e.target.style.borderColor = 'rgba(0, 54, 74, 0.15)'}
-                        />
-                      </div>
-
-                      {/* Datatype */}
-                      <div>
-                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>Data Type</label>
-                        <select
-                          value={attr.datatype}
-                          onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '12px 16px',
-                            borderRadius: '10px',
-                            border: '1px solid rgba(0, 54, 74, 0.15)',
-                            fontSize: '14px',
-                            color: '#00364A',
-                            backgroundColor: 'white',
-                            outline: 'none',
-                            cursor: 'pointer',
-                            appearance: 'none',
-                            backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2300364A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`,
-                            backgroundRepeat: 'no-repeat',
-                            backgroundPosition: 'right 16px top 50%',
-                            backgroundSize: '10px auto'
-                          }}
-                        >
-                          <option value="text">String</option>
-                          <option value="int">Integer</option>
-                          <option value="bool">Boolean</option>
-                          <option value="Float">Float</option>
-                          <option value="Date">Date</option>
-                        </select>
-                      </div>
-
-                      {/* NEW — Checkbox */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '35px' }}>
-                        <input
-                          type="checkbox"
-                          checked={attr.check_for_unique}
-                          onChange={(e) => updateAttribute(index, "check_for_unique", e.target.checked)}
-                          style={{
-                            width: '18px',
-                            height: '18px',
-                            accentColor: '#49A3C4',
-                            cursor: 'pointer'
-                          }}
-                        />
-                        <label style={{ fontSize: '14px', color: '#00364A', cursor: 'pointer' }}>Check Duplicate</label>
-                      </div>
-
+                    {/* Name */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. name, email"
+                        value={attr.name}
+                        onChange={(e) => updateAttribute(index, "name", e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(0, 54, 74, 0.15)',
+                          fontSize: '14px',
+                          color: '#00364A',
+                          outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = '#49A3C4'}
+                        onBlur={(e) => e.target.style.borderColor = 'rgba(0, 54, 74, 0.15)'}
+                      />
                     </div>
 
-                    {/* Delete Button */}
-                    <button
-                      type="button"
-                      style={{
-                        marginTop: '28px',
-                        padding: '10px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        backgroundColor: '#FEF2F2',
-                        color: '#EF4444',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = '#FEE2E2'}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = '#FEF2F2'}
-                      onClick={() => deleteAttribute(index)}
-                      title="Delete attribute"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    {/* Datatype */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>Data Type</label>
+                      <select
+                        value={attr.datatype}
+                        onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(0, 54, 74, 0.15)',
+                          fontSize: '14px',
+                          color: '#00364A',
+                          backgroundColor: 'white',
+                          outline: 'none',
+                          cursor: 'pointer',
+                          appearance: 'none',
+                          backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2300364A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'right 16px top 50%',
+                          backgroundSize: '10px auto'
+                        }}
+                      >
+                        <option value="text">String</option>
+                        <option value="int">Integer</option>
+                        <option value="bool">Boolean</option>
+                        <option value="Float">Float</option>
+                        <option value="Date">Date</option>
+                      </select>
+                    </div>
+
+                    {/* NEW — Checkbox */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '35px' }}>
+                      <input
+                        type="checkbox"
+                        checked={attr.check_for_unique}
+                        onChange={(e) => updateAttribute(index, "check_for_unique", e.target.checked)}
+                        style={{
+                          width: '18px',
+                          height: '18px',
+                          accentColor: '#49A3C4',
+                          cursor: 'pointer'
+                        }}
+                      />
+                      <label style={{ fontSize: '14px', color: '#00364A', cursor: 'pointer' }}>Check Duplicate</label>
+                    </div>
 
                   </div>
+
+                  {/* Delete Button */}
+                  <button
+                    type="button"
+                    style={{
+                      marginTop: '28px',
+                      padding: '10px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      backgroundColor: '#FEF2F2',
+                      color: '#EF4444',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#FEE2E2'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = '#FEF2F2'}
+                    onClick={() => deleteAttribute(index)}
+                    title="Delete attribute"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               ))
             )}
           </div>

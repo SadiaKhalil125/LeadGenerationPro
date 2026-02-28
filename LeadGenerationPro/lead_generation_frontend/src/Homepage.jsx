@@ -233,6 +233,51 @@ export default function WebScraperLanding() {
               }}>
               Pricing
             </a>
+            {/* New Links */}
+            <a
+              href="/dashboard"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate('/dashboard');
+              }}
+              style={{
+                fontWeight: '500',
+                color: '#00364A',
+                textDecoration: 'none',
+                transition: 'all 0.3s',
+                padding: '8px 20px',
+                borderRadius: '10px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.opacity = '0.6';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.opacity = '1';
+              }}>
+              Data Extraction
+            </a>
+            <a
+              href="/outreach"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate('/outreach');
+              }}
+              style={{
+                fontWeight: '500',
+                color: '#00364A',
+                textDecoration: 'none',
+                transition: 'all 0.3s',
+                padding: '8px 20px',
+                borderRadius: '10px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.opacity = '0.6';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.opacity = '1';
+              }}>
+              Outreach
+            </a>
           </nav>
           
           {/* Buttons - Right */}

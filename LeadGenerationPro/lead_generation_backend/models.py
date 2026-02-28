@@ -273,3 +273,14 @@ class UserSignup(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+from pydantic import BaseModel
+from typing import List, Dict, Optional
+
+class OutreachRequest(BaseModel):
+    provider: str
+    # Setting the default to an empty dict makes it "optional" during initialization
+    config: Optional[Dict] = {} 
+    subject: str
+    message: str
+    contacts: List[Dict]

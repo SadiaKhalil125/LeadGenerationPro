@@ -28,6 +28,7 @@ import LeadSyncTest from '../LeadsSyncPage';
 import ApiSourceManager from './ApiSourceManager';
 import ApiSourceCreator from './ApiSourceCreator';
 import ApiTaskExecutor from './ApiTaskExecutor';
+import Outreach from './Outreach';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useContext(AuthContext);
@@ -81,6 +82,7 @@ function App() {
         <Route path="/quick-extract" element={<QuickExtract />} />
         <Route path="/userleadsdashboard" element={<LeadGeneratorPage />} />
         <Route path="/leadssync" element= {<LeadSyncTest />} />
+        <Route path="/outreach" element={<Outreach />} />
           </Routes>
         </Router>
       </AuthProvider>

@@ -79,8 +79,7 @@ const SourceCreator = () => {
     "offset",
     "path",
     "button_click",
-    "scroll",
-    "ajax_click",
+    "scroll"
   ];
 
   useEffect(() => {
