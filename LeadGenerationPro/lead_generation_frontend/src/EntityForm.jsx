@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Save, List, Database, Columns, Sparkles, ArrowLeft, X, CheckCircle, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
 
 const EntityForm = () => {
@@ -8,12 +9,13 @@ const EntityForm = () => {
   const [attributes, setAttributes] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Notification system
   const addNotification = (type, message) => {
     const id = Date.now();
     setNotifications(prev => [...prev, { id, type, message }]);
-    
+
     // Auto-remove after 5 seconds
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
@@ -66,16 +68,17 @@ const EntityForm = () => {
     try {
       const response = await fetch(`${API_BASE}/entity/save-entity`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "ngrok-skip-browser-warning": "true"
         },
         body: JSON.stringify(payload),
       });
       const data = await response.json();
-      
+
       if (data.success === true) {
         addNotification('success', "Entity saved successfully!");
+        queryClient.invalidateQueries({ queryKey: ['entities'] });
         setEntityName("");
         setAttributes([]);
       } else {
@@ -106,9 +109,9 @@ const EntityForm = () => {
           <div
             key={notif.id}
             style={{
-              backgroundColor: notif.type === 'success' ? '#10B981' : 
-                             notif.type === 'error' ? '#EF4444' : 
-                             '#3B82F6',
+              backgroundColor: notif.type === 'success' ? '#10B981' :
+                notif.type === 'error' ? '#EF4444' :
+                  '#3B82F6',
               color: 'white',
               padding: '16px 20px',
               borderRadius: '12px',
@@ -263,7 +266,7 @@ const EntityForm = () => {
                 <ArrowLeft size={18} />
                 Dashboard
               </button>
-              <button 
+              <button
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -286,7 +289,7 @@ const EntityForm = () => {
               </button>
             </div>
           </div>
-            
+
           {/* Entity Name Input */}
           <div style={{ marginBottom: '40px' }}>
             <label htmlFor="entityName" style={{
@@ -336,7 +339,7 @@ const EntityForm = () => {
               }}
             />
           </div>
-         
+
           {/* Attributes Section Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
             <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#00364A', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -497,8 +500,8 @@ const EntityForm = () => {
 
           {/* Add Attribute Button */}
           <div style={{ marginBottom: '40px' }}>
-            <button 
-              type="button" 
+            <button
+              type="button"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -535,8 +538,8 @@ const EntityForm = () => {
             paddingTop: '30px',
             borderTop: '1px solid rgba(0, 54, 74, 0.1)'
           }}>
-            <button 
-              type="button" 
+            <button
+              type="button"
               style={{
                 display: 'flex',
                 alignItems: 'center',

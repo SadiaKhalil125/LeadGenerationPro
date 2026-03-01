@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Globe, 
-  Save, 
-  X, 
-  AlertTriangle, 
-  Loader2, 
-  Plus, 
-  List, 
-  ArrowLeft, 
-  Settings, 
-  Database, 
+import {
+  Globe,
+  Save,
+  X,
+  AlertTriangle,
+  AlertCircle,
+  Loader2,
+  Plus,
+  List,
+  ArrowLeft,
+  Settings,
+  Database,
   Lock,
   ExternalLink,
   Layers,
@@ -19,12 +20,22 @@ import {
 } from 'lucide-react';
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 const SourceCreator = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [sourceType, setSourceType] = useState('web'); // 'web' or 'api'
   const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+
+  const addNotification = (type, message) => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
 
   // Web Source State
   const [webName, setWebName] = useState("");
@@ -61,7 +72,7 @@ const SourceCreator = () => {
     request_template: {
       method: 'GET',
       headers: {},
-      params: {}, 
+      params: {},
       body: {},
       timeout: 30
     },
@@ -69,7 +80,7 @@ const SourceCreator = () => {
       data_path: '',
       sample_response: {}
     },
-    field_mappings: [] 
+    field_mappings: []
   });
   const [newParam, setNewParam] = useState({ key: '', value: '' });
   const [newHeader, setNewHeader] = useState({ key: '', value: '' });
@@ -117,7 +128,7 @@ const SourceCreator = () => {
   const handleWebSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setResponse(null);
+    // notifications cleared automatically by auto-dismiss
 
     const paginationPayload = paginationType
       ? { type: paginationType, ...paginationConfig }
@@ -150,10 +161,11 @@ const SourceCreator = () => {
       });
 
       const data = await res.json();
-      setResponse({ type: "success", message: data.message });
+      addNotification('success', data.message);
+      queryClient.invalidateQueries({ queryKey: ['sources'] });
       resetWebForm();
     } catch (err) {
-      setResponse({ type: "error", message: "Failed to save source." });
+      addNotification('error', 'Failed to save source.');
     } finally {
       setLoading(false);
     }
@@ -185,14 +197,14 @@ const SourceCreator = () => {
     setApiFormData(prev => ({
       ...prev,
       entity_name: entityName,
-      field_mappings: selectedEntity 
+      field_mappings: selectedEntity
         ? selectedEntity.columns
-            .filter(col => !['id', 'source', 'modified_at', 'created_at'].includes(col))
-            .map(col => ({
-              api_field: '', 
-              db_field: col, 
-              transform: '' 
-            }))
+          .filter(col => !['id', 'source', 'modified_at', 'created_at'].includes(col))
+          .map(col => ({
+            api_field: '',
+            db_field: col,
+            transform: ''
+          }))
         : []
     }));
   };
@@ -249,17 +261,17 @@ const SourceCreator = () => {
     const activeMappings = apiFormData.field_mappings.filter(m => m.api_field.trim() !== '');
 
     if (!apiFormData.name || !apiFormData.api_url || !apiFormData.entity_name) {
-      setResponse({ type: 'error', message: 'Basic Info is required' });
+      addNotification('error', 'Basic Info is required');
       return;
     }
     if (activeMappings.length === 0) {
-      setResponse({ type: 'error', message: 'Please map at least one attribute to an API field' });
+      addNotification('error', 'Please map at least one attribute to an API field');
       return;
     }
 
     try {
       setLoading(true);
-      setResponse(null);
+      // notifications cleared automatically by auto-dismiss
       const apiResponse = await fetch(`${API_BASE}/api-sources/`, {
         method: 'POST',
         headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -268,10 +280,11 @@ const SourceCreator = () => {
       const data = await apiResponse.json();
       if (!apiResponse.ok) throw new Error(data.detail || 'Failed to create API source');
 
-      setResponse({ type: 'success', message: 'API source created successfully!' });
+      addNotification('success', 'API source created successfully!');
+      queryClient.invalidateQueries({ queryKey: ['api-sources'] });
       setTimeout(() => navigate('/sourcemanagement'), 1500);
     } catch (err) {
-      setResponse({ type: 'error', message: err.message });
+      addNotification('error', err.message);
     } finally {
       setLoading(false);
     }
@@ -287,7 +300,7 @@ const SourceCreator = () => {
       request_template: {
         method: 'GET',
         headers: {},
-        params: {}, 
+        params: {},
         body: {},
         timeout: 30
       },
@@ -295,7 +308,7 @@ const SourceCreator = () => {
         data_path: '',
         sample_response: {}
       },
-      field_mappings: [] 
+      field_mappings: []
     });
     setNewParam({ key: '', value: '' });
     setNewHeader({ key: '', value: '' });
@@ -307,7 +320,7 @@ const SourceCreator = () => {
     } else {
       resetApiForm();
     }
-    setResponse(null);
+    // notifications clear automatically — no action needed
   };
 
   return (
@@ -321,6 +334,8 @@ const SourceCreator = () => {
       justifyContent: 'center',
       alignItems: 'flex-start'
     }}>
+      {/* Floating Notification Panel */}
+      <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
       <div style={{
         width: '100%',
         maxWidth: '1000px',
@@ -368,7 +383,7 @@ const SourceCreator = () => {
                 opacity: 0.7,
                 margin: '5px 0 0 0'
               }}>
-                {sourceType === 'web' 
+                {sourceType === 'web'
                   ? 'Define the source URL and configuration'
                   : 'Configure automated endpoints and attribute mappings'}
               </p>
@@ -474,7 +489,7 @@ const SourceCreator = () => {
             <button
               onClick={() => {
                 setSourceType('web');
-                setResponse(null);
+                // clear notifications on tab switch — nothing needed
               }}
               style={{
                 padding: '12px 30px',
@@ -497,7 +512,7 @@ const SourceCreator = () => {
             <button
               onClick={() => {
                 setSourceType('api');
-                setResponse(null);
+                // clear notifications on tab switch — nothing needed
               }}
               style={{
                 padding: '12px 30px',
@@ -519,42 +534,7 @@ const SourceCreator = () => {
             </button>
           </div>
 
-          {/* Response Messages */}
-          {response && (
-            <div style={{
-              marginBottom: '30px',
-              padding: '20px 25px',
-              borderRadius: '15px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '15px',
-              backgroundColor: response.type === 'success' ? '#E0F2FE' : '#FEF2F2',
-              border: `2px solid ${response.type === 'success' ? '#49A3C4' : '#EF4444'}`,
-              color: '#00364A'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: response.type === 'success' ? '#49A3C4' : '#EF4444'
-              }}>
-                {response.type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
-              </div>
-              <span style={{ fontWeight: '500', flex: 1 }}>{response.message}</span>
-              <button 
-                onClick={() => setResponse(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#00364A',
-                  opacity: 0.5
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-          )}
+          {/* Response Messages - REMOVED: now using NotificationPanel */}
 
           {/* Web Source Form */}
           {sourceType === 'web' ? (
@@ -758,7 +738,7 @@ const SourceCreator = () => {
                   alignItems: 'center',
                   gap: '8px'
                 }}
-                onClick={() => setIsAuthProtected(!isAuthProtected)}>
+                  onClick={() => setIsAuthProtected(!isAuthProtected)}>
                   <Shield size={18} color="#49A3C4" />
                   Requires Login / Authentication?
                 </label>
@@ -784,14 +764,14 @@ const SourceCreator = () => {
                     <Shield size={20} color="#49A3C4" />
                     Authentication Configuration
                   </h3>
-                  
+
                   <div style={{ display: 'grid', gap: '20px' }}>
                     <DynamicField
                       label="Login Page URL *"
                       placeholder="https://example.com/login"
                       onChange={(v) => handleAuthChange("login_url", v)}
                     />
-                    
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{
                         fontSize: '14px',
@@ -814,7 +794,7 @@ const SourceCreator = () => {
                       placeholder="your_username"
                       onChange={(v) => handleAuthChange("username", v)}
                     />
-                    
+
                     <DynamicField
                       label="Password *"
                       type="password"
@@ -837,25 +817,25 @@ const SourceCreator = () => {
                         }}>
                           Advanced CSS Selectors (Optional - auto-detected if left empty)
                         </p>
-                        
+
                         <DynamicField
                           label="Username Field Selector"
                           placeholder='input[name="username"]'
                           onChange={(v) => handleAuthChange("username_selector", v)}
                         />
-                        
+
                         <DynamicField
                           label="Password Field Selector"
                           placeholder='input[type="password"]'
                           onChange={(v) => handleAuthChange("password_selector", v)}
                         />
-                        
+
                         <DynamicField
                           label="Submit Button Selector"
                           placeholder='button[type="submit"]'
                           onChange={(v) => handleAuthChange("submit_selector", v)}
                         />
-                        
+
                         <DynamicField
                           label="Success Indicator"
                           placeholder=".dashboard, .welcome-message"
@@ -897,7 +877,7 @@ const SourceCreator = () => {
                   alignItems: 'center',
                   gap: '8px'
                 }}
-                onClick={() => setIsCaptchaProtected(!isCaptchaProtected)}>
+                  onClick={() => setIsCaptchaProtected(!isCaptchaProtected)}>
                   <Lock size={18} color="#49A3C4" />
                   Is Captcha Protected?
                 </label>
@@ -922,7 +902,7 @@ const SourceCreator = () => {
                     <Lock size={20} color="#49A3C4" />
                     Captcha Parameters
                   </h3>
-                  
+
                   <div style={{ display: 'grid', gap: '20px' }}>
                     <DynamicField
                       label="API Key"
@@ -939,7 +919,7 @@ const SourceCreator = () => {
                       placeholder="Captcha site key"
                       onChange={(v) => handleCaptchaChange("site_key", v)}
                     />
-                    
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{
                         fontSize: '14px',
@@ -1047,7 +1027,7 @@ const SourceCreator = () => {
           ) : (
             /* API Source Form */
             <form onSubmit={handleApiSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
-              
+
               {/* Section 1: Target Entity */}
               <section>
                 <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1077,33 +1057,33 @@ const SourceCreator = () => {
                 <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Settings size={20} /> 2. Request Configuration
                 </h2>
-                
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
-                    <div>
-                      <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>HTTP Method</label>
-                      <ApiStyledSelect value={apiFormData.request_template.method} onChange={(e) => handleNestedChange('request_template', 'method', e.target.value)}>
-                        <option value="GET">GET</option>
-                        <option value="POST">POST</option>
-                        <option value="PUT">PUT</option>
-                      </ApiStyledSelect>
-                    </div>
-                    <div>
-                      <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>Request Timeout (sec)</label>
-                      <ApiStyledInput type="number" value={apiFormData.request_template.timeout} onChange={(e) => handleNestedChange('request_template', 'timeout', e.target.value)} />
-                    </div>
+                  <div>
+                    <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>HTTP Method</label>
+                    <ApiStyledSelect value={apiFormData.request_template.method} onChange={(e) => handleNestedChange('request_template', 'method', e.target.value)}>
+                      <option value="GET">GET</option>
+                      <option value="POST">POST</option>
+                      <option value="PUT">PUT</option>
+                    </ApiStyledSelect>
+                  </div>
+                  <div>
+                    <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>Request Timeout (sec)</label>
+                    <ApiStyledInput type="number" value={apiFormData.request_template.timeout} onChange={(e) => handleNestedChange('request_template', 'timeout', e.target.value)} />
+                  </div>
                 </div>
 
                 {apiFormData.request_template.method !== 'GET' && (
                   <div style={{ marginBottom: '25px' }}>
-                     <label style={{ fontSize: '13px', fontWeight: '700', color: '#00364A', marginBottom: '8px', display: 'block' }}>Request JSON Body (Required for Apollo)</label>
-                     <textarea 
+                    <label style={{ fontSize: '13px', fontWeight: '700', color: '#00364A', marginBottom: '8px', display: 'block' }}>Request JSON Body (Required for Apollo)</label>
+                    <textarea
                       style={{ width: '100%', height: '100px', borderRadius: '12px', border: '2px solid rgba(0, 54, 74, 0.15)', padding: '15px', fontFamily: 'monospace', color: '#00364A', outline: 'none' }}
                       placeholder='{ "key": "value" }'
                       onChange={(e) => {
                         try { handleNestedChange('request_template', 'body', JSON.parse(e.target.value)); }
-                        catch(err) { /* silent fail on parsing during typing */ }
+                        catch (err) { /* silent fail on parsing during typing */ }
                       }}
-                     />
+                    />
                   </div>
                 )}
 
@@ -1122,35 +1102,35 @@ const SourceCreator = () => {
                 </div>
 
                 <div style={{ backgroundColor: '#F8FBFE', padding: '20px', borderRadius: '15px', marginBottom: '20px', border: '1px solid rgba(0,54,74,0.05)' }}>
-                   <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Settings size={18} color="#49A3C4" /> Additional Static Headers</label>
-                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
-                      <ApiStyledInput placeholder="Key" value={newHeader.key} onChange={e => setNewHeader({...newHeader, key: e.target.value})} />
-                      <ApiStyledInput placeholder="Value" value={newHeader.value} onChange={e => setNewHeader({...newHeader, value: e.target.value})} />
-                      <button type="button" onClick={addHeader} style={{ background: '#49A3C4', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', cursor: 'pointer' }}><Plus size={20} /></button>
-                   </div>
-                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px' }}>
-                      {Object.entries(apiFormData.request_template.headers || {}).map(([k, v]) => (
-                        <div key={k} style={{ background: 'white', padding: '6px 14px', borderRadius: '20px', border: '1px solid #ddd', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <strong>{k}:</strong> {v} <X size={14} style={{ cursor: 'pointer', color: '#EF4444' }} onClick={() => removeHeader(k)} />
-                        </div>
-                      ))}
-                   </div>
+                  <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Settings size={18} color="#49A3C4" /> Additional Static Headers</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
+                    <ApiStyledInput placeholder="Key" value={newHeader.key} onChange={e => setNewHeader({ ...newHeader, key: e.target.value })} />
+                    <ApiStyledInput placeholder="Value" value={newHeader.value} onChange={e => setNewHeader({ ...newHeader, value: e.target.value })} />
+                    <button type="button" onClick={addHeader} style={{ background: '#49A3C4', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', cursor: 'pointer' }}><Plus size={20} /></button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px' }}>
+                    {Object.entries(apiFormData.request_template.headers || {}).map(([k, v]) => (
+                      <div key={k} style={{ background: 'white', padding: '6px 14px', borderRadius: '20px', border: '1px solid #ddd', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <strong>{k}:</strong> {v} <X size={14} style={{ cursor: 'pointer', color: '#EF4444' }} onClick={() => removeHeader(k)} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div style={{ backgroundColor: '#F8FBFE', padding: '20px', borderRadius: '15px', marginBottom: '20px', border: '1px solid rgba(0,54,74,0.05)' }}>
-                   <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Globe size={18} color="#49A3C4" /> Default Query Parameters</label>
-                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
-                      <ApiStyledInput placeholder="Param Key" value={newParam.key} onChange={e => setNewParam({...newParam, key: e.target.value})} />
-                      <ApiStyledInput placeholder="Value" value={newParam.value} onChange={e => setNewParam({...newParam, value: e.target.value})} />
-                      <button type="button" onClick={addParam} style={{ background: '#49A3C4', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', cursor: 'pointer' }}><Plus size={20} /></button>
-                   </div>
-                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px' }}>
-                      {Object.entries(apiFormData.request_template.params || {}).map(([k, v]) => (
-                        <div key={k} style={{ background: 'white', padding: '6px 14px', borderRadius: '20px', border: '1px solid #ddd', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <strong>{k}:</strong> {v} <X size={14} style={{ cursor: 'pointer', color: '#EF4444' }} onClick={() => removeParam(k)} />
-                        </div>
-                      ))}
-                   </div>
+                  <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Globe size={18} color="#49A3C4" /> Default Query Parameters</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
+                    <ApiStyledInput placeholder="Param Key" value={newParam.key} onChange={e => setNewParam({ ...newParam, key: e.target.value })} />
+                    <ApiStyledInput placeholder="Value" value={newParam.value} onChange={e => setNewParam({ ...newParam, value: e.target.value })} />
+                    <button type="button" onClick={addParam} style={{ background: '#49A3C4', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', cursor: 'pointer' }}><Plus size={20} /></button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px' }}>
+                    {Object.entries(apiFormData.request_template.params || {}).map(([k, v]) => (
+                      <div key={k} style={{ background: 'white', padding: '6px 14px', borderRadius: '20px', border: '1px solid #ddd', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <strong>{k}:</strong> {v} <X size={14} style={{ cursor: 'pointer', color: '#EF4444' }} onClick={() => removeParam(k)} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
 
@@ -1166,13 +1146,13 @@ const SourceCreator = () => {
                 <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <List size={20} /> 4. Field Mapping
                 </h2>
-                
+
                 {apiFormData.field_mappings.length > 0 ? (
                   <div style={{ display: 'grid', gap: '15px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '20px', padding: '0 10px', opacity: 0.6 }}>
-                       <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Database Attribute</span>
-                       <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>API JSON Field Name</span>
-                       <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Transform</span>
+                      <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Database Attribute</span>
+                      <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>API JSON Field Name</span>
+                      <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Transform</span>
                     </div>
 
                     {apiFormData.field_mappings.map((m, i) => (
@@ -1188,12 +1168,12 @@ const SourceCreator = () => {
                 )}
               </section>
 
-              <button type="submit" disabled={loading} style={{ 
-                padding: '18px', background: '#00364A', color: 'white', border: 'none', borderRadius: '15px', 
-                fontSize: '18px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' 
+              <button type="submit" disabled={loading} style={{
+                padding: '18px', background: '#00364A', color: 'white', border: 'none', borderRadius: '15px',
+                fontSize: '18px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px'
               }}>
-                 {loading ? <Loader2 size={22} className="spin" /> : <Save size={22} />}
-                 Save API Source
+                {loading ? <Loader2 size={22} className="spin" /> : <Save size={22} />}
+                Save API Source
               </button>
             </form>
           )}
@@ -1375,5 +1355,33 @@ const ApiStyledSelect = (props) => (
     }}
   />
 );
+
+// Floating toast notification panel (same pattern as EntityForm)
+const NotificationPanel = ({ notifications, onRemove }) => {
+  if (!notifications.length) return null;
+  return (
+    <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '400px' }}>
+      {notifications.map(notif => (
+        <div key={notif.id} style={{
+          backgroundColor: notif.type === 'success' ? '#10B981' : '#EF4444',
+          color: 'white', padding: '16px 20px', borderRadius: '12px',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
+          display: 'flex', alignItems: 'flex-start', gap: '12px',
+          animation: 'slideIn 0.3s ease', border: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <div style={{ flexShrink: 0, marginTop: '2px' }}>
+            {notif.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+          </div>
+          <div style={{ flex: 1, fontSize: '14px', fontWeight: '500', lineHeight: '1.5' }}>{notif.message}</div>
+          <button onClick={() => onRemove(notif.id)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '4px', flexShrink: 0 }}
+            onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.8'}>
+            <X size={16} />
+          </button>
+        </div>
+      ))}
+      <style>{`@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+    </div>
+  );
+};
 
 export default SourceCreator;

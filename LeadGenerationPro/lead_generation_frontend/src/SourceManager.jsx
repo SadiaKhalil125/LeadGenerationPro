@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Edit, 
-  Trash2, 
-  ChevronDown, 
-  ChevronRight, 
-  AlertTriangle, 
-  ExternalLink, 
-  Plus, 
-  Save, 
+import {
+  Edit,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  AlertTriangle,
+  AlertCircle,
+  ExternalLink,
+  Plus,
+  Save,
   X,
   Database,
   RefreshCw,
@@ -36,15 +37,23 @@ const SourceManagement = () => {
   const [error, setError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [dependencies, setDependencies] = useState({});
-  const [response, setResponse] = useState(null);
+  const [notifications, setNotifications] = useState([]);
   const [testingSource, setTestingSource] = useState(null);
   const [testResult, setTestResult] = useState(null);
-  
+
+  const addNotification = (type, message) => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
+
   // Web source edit state
   const [editForm, setEditForm] = useState({ name: '', url: '' });
   const [editPaginationType, setEditPaginationType] = useState('');
   const [editPaginationConfig, setEditPaginationConfig] = useState({});
-  
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -52,7 +61,7 @@ const SourceManagement = () => {
   const { data: webSourcesData, isLoading: isLoadingWebSources } = useQuery({
     queryKey: ['sources'],
     queryFn: async () => {
-      const response = await fetch(`${API_BASE}/source/sources`,{
+      const response = await fetch(`${API_BASE}/source/sources`, {
         method: "GET",
         headers: { "ngrok-skip-browser-warning": "true" }
       });
@@ -60,7 +69,8 @@ const SourceManagement = () => {
       const data = await response.json();
       return data.sources || [];
     },
-    enabled: sourceType === 'web'
+    enabled: sourceType === 'web',
+    refetchOnMount: true, // Override global false — refetch if stale (e.g. after invalidateQueries from SourceCreator)
   });
 
   // Fetch API sources
@@ -80,25 +90,25 @@ const SourceManagement = () => {
     enabled: sourceType === 'api'
   });
 
-  const pageLoading = sourceType === 'web' 
+  const pageLoading = sourceType === 'web'
     ? (isLoadingWebSources && !webSourcesData)
     : (isLoadingApiSources && !apiSourcesData);
 
-  const sources = sourceType === 'web' 
+  const sources = sourceType === 'web'
     ? (webSourcesData || [])
     : (Array.isArray(apiSourcesData) ? apiSourcesData : []);
 
   // Web source functions
   const fetchDependencies = async (sourceId) => {
     try {
-      const mappingsResponse = await fetch(`${API_BASE}/mapping/mappings`,{
+      const mappingsResponse = await fetch(`${API_BASE}/mapping/mappings`, {
         method: "GET",
         headers: { "ngrok-skip-browser-warning": "true" }
       });
       if (mappingsResponse.ok) {
         const mappingsData = await mappingsResponse.json();
         const sourceMappings = mappingsData.mappings?.filter(m => m.source_id === sourceId) || [];
-        
+
         const tasksResponse = await fetch(`${API_BASE}/task/tasks`);
         let sourceTasks = [];
         if (tasksResponse.ok) {
@@ -170,24 +180,24 @@ const SourceManagement = () => {
       }
 
       const data = await apiResponse.json();
-      setResponse({ type: 'success', message: data.message });
-      
+      addNotification('success', data.message);
+
       queryClient.setQueryData(['sources'], (oldSources) => {
         if (!oldSources) return oldSources;
-        return oldSources.map(source => 
+        return oldSources.map(source =>
           source.id === editingSource ? { ...source, ...payload } : source
         );
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['sources'] }, { refetchType: 'none' });
-      
+
       setEditingSource(null);
       setEditForm({ name: '', url: '' });
       setEditPaginationType('');
       setEditPaginationConfig({});
     } catch (err) {
       setError(err.message);
-      setResponse({ type: 'error', message: err.message });
+      addNotification('error', err.message);
     } finally {
       setLoading(false);
     }
@@ -196,13 +206,13 @@ const SourceManagement = () => {
   const handleDelete = async (sourceId, force = false) => {
     try {
       setLoading(true);
-      
+
       if (sourceType === 'web') {
-        const endpoint = force ? 
-          `${API_BASE}/source/source/${sourceId}/force` : 
+        const endpoint = force ?
+          `${API_BASE}/source/source/${sourceId}/force` :
           `${API_BASE}/source/source/${sourceId}`;
 
-        const apiResponse = await fetch(endpoint, { method: 'DELETE' , headers: {"ngrok-skip-browser-warning": "true"} });
+        const apiResponse = await fetch(endpoint, { method: 'DELETE', headers: { "ngrok-skip-browser-warning": "true" } });
 
         if (!apiResponse.ok) {
           const errorData = await apiResponse.json();
@@ -210,34 +220,34 @@ const SourceManagement = () => {
         }
 
         const data = await apiResponse.json();
-        setResponse({ type: 'success', message: data.message });
-        
+        addNotification('success', data.message);
+
         queryClient.setQueryData(['sources'], (oldSources) => {
           if (!oldSources) return oldSources;
           return oldSources.filter(source => source.id !== sourceId);
         });
-        
+
         queryClient.invalidateQueries({ queryKey: ['sources'] }, { refetchType: 'none' });
       } else {
         const apiResponse = await fetch(`${API_BASE}/api-sources/${sourceId}`, {
           method: "DELETE",
           headers: { "ngrok-skip-browser-warning": "true" }
         });
-        
+
         if (!apiResponse.ok) {
           const data = await apiResponse.json();
           throw new Error(data.detail || 'Failed to delete');
         }
-        
-        setResponse({ type: 'success', message: 'API source deleted successfully' });
+
+        addNotification('success', 'API source deleted successfully');
         refetchApiSources();
       }
-      
+
       setDeleteConfirm(null);
       setExpandedSource(null);
     } catch (err) {
       setError(err.message);
-      setResponse({ type: 'error', message: err.message });
+      addNotification('error', err.message);
     } finally {
       setLoading(false);
     }
@@ -303,7 +313,7 @@ const SourceManagement = () => {
     );
   }
 
-  // API Source Edit Form
+  // API Source Edit Form inline rendering
   if (sourceType === 'api' && editingSource && typeof editingSource === 'object') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#C7D8ED', padding: '40px 20px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
@@ -311,13 +321,15 @@ const SourceManagement = () => {
           <button onClick={handleCloseEdit} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#49A3C4', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: '600', marginBottom: '24px' }}>
             <ArrowLeft size={20} /> Back to API Sources
           </button>
-          <ApiSourceForm 
-            source={editingSource} 
-            onClose={handleCloseEdit} 
-            onSuccess={() => { 
-              refetchApiSources(); 
-              handleCloseEdit(); 
-            }} 
+          <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
+          <ApiSourceForm
+            source={editingSource}
+            onClose={handleCloseEdit}
+            showNotification={addNotification}
+            onSuccess={() => {
+              refetchApiSources();
+              handleCloseEdit();
+            }}
           />
         </div>
       </div>
@@ -335,6 +347,8 @@ const SourceManagement = () => {
       justifyContent: 'center',
       alignItems: 'flex-start'
     }}>
+      {/* Floating Notification Panel */}
+      <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
       <div style={{
         width: '100%',
         maxWidth: '1200px',
@@ -380,36 +394,36 @@ const SourceManagement = () => {
                 opacity: 0.7,
                 margin: '5px 0 0 0'
               }}>
-                {sourceType === 'web' 
+                {sourceType === 'web'
                   ? 'Manage your web scraping sources and their dependencies'
                   : 'Manage automated API endpoints'}
               </p>
             </div>
           </div>
-          
+
           <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-            <StyledButton 
-              onClick={()=>navigate('/dashboard')} 
+            <StyledButton
+              onClick={() => navigate('/dashboard')}
               variant="outline"
               icon={<ArrowLeft size={18} />}
             >
               Dashboard
             </StyledButton>
-            <StyledButton 
+            <StyledButton
               onClick={() => {
                 if (sourceType === 'web') {
                   queryClient.invalidateQueries({ queryKey: ['sources'] });
                 } else {
                   refetchApiSources();
                 }
-              }} 
+              }}
               variant="outline"
               icon={<RefreshCw size={18} />}
             >
               Refresh
             </StyledButton>
-            <StyledButton 
-              onClick={() => navigate(sourceType === 'web' ? "/addsource" : "/api-source-creator")} 
+            <StyledButton
+              onClick={() => navigate(sourceType === 'web' ? "/addsource" : "/api-source-creator")}
               variant="primary"
               icon={<Plus size={18} />}
             >
@@ -490,10 +504,10 @@ const SourceManagement = () => {
             gap: '20px',
             marginBottom: '40px'
           }}>
-            <StatCard 
-              title={sourceType === 'web' ? "Total Sources" : "Total API Sources"} 
-              value={sources.length} 
-              color="#00364A" 
+            <StatCard
+              title={sourceType === 'web' ? "Total Sources" : "Total API Sources"}
+              value={sources.length}
+              color="#00364A"
             />
             {sourceType === 'web' ? (
               <>
@@ -505,42 +519,7 @@ const SourceManagement = () => {
             )}
           </div>
 
-          {/* Response Messages */}
-          {response && (
-            <div style={{
-              marginBottom: '30px',
-              padding: '20px 25px',
-              borderRadius: '15px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '15px',
-              backgroundColor: response.type === 'success' ? '#E0F2FE' : '#FEF2F2',
-              border: `2px solid ${response.type === 'success' ? '#49A3C4' : '#EF4444'}`,
-              color: '#00364A'
-            }}>
-              <div style={{
-                color: response.type === 'success' ? '#49A3C4' : '#EF4444'
-              }}>
-                {response.type === 'success' ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
-              </div>
-              <span style={{ fontWeight: '500', flex: 1 }}>{response.message}</span>
-              <button 
-                onClick={() => setResponse(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#00364A',
-                  opacity: 0.5,
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '4px'
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-          )}
+          {/* Response Messages - REMOVED: now using NotificationPanel */}
 
           {/* Sources List */}
           {sources.length === 0 ? (
@@ -630,7 +609,7 @@ const SourceManagement = () => {
           )}
         </div>
       </div>
-      
+
       <style>{`
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
@@ -642,13 +621,13 @@ const SourceManagement = () => {
 };
 
 // Web Source Edit Form Component
-const WebSourceEditForm = ({ 
-  source, 
-  editForm, 
-  setEditForm, 
-  editPaginationType, 
-  setEditPaginationType, 
-  editPaginationConfig, 
+const WebSourceEditForm = ({
+  source,
+  editForm,
+  setEditForm,
+  editPaginationType,
+  setEditPaginationType,
+  editPaginationConfig,
   setEditPaginationConfig,
   loading,
   onSave,
@@ -676,7 +655,7 @@ const WebSourceEditForm = ({
         value={editForm.url}
         onChange={(e) => setEditForm(prev => ({ ...prev, url: e.target.value }))}
       />
-      
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <label style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Settings size={16} color="#49A3C4" /> Pagination Type
@@ -783,15 +762,15 @@ const WebSourceEditForm = ({
       )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', marginTop: '10px' }}>
-        <StyledButton 
-          onClick={onCancel} 
+        <StyledButton
+          onClick={onCancel}
           variant="secondary"
           icon={<X size={18} />}
         >
           Cancel
         </StyledButton>
-        <StyledButton 
-          onClick={onSave} 
+        <StyledButton
+          onClick={onSave}
           variant="primary"
           disabled={loading}
           icon={loading ? <Loader2 size={18} className="spin" /> : <Save size={18} />}
@@ -833,7 +812,7 @@ const WebSourceView = ({ source, expandedSource, dependencies, onExpand, onEdit,
           </button>
           <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', margin: 0 }}>{source.name}</h3>
         </div>
-        
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', paddingLeft: '40px' }}>
           <InfoItem icon={<ExternalLink size={14} />} label="URL">
             <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ color: '#49A3C4', textDecoration: 'none' }}>
@@ -873,12 +852,12 @@ const WebSourceView = ({ source, expandedSource, dependencies, onExpand, onEdit,
           <List size={18} color="#49A3C4" />
           Dependencies
         </h4>
-        
+
         {dependencies[source.id] ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '30px' }}>
-            <DependencySection 
-              title="Entity Mappings" 
-              count={dependencies[source.id].mappings.length} 
+            <DependencySection
+              title="Entity Mappings"
+              count={dependencies[source.id].mappings.length}
               icon={<Map size={16} color="#49A3C4" />}
               items={dependencies[source.id].mappings.map(m => ({
                 id: m.id,
@@ -886,9 +865,9 @@ const WebSourceView = ({ source, expandedSource, dependencies, onExpand, onEdit,
                 secondary: `(${m.entity_name})`
               }))}
             />
-            <DependencySection 
-              title="Active Tasks" 
-              count={dependencies[source.id].tasks.length} 
+            <DependencySection
+              title="Active Tasks"
+              count={dependencies[source.id].tasks.length}
               icon={<Calendar size={16} color="#49A3C4" />}
               items={dependencies[source.id].tasks.map(t => ({
                 id: t.id,
@@ -908,15 +887,15 @@ const WebSourceView = ({ source, expandedSource, dependencies, onExpand, onEdit,
 );
 
 // API Source View Component
-const ApiSourceView = ({ 
-  source, 
-  expandedSource, 
-  testingSource, 
-  testResult, 
-  onExpand, 
-  onEdit, 
-  onDelete, 
-  onTestConnection 
+const ApiSourceView = ({
+  source,
+  expandedSource,
+  testingSource,
+  testResult,
+  onExpand,
+  onEdit,
+  onDelete,
+  onTestConnection
 }) => (
   <div style={{ padding: '25px 30px' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -962,22 +941,22 @@ const ApiSourceView = ({
           <div>
             <SectionTitle icon={<Settings size={16} />} title="Request Configuration" />
             <div style={{ padding: '15px', background: '#F8FBFE', borderRadius: '15px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <InfoItem icon={<Zap size={14}/>} label="Method">{source.request_template?.method || 'GET'}</InfoItem>
-              <InfoItem icon={<Code size={14}/>} label="Data Path">{source.data_extraction_path || '$'}</InfoItem>
+              <InfoItem icon={<Zap size={14} />} label="Method">{source.request_template?.method || 'GET'}</InfoItem>
+              <InfoItem icon={<Code size={14} />} label="Data Path">{source.data_extraction_path || '$'}</InfoItem>
               {source.request_template?.timeout && (
-                <InfoItem icon={<Info size={14}/>} label="Timeout">{source.request_template.timeout}s</InfoItem>
+                <InfoItem icon={<Info size={14} />} label="Timeout">{source.request_template.timeout}s</InfoItem>
               )}
               {source.api_key_name && (
-                <InfoItem icon={<Lock size={14}/>} label="Auth Header">{source.api_key_name}</InfoItem>
+                <InfoItem icon={<Lock size={14} />} label="Auth Header">{source.api_key_name}</InfoItem>
               )}
             </div>
           </div>
         </div>
 
-        <StyledButton 
-          onClick={() => onTestConnection(source.id)} 
-          disabled={testingSource === source.id} 
-          variant="outline" 
+        <StyledButton
+          onClick={() => onTestConnection(source.id)}
+          disabled={testingSource === source.id}
+          variant="outline"
           icon={testingSource === source.id ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
         >
           Test Connection
@@ -1057,16 +1036,16 @@ const DeleteConfirmModal = ({ sourceType, source, dependencies, loading, onConfi
       )}
 
       <div style={{ display: 'flex', gap: '15px' }}>
-        <StyledButton 
-          onClick={() => onConfirm(true)} 
+        <StyledButton
+          onClick={() => onConfirm(true)}
           variant="danger"
           disabled={loading}
           style={{ flex: 1 }}
         >
           {loading ? 'Deleting...' : 'Delete Everything'}
         </StyledButton>
-        <StyledButton 
-          onClick={onCancel} 
+        <StyledButton
+          onClick={onCancel}
           variant="secondary"
           style={{ flex: 1 }}
         >
@@ -1078,17 +1057,17 @@ const DeleteConfirmModal = ({ sourceType, source, dependencies, loading, onConfi
 );
 
 // API Source Form Component (for editing)
-const ApiSourceForm = ({ source, onClose, onSuccess }) => {
+const ApiSourceForm = ({ source, onClose, onSuccess, showNotification }) => {
   const [loading, setLoading] = useState(false);
   const [entities, setEntities] = useState([]);
-  
+
   const [formData, setFormData] = useState({
     ...source,
-    api_key: '', 
+    api_key: '',
     api_key_name: source.api_key_name || 'Authorization',
     request_template: source.request_template || { method: 'GET', headers: {}, params: {}, body: {}, timeout: 30 }
   });
-  
+
   const [newMapping, setNewMapping] = useState({ api_field: '', db_field: '', transform: '' });
 
   useEffect(() => {
@@ -1115,15 +1094,15 @@ const ApiSourceForm = ({ source, onClose, onSuccess }) => {
         body: JSON.stringify(formData)
       });
       if (response.ok) onSuccess();
-      else alert("Update failed");
-    } catch (err) { alert(err.message); } finally { setLoading(false); }
+      else showNotification('error', 'Update failed');
+    } catch (err) { showNotification('error', err.message); } finally { setLoading(false); }
   };
 
   return (
     <div style={{ backgroundColor: 'white', borderRadius: '25px', padding: '40px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
       <SectionTitle icon={<Edit size={16} />} title="Edit API Source" />
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-        
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <FormGroup label="Source Name" value={formData.name} onChange={v => handleInputChange('name', v)} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1141,8 +1120,8 @@ const ApiSourceForm = ({ source, onClose, onSuccess }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: 15 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '13px', fontWeight: '600' }}>HTTP Method</label>
-              <select 
-                value={formData.request_template.method} 
+              <select
+                value={formData.request_template.method}
                 onChange={e => handleNestedChange('request_template', 'method', e.target.value)}
                 style={{ padding: '12px', borderRadius: '12px', border: '1.5px solid #49A3C4', backgroundColor: 'white' }}
               >
@@ -1157,16 +1136,16 @@ const ApiSourceForm = ({ source, onClose, onSuccess }) => {
           {formData.request_template.method !== 'GET' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '13px', fontWeight: '600' }}>Request Body (JSON)</label>
-              <textarea 
+              <textarea
                 value={typeof formData.request_template.body === 'object' ? JSON.stringify(formData.request_template.body, null, 2) : formData.request_template.body}
-                onChange={e => { try { handleNestedChange('request_template', 'body', JSON.parse(e.target.value)); } catch(err) { handleNestedChange('request_template', 'body', e.target.value); } }}
+                onChange={e => { try { handleNestedChange('request_template', 'body', JSON.parse(e.target.value)); } catch (err) { handleNestedChange('request_template', 'body', e.target.value); } }}
                 style={{ height: '80px', padding: '12px', borderRadius: '12px', border: '1px solid #ddd', fontFamily: 'monospace' }}
                 placeholder='{ "key": "value" }'
               />
             </div>
           )}
         </section>
-        
+
         <section style={{ padding: '20px', backgroundColor: '#F8FBFE', borderRadius: '15px', border: '1px solid #E2E8F0' }}>
           <SectionTitle icon={<Lock size={16} />} title="Authentication" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
@@ -1178,18 +1157,18 @@ const ApiSourceForm = ({ source, onClose, onSuccess }) => {
         <section>
           <SectionTitle icon={<List size={16} />} title="Mappings" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '10px', alignItems: 'flex-end' }}>
-             <FormSubGroup label="API Field" value={newMapping.api_field} onChange={v => setNewMapping({...newMapping, api_field: v})} />
-             <FormSubGroup label="DB Field" value={newMapping.db_field} onChange={v => setNewMapping({...newMapping, db_field: v})} />
-             <FormSubGroup label="Transform" value={newMapping.transform} onChange={v => setNewMapping({...newMapping, transform: v})} />
-             <StyledButton type="button" onClick={() => { setFormData(p => ({...p, field_mappings: [...p.field_mappings, newMapping]})); setNewMapping({api_field:'', db_field:'', transform:''}); }} variant="outline" icon={<Plus size={16}/>} />
+            <FormSubGroup label="API Field" value={newMapping.api_field} onChange={v => setNewMapping({ ...newMapping, api_field: v })} />
+            <FormSubGroup label="DB Field" value={newMapping.db_field} onChange={v => setNewMapping({ ...newMapping, db_field: v })} />
+            <FormSubGroup label="Transform" value={newMapping.transform} onChange={v => setNewMapping({ ...newMapping, transform: v })} />
+            <StyledButton type="button" onClick={() => { setFormData(p => ({ ...p, field_mappings: [...p.field_mappings, newMapping] })); setNewMapping({ api_field: '', db_field: '', transform: '' }); }} variant="outline" icon={<Plus size={16} />} />
           </div>
           <div style={{ marginTop: '10px' }}>
             {formData.field_mappings.map((m, i) => (
-              <div key={i} style={{ fontSize: '13px', background: '#f8fbfe', padding: '8px', marginBottom: '5px', borderRadius: '8px', display:'flex', justifyContent:'space-between', alignItems: 'center' }}>
+              <div key={i} style={{ fontSize: '13px', background: '#f8fbfe', padding: '8px', marginBottom: '5px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>{m.api_field} → {m.db_field}</span>
-                <button 
+                <button
                   type="button"
-                  onClick={() => setFormData(p => ({...p, field_mappings: p.field_mappings.filter((_, idx)=>idx!==i)}))}
+                  onClick={() => setFormData(p => ({ ...p, field_mappings: p.field_mappings.filter((_, idx) => idx !== i) }))}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }}
                 >
                   <Trash2 size={14} color="#EF4444" />
@@ -1211,7 +1190,7 @@ const ApiSourceForm = ({ source, onClose, onSuccess }) => {
 // Helper Components
 const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled, style, type = "button" }) => {
   const [hover, setHover] = useState(false);
-  
+
   const styles = {
     primary: {
       bg: '#00364A', color: 'white', border: '2px solid #00364A',
@@ -1368,12 +1347,12 @@ const DynamicField = ({ label, placeholder, type = "text", value, onChange }) =>
 const FormGroup = ({ label, value, onChange, type = "text", placeholder = "" }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
     <label style={{ fontSize: '13px', fontWeight: '600', opacity: 0.7 }}>{label}</label>
-    <input 
-      type={type} 
-      value={value} 
-      onChange={e => onChange(e.target.value)} 
+    <input
+      type={type}
+      value={value}
+      onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
-      style={{ padding: '12px 16px', borderRadius: '12px', border: 'none', backgroundColor: '#f0f4f8', color: '#00364A', outline: 'none', fontSize: '14px' }} 
+      style={{ padding: '12px 16px', borderRadius: '12px', border: 'none', backgroundColor: '#f0f4f8', color: '#00364A', outline: 'none', fontSize: '14px' }}
     />
   </div>
 );
@@ -1475,5 +1454,33 @@ const CodeBlock = ({ data }) => (
     {JSON.stringify(data, null, 2)}
   </pre>
 );
+
+// Floating toast notification panel (same pattern as EntityForm)
+const NotificationPanel = ({ notifications, onRemove }) => {
+  if (!notifications.length) return null;
+  return (
+    <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '400px' }}>
+      {notifications.map(notif => (
+        <div key={notif.id} style={{
+          backgroundColor: notif.type === 'success' ? '#10B981' : '#EF4444',
+          color: 'white', padding: '16px 20px', borderRadius: '12px',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
+          display: 'flex', alignItems: 'flex-start', gap: '12px',
+          animation: 'slideIn 0.3s ease', border: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <div style={{ flexShrink: 0, marginTop: '2px' }}>
+            {notif.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+          </div>
+          <div style={{ flex: 1, fontSize: '14px', fontWeight: '500', lineHeight: '1.5' }}>{notif.message}</div>
+          <button onClick={() => onRemove(notif.id)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '4px', flexShrink: 0 }}
+            onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.8'}>
+            <X size={16} />
+          </button>
+        </div>
+      ))}
+      <style>{`@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+    </div>
+  );
+};
 
 export default SourceManagement;

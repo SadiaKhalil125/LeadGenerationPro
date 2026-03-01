@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Globe, Save, X, AlertTriangle, CheckCircle, Loader2, Plus, List, ArrowLeft, Trash2, Settings, Database, Info, Lock } from 'lucide-react';
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Styling Components (Kept exactly as provided)
 const StyledInput = (props) => (
@@ -61,11 +62,12 @@ const StyledSelect = (props) => (
 
 const ApiSourceCreator = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [entities, setEntities] = useState([]); 
-  
+  const [entities, setEntities] = useState([]);
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
@@ -76,7 +78,7 @@ const ApiSourceCreator = () => {
     request_template: {
       method: 'GET',
       headers: {},
-      params: {}, 
+      params: {},
       body: {}, // Support for POST body
       timeout: 30
     },
@@ -84,7 +86,7 @@ const ApiSourceCreator = () => {
       data_path: '',
       sample_response: {}
     },
-    field_mappings: [] 
+    field_mappings: []
   });
 
   const [newParam, setNewParam] = useState({ key: '', value: '' });
@@ -112,14 +114,14 @@ const ApiSourceCreator = () => {
     setFormData(prev => ({
       ...prev,
       entity_name: entityName,
-      field_mappings: selectedEntity 
+      field_mappings: selectedEntity
         ? selectedEntity.columns
-            .filter(col => !['id', 'source', 'modified_at', 'created_at'].includes(col))
-            .map(col => ({
-              api_field: '', 
-              db_field: col, 
-              transform: '' 
-            }))
+          .filter(col => !['id', 'source', 'modified_at', 'created_at'].includes(col))
+          .map(col => ({
+            api_field: '',
+            db_field: col,
+            transform: ''
+          }))
         : []
     }));
   };
@@ -196,6 +198,7 @@ const ApiSourceCreator = () => {
       if (!response.ok) throw new Error(data.detail || 'Failed to create API source');
 
       setSuccess('API source created successfully!');
+      queryClient.invalidateQueries({ queryKey: ['api-sources'] });
       setTimeout(() => navigate('/api-sources'), 1500);
     } catch (err) {
       setError(err.message);
@@ -207,7 +210,7 @@ const ApiSourceCreator = () => {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#C7D8ED', color: '#00364A', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", padding: '40px 20px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
       <div style={{ width: '100%', maxWidth: '1000px', backgroundColor: 'white', borderRadius: '25px', boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)', overflow: 'hidden' }}>
-        
+
         {/* Header */}
         <div style={{ padding: '40px 50px', borderBottom: '1px solid rgba(0, 54, 74, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -227,7 +230,7 @@ const ApiSourceCreator = () => {
           {success && <div style={{ marginBottom: '20px', color: '#059669', padding: '15px', backgroundColor: '#ECFDF5', borderRadius: '12px', border: '1px solid #A7F3D0' }}>{success}</div>}
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
-            
+
             {/* Section 1: Target Entity */}
             <section>
               <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -257,34 +260,34 @@ const ApiSourceCreator = () => {
               <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Settings size={20} /> 2. Request Configuration
               </h2>
-              
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
-                  <div>
-                    <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>HTTP Method</label>
-                    <StyledSelect value={formData.request_template.method} onChange={(e) => handleNestedChange('request_template', 'method', e.target.value)}>
-                      <option value="GET">GET</option>
-                      <option value="POST">POST</option>
-                      <option value="PUT">PUT</option>
-                    </StyledSelect>
-                  </div>
-                  <div>
-                    <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>Request Timeout (sec)</label>
-                    <StyledInput type="number" value={formData.request_template.timeout} onChange={(e) => handleNestedChange('request_template', 'timeout', e.target.value)} />
-                  </div>
+                <div>
+                  <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>HTTP Method</label>
+                  <StyledSelect value={formData.request_template.method} onChange={(e) => handleNestedChange('request_template', 'method', e.target.value)}>
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                  </StyledSelect>
+                </div>
+                <div>
+                  <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>Request Timeout (sec)</label>
+                  <StyledInput type="number" value={formData.request_template.timeout} onChange={(e) => handleNestedChange('request_template', 'timeout', e.target.value)} />
+                </div>
               </div>
 
               {/* POST BODY INPUT (Visible only for non-GET methods) */}
               {formData.request_template.method !== 'GET' && (
                 <div style={{ marginBottom: '25px' }}>
-                   <label style={{ fontSize: '13px', fontWeight: '700', color: '#00364A', marginBottom: '8px', display: 'block' }}>Request JSON Body (Required for Apollo)</label>
-                   <textarea 
+                  <label style={{ fontSize: '13px', fontWeight: '700', color: '#00364A', marginBottom: '8px', display: 'block' }}>Request JSON Body (Required for Apollo)</label>
+                  <textarea
                     style={{ width: '100%', height: '100px', borderRadius: '12px', border: '2px solid rgba(0, 54, 74, 0.15)', padding: '15px', fontFamily: 'monospace', color: '#00364A', outline: 'none' }}
                     placeholder='{ "key": "value" }'
                     onChange={(e) => {
                       try { handleNestedChange('request_template', 'body', JSON.parse(e.target.value)); }
-                      catch(err) { /* silent fail on parsing during typing */ }
+                      catch (err) { /* silent fail on parsing during typing */ }
                     }}
-                   />
+                  />
                 </div>
               )}
 
@@ -305,36 +308,36 @@ const ApiSourceCreator = () => {
 
               {/* Headers UI */}
               <div style={{ backgroundColor: '#F8FBFE', padding: '20px', borderRadius: '15px', marginBottom: '20px', border: '1px solid rgba(0,54,74,0.05)' }}>
-                 <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Settings size={18} color="#49A3C4" /> Additional Static Headers</label>
-                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
-                    <StyledInput placeholder="Key" value={newHeader.key} onChange={e => setNewHeader({...newHeader, key: e.target.value})} />
-                    <StyledInput placeholder="Value" value={newHeader.value} onChange={e => setNewHeader({...newHeader, value: e.target.value})} />
-                    <button type="button" onClick={addHeader} style={{ background: '#49A3C4', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', cursor: 'pointer' }}><Plus size={20} /></button>
-                 </div>
-                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px' }}>
-                    {Object.entries(formData.request_template.headers || {}).map(([k, v]) => (
-                      <div key={k} style={{ background: 'white', padding: '6px 14px', borderRadius: '20px', border: '1px solid #ddd', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <strong>{k}:</strong> {v} <X size={14} style={{ cursor: 'pointer', color: '#EF4444' }} onClick={() => removeHeader(k)} />
-                      </div>
-                    ))}
-                 </div>
+                <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Settings size={18} color="#49A3C4" /> Additional Static Headers</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
+                  <StyledInput placeholder="Key" value={newHeader.key} onChange={e => setNewHeader({ ...newHeader, key: e.target.value })} />
+                  <StyledInput placeholder="Value" value={newHeader.value} onChange={e => setNewHeader({ ...newHeader, value: e.target.value })} />
+                  <button type="button" onClick={addHeader} style={{ background: '#49A3C4', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', cursor: 'pointer' }}><Plus size={20} /></button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px' }}>
+                  {Object.entries(formData.request_template.headers || {}).map(([k, v]) => (
+                    <div key={k} style={{ background: 'white', padding: '6px 14px', borderRadius: '20px', border: '1px solid #ddd', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <strong>{k}:</strong> {v} <X size={14} style={{ cursor: 'pointer', color: '#EF4444' }} onClick={() => removeHeader(k)} />
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Query Params UI */}
               <div style={{ backgroundColor: '#F8FBFE', padding: '20px', borderRadius: '15px', marginBottom: '20px', border: '1px solid rgba(0,54,74,0.05)' }}>
-                 <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Globe size={18} color="#49A3C4" /> Default Query Parameters</label>
-                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
-                    <StyledInput placeholder="Param Key" value={newParam.key} onChange={e => setNewParam({...newParam, key: e.target.value})} />
-                    <StyledInput placeholder="Value" value={newParam.value} onChange={e => setNewParam({...newParam, value: e.target.value})} />
-                    <button type="button" onClick={addParam} style={{ background: '#49A3C4', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', cursor: 'pointer' }}><Plus size={20} /></button>
-                 </div>
-                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px' }}>
-                    {Object.entries(formData.request_template.params || {}).map(([k, v]) => (
-                      <div key={k} style={{ background: 'white', padding: '6px 14px', borderRadius: '20px', border: '1px solid #ddd', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <strong>{k}:</strong> {v} <X size={14} style={{ cursor: 'pointer', color: '#EF4444' }} onClick={() => removeParam(k)} />
-                      </div>
-                    ))}
-                 </div>
+                <label style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}><Globe size={18} color="#49A3C4" /> Default Query Parameters</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
+                  <StyledInput placeholder="Param Key" value={newParam.key} onChange={e => setNewParam({ ...newParam, key: e.target.value })} />
+                  <StyledInput placeholder="Value" value={newParam.value} onChange={e => setNewParam({ ...newParam, value: e.target.value })} />
+                  <button type="button" onClick={addParam} style={{ background: '#49A3C4', color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', cursor: 'pointer' }}><Plus size={20} /></button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px' }}>
+                  {Object.entries(formData.request_template.params || {}).map(([k, v]) => (
+                    <div key={k} style={{ background: 'white', padding: '6px 14px', borderRadius: '20px', border: '1px solid #ddd', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <strong>{k}:</strong> {v} <X size={14} style={{ cursor: 'pointer', color: '#EF4444' }} onClick={() => removeParam(k)} />
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
 
@@ -350,13 +353,13 @@ const ApiSourceCreator = () => {
               <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <List size={20} /> 4. Field Mapping
               </h2>
-              
+
               {formData.field_mappings.length > 0 ? (
                 <div style={{ display: 'grid', gap: '15px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '20px', padding: '0 10px', opacity: 0.6 }}>
-                     <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Database Attribute</span>
-                     <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>API JSON Field Name</span>
-                     <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Transform</span>
+                    <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Database Attribute</span>
+                    <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>API JSON Field Name</span>
+                    <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Transform</span>
                   </div>
 
                   {formData.field_mappings.map((m, i) => (
@@ -372,12 +375,12 @@ const ApiSourceCreator = () => {
               )}
             </section>
 
-            <button type="submit" disabled={loading} style={{ 
-              padding: '18px', background: '#00364A', color: 'white', border: 'none', borderRadius: '15px', 
-              fontSize: '18px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' 
+            <button type="submit" disabled={loading} style={{
+              padding: '18px', background: '#00364A', color: 'white', border: 'none', borderRadius: '15px',
+              fontSize: '18px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px'
             }}>
-               {loading ? <Loader2 size={22} className="spin" /> : <Save size={22} />}
-               Save API Source
+              {loading ? <Loader2 size={22} className="spin" /> : <Save size={22} />}
+              Save API Source
             </button>
           </form>
         </div>

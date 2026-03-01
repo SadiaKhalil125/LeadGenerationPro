@@ -151,8 +151,13 @@ async def create_task(request: TaskRequest):
         if request.repeat not in VALID_REPEATS:
             raise HTTPException(status_code=400, detail="Invalid repeat value")
         
-        if request.scheduled_time < datetime.now(timezone.utc):
+        # Handle both tz-aware (e.g. "...+05:00") and tz-naive datetimes safely
+        sched = request.scheduled_time
+        now_utc = datetime.now(timezone.utc)
+        sched_utc = sched if sched.tzinfo else sched.replace(tzinfo=timezone.utc)
+        if sched_utc < now_utc:
             raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+
 
         conn, cur = get_db_cursor()
         
@@ -186,8 +191,11 @@ async def create_task(request: TaskRequest):
         # 2. Handle both web and API sources
         if request.source_type == 'web':
             # Existing web source logic (UNCHANGED to prevent breaking things)
-            if not request.source_id or not request.mapping_id:
-                raise HTTPException(status_code=400, detail="source_id and mapping_id required")
+            if not request.source_id:
+                raise HTTPException(status_code=400, detail="Please select a Web Source before creating a task.")
+            if not request.mapping_id:
+                raise HTTPException(status_code=400, detail="Please select a Mapping for the chosen source.")
+
             
             cur.execute("SELECT id FROM sources WHERE id = %s", (request.source_id,))
             if not cur.fetchone():
@@ -258,12 +266,15 @@ async def create_task(request: TaskRequest):
             "message": f"Task '{task_name}' created successfully"
         }
            
+    except HTTPException:
+        raise  # Re-raise 400/404 errors as-is with their meaningful messages
     except Exception as e:
-        if conn: conn.rollback()
+        # if conn: conn.rollback()
         logger.error(f"Error creating task: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create task: {str(e)}")
     finally:
-        if conn: conn.close()
+        logger.info("Task creation completed")
+        # if conn: conn.close()
 
 
 @router.get("/tasks", response_model=TasksListResponse)
@@ -378,8 +389,13 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
         if request.repeat not in VALID_REPEATS:
             raise HTTPException(status_code=400, detail="Invalid repeat value")
         
-        if request.scheduled_time < datetime.now(timezone.utc):
+        # Handle both tz-aware (e.g. "...+05:00") and tz-naive datetimes safely
+        sched = request.scheduled_time
+        now_utc = datetime.now(timezone.utc)
+        sched_utc = sched if sched.tzinfo else sched.replace(tzinfo=timezone.utc)
+        if sched_utc < now_utc:
             raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+
 
         conn, cur = get_db_cursor()
         
@@ -445,10 +461,10 @@ async def update_task(task_id: int, request: TaskUpdateRequest):
         }
         
     except HTTPException:
-        conn.rollback()
+        # conn.rollback()
         raise
     except Exception as e:
-        conn.rollback()
+        # conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update task: {str(e)}")
  
 async def upsert_entity_record(cur,entity_name: str, source_name: str, item: dict):
