@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { 
-  Database, 
-  Map as MapIcon, 
-  Edit3, 
-  Trash2, 
-  ChevronDown, 
-  ChevronRight, 
-  AlertCircle, 
+import {
+  Database,
+  Map as MapIcon,
+  Edit3,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  AlertCircle,
   CheckCircle,
+  X,
   ToggleLeft,
   ToggleRight,
   Columns,
@@ -44,13 +45,22 @@ const MappingManager = () => {
   const [search, setSearch] = useState("");
   const [filterSource, setFilterSource] = useState("all");
   const [deleting, setDeleting] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const addNotification = (type, message) => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
 
   const { data: mappingsData, isLoading: isLoadingMappings, error: queryError } = useQuery({
     queryKey: ['mappings'],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/mapping/mappings`,{
+      const res = await fetch(`${API_BASE}/mapping/mappings`, {
         method: "GET",
         headers: {
           "ngrok-skip-browser-warning": "true"
@@ -60,6 +70,7 @@ const MappingManager = () => {
       const data = await res.json();
       return data?.mappings ?? [];
     },
+    refetchOnMount: true, // Override global false — refetch if stale (e.g. after invalidateQueries from EntityMappingForm)
   });
 
   const loading = isLoadingMappings && !mappingsData;
@@ -99,24 +110,24 @@ const MappingManager = () => {
     try {
       const res = await fetch(`${API_BASE}/mapping/delete-mapping/${encodeURIComponent(mappingName)}`, {
         method: 'DELETE',
-          headers: {
-            "ngrok-skip-browser-warning": "true"
-          }
+        headers: {
+          "ngrok-skip-browser-warning": "true"
+        }
       });
-      
+
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
-      
+
       queryClient.setQueryData(['mappings'], (oldMappings) => {
         if (!oldMappings) return oldMappings;
         return oldMappings.filter(m => m.mapping_name !== mappingName);
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['mappings'] }, { refetchType: 'none' });
     } catch (err) {
       console.error("Delete failed:", err);
-      alert("Failed to delete mapping — check console for details.");
+      addNotification('error', 'Failed to delete mapping — check console for details.');
     } finally {
       setDeleting(false);
     }
@@ -126,34 +137,34 @@ const MappingManager = () => {
     try {
       const res = await fetch(`${API_BASE}/mapping/toggle-mapping-status/${encodeURIComponent(mappingName)}`, {
         method: 'PUT',
-        headers:{
+        headers: {
           "ngrok-skip-browser-warning": "true"
         }
       });
-      
+
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
-      
+
       const data = await res.json();
-      
+
       queryClient.setQueryData(['mappings'], (oldMappings) => {
         if (!oldMappings) return oldMappings;
-        return oldMappings.map(m => 
+        return oldMappings.map(m =>
           m.mapping_name === mappingName ? { ...m, enabled: data.enabled } : m
         );
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['mappings'] }, { refetchType: 'none' });
     } catch (err) {
       console.error("Toggle status failed:", err);
-      alert("Failed to toggle mapping status — check console for details.");
+      addNotification('error', 'Failed to toggle mapping status — check console for details.');
     }
   };
 
   const onOpenEdit = (mapping) => {
-    navigate('/entitymappingform', { 
-      state: { 
+    navigate('/entitymappingform', {
+      state: {
         editMode: true,
         mappingData: {
           id: mapping.id,
@@ -167,7 +178,7 @@ const MappingManager = () => {
           follow_links: mapping.follow_links || [],
           enabled: mapping.enabled
         }
-      } 
+      }
     });
   };
 
@@ -182,6 +193,8 @@ const MappingManager = () => {
       justifyContent: 'center',
       alignItems: 'flex-start'
     }}>
+      {/* Floating Notification Panel */}
+      <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
       <div style={{
         width: '100%',
         maxWidth: '1200px',
@@ -230,22 +243,22 @@ const MappingManager = () => {
           </div>
 
           <div style={{ display: 'flex', gap: '15px' }}>
-            <StyledButton 
-              onClick={()=>navigate('/dashboard')} 
+            <StyledButton
+              onClick={() => navigate('/dashboard')}
               variant="outline"
               icon={<ArrowLeft size={18} />}
             >
               Dashboard
             </StyledButton>
-            <StyledButton 
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['mappings'] })} 
+            <StyledButton
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['mappings'] })}
               variant="outline"
               icon={<RefreshCw size={18} />}
             >
               Refresh
             </StyledButton>
-            <StyledButton 
-              onClick={() => window.location.href = '/entitymappingform'} 
+            <StyledButton
+              onClick={() => window.location.href = '/entitymappingform'}
               variant="primary"
               icon={<Edit3 size={18} />}
             >
@@ -298,7 +311,7 @@ const MappingManager = () => {
               />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '17px', padding:'3px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '17px', padding: '3px' }}>
               <select
                 value={filterSource}
                 onChange={(e) => setFilterSource(e.target.value)}
@@ -372,28 +385,28 @@ const MappingManager = () => {
                           {st.label}
                         </div>
 
-                        <IconButton 
+                        <IconButton
                           onClick={() => toggleMappingStatus(m.mapping_name, m.enabled)}
                           icon={m.enabled !== false ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
                           color={m.enabled !== false ? "#059669" : "#DC2626"}
                           title={m.enabled !== false ? 'Disable' : 'Enable'}
                         />
 
-                        <IconButton 
+                        <IconButton
                           onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}
                           icon={expandedId === m.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                           color="#49A3C4"
                           title="Details"
                         />
 
-                        <IconButton 
+                        <IconButton
                           onClick={() => onOpenEdit(m)}
                           icon={<Edit3 size={18} />}
                           color="#D97706"
                           title="Edit"
                         />
 
-                        <IconButton 
+                        <IconButton
                           onClick={() => onDelete(m.mapping_name)}
                           icon={<Trash2 size={18} />}
                           color="#EF4444"
@@ -442,7 +455,7 @@ const MappingManager = () => {
 
 const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled }) => {
   const [hover, setHover] = useState(false);
-  
+
   const styles = {
     primary: {
       bg: '#00364A', color: 'white', border: '2px solid #00364A',
@@ -511,14 +524,14 @@ const StatCard = ({ title, value, color }) => (
 
 const IconButton = ({ onClick, icon, color, disabled, title }) => {
   const [hover, setHover] = useState(false);
-  
+
   const effectiveColor = disabled ? '#cccccc' : color;
-  
+
   const getBgColor = () => {
     if (disabled) return '#f5f5f5';
     if (hover) {
-        if (effectiveColor.startsWith('#')) return `${effectiveColor}15`; 
-        return '#f0f0f0';
+      if (effectiveColor.startsWith('#')) return `${effectiveColor}15`;
+      return '#f0f0f0';
     }
     return '#F8FBFF';
   };
@@ -553,3 +566,31 @@ const IconButton = ({ onClick, icon, color, disabled, title }) => {
 };
 
 export default MappingManager;
+
+// Floating toast notification panel
+const NotificationPanel = ({ notifications, onRemove }) => {
+  if (!notifications.length) return null;
+  return (
+    <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '400px' }}>
+      {notifications.map(notif => (
+        <div key={notif.id} style={{
+          backgroundColor: notif.type === 'success' ? '#10B981' : '#EF4444',
+          color: 'white', padding: '16px 20px', borderRadius: '12px',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
+          display: 'flex', alignItems: 'flex-start', gap: '12px',
+          animation: 'slideIn 0.3s ease', border: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <div style={{ flexShrink: 0, marginTop: '2px' }}>
+            {notif.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+          </div>
+          <div style={{ flex: 1, fontSize: '14px', fontWeight: '500', lineHeight: '1.5' }}>{notif.message}</div>
+          <button onClick={() => onRemove(notif.id)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '4px', flexShrink: 0 }}
+            onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.8'}>
+            <X size={16} />
+          </button>
+        </div>
+      ))}
+      <style>{`@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+    </div>
+  );
+};

@@ -31,9 +31,40 @@ const TasksManagement = () => {
     const [editRepeat, setEditRepeat] = useState('');
     const [editMaxItems, setEditMaxItems] = useState('');
     const [loading, setLoading] = useState(false);
-    const [response, setResponse] = useState(null);
+    const [notifications, setNotifications] = useState([]);
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+
+    const addNotification = (type, message) => {
+        const id = Date.now();
+        setNotifications(prev => [...prev, { id, type, message }]);
+        setTimeout(() => {
+            setNotifications(prev => prev.filter(n => n.id !== id));
+        }, 5000);
+    };
+
+    // Converts a datetime-local input value to ISO with local offset,
+    // so the backend receives the user's intended wall-clock time.
+    const localDateTimeToISO = (datetimeLocalStr) => {
+        if (!datetimeLocalStr) return null;
+        const d = new Date(datetimeLocalStr);
+        const tzOffsetMin = -d.getTimezoneOffset();
+        const sign = tzOffsetMin >= 0 ? '+' : '-';
+        const absMin = Math.abs(tzOffsetMin);
+        const hh = String(Math.floor(absMin / 60)).padStart(2, '0');
+        const mm = String(absMin % 60).padStart(2, '0');
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+            `T${pad(d.getHours())}:${pad(d.getMinutes())}:00${sign}${hh}:${mm}`;
+    };
+
+    // The backend stores TIMESTAMP (no timezone). Python serialises it without
+    // a 'Z', so browsers would treat it as LOCAL time instead of UTC. Append
+    // 'Z' if there is no offset in the string to force UTC interpretation.
+    const ensureUTC = (dateStr) => {
+        if (!dateStr) return dateStr;
+        return /[Z+\-]\d{2}:?\d{2}$/.test(dateStr) ? dateStr : dateStr + 'Z';
+    };
 
     // Fetch tasks
     const { data: tasksData, isLoading: isLoadingTasks } = useQuery({
@@ -66,7 +97,7 @@ const TasksManagement = () => {
         setEditTaskName(task.task_name);
         setEditRepeat(task.repeat || 'once');
         setEditMaxItems(task.max_items || '');
-        setResponse(null);
+        // notifications clear automatically — no action needed
     };
 
     const handleCancelEdit = () => {
@@ -79,20 +110,20 @@ const TasksManagement = () => {
 
     const handleUpdateTask = async (taskId) => {
         if (!editScheduledTime) {
-            setResponse({ type: 'error', message: 'Please provide a scheduled time.' });
+            addNotification('error', 'Please provide a scheduled time.');
             return;
         }
         setLoading(true);
         try {
             const requestData = {
-                scheduled_time: new Date(editScheduledTime).toISOString(),
+                scheduled_time: localDateTimeToISO(editScheduledTime),
                 task_name: editTaskName || undefined,
                 repeat: editRepeat || undefined,
                 max_items: editMaxItems !== '' ? Number(editMaxItems) : 0
             };
             const res = await fetch(`${API_BASE}/task/update-task/${taskId}`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     "ngrok-skip-browser-warning": "true"
                 },
@@ -100,24 +131,24 @@ const TasksManagement = () => {
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                setResponse({ type: 'success', message: data.message });
+                addNotification('success', data.message);
                 setEditingTask(null);
-                
+
                 // Update cache directly
                 queryClient.setQueryData(['tasks'], (oldTasks) => {
                     if (!oldTasks) return oldTasks;
-                    return oldTasks.map(task => 
+                    return oldTasks.map(task =>
                         task.id === taskId ? { ...task, ...requestData } : task
                     );
                 });
-                
+
                 // Mark as stale but don't refetch immediately
                 queryClient.invalidateQueries({ queryKey: ['tasks'] }, { refetchType: 'none' });
             } else {
-                setResponse({ type: 'error', message: data.detail || 'Failed to update task.' });
+                addNotification('error', data.detail || 'Failed to update task.');
             }
         } catch (error) {
-            setResponse({ type: 'error', message: 'A network error occurred.' });
+            addNotification('error', 'A network error occurred.');
         } finally {
             setLoading(false);
         }
@@ -127,40 +158,40 @@ const TasksManagement = () => {
         if (!confirm(`Are you sure you want to delete task "${taskName}"?`)) return;
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/task/delete-task/${taskId}`, { 
+            const res = await fetch(`${API_BASE}/task/delete-task/${taskId}`, {
                 method: 'DELETE',
                 headers: { "ngrok-skip-browser-warning": "true" }
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                setResponse({ type: 'success', message: data.message });
-                
+                addNotification('success', data.message);
+
                 // Update cache directly - remove deleted task
                 queryClient.setQueryData(['tasks'], (oldTasks) => {
                     if (!oldTasks) return oldTasks;
                     return oldTasks.filter(task => task.id !== taskId);
                 });
-                
+
                 // Mark as stale but don't refetch immediately
                 queryClient.invalidateQueries({ queryKey: ['tasks'] }, { refetchType: 'none' });
             } else {
-                setResponse({ type: 'error', message: data.detail || 'Failed to delete task.' });
+                addNotification('error', data.detail || 'Failed to delete task.');
             }
         } catch (error) {
-            setResponse({ type: 'error', message: 'A network error occurred.' });
+            addNotification('error', 'A network error occurred.');
         } finally {
             setLoading(false);
         }
     };
 
     const formatDateTime = (dateString) => {
-        return new Date(dateString).toLocaleString([], {
+        return new Date(ensureUTC(dateString)).toLocaleString([], {
             year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
     };
 
     const getStatusBadge = (scheduledTime) => {
-        const isUpcoming = new Date(scheduledTime) > new Date();
+        const isUpcoming = new Date(ensureUTC(scheduledTime)) > new Date();
         return (
             <div style={{
                 display: 'inline-flex',
@@ -180,8 +211,8 @@ const TasksManagement = () => {
         );
     };
 
-    const sortedTasks = [...tasks].sort((a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time));
-    const upcomingCount = tasks.filter(task => new Date(task.scheduled_time) > new Date()).length;
+    const sortedTasks = [...tasks].sort((a, b) => new Date(ensureUTC(a.scheduled_time)) - new Date(ensureUTC(b.scheduled_time)));
+    const upcomingCount = tasks.filter(task => new Date(ensureUTC(task.scheduled_time)) > new Date()).length;
 
     if (pageLoading) {
         return (
@@ -195,12 +226,12 @@ const TasksManagement = () => {
                 gap: '20px'
             }}>
                 <div style={{
-                   width: '40px',
-                   height: '40px',
-                   border: '4px solid #49A3C4',
-                   borderTop: '4px solid transparent',
-                   borderRadius: '50%',
-                   animation: 'spin 1s linear infinite'
+                    width: '40px',
+                    height: '40px',
+                    border: '4px solid #49A3C4',
+                    borderTop: '4px solid transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
                 }} />
                 <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Task Data...</h1>
                 <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
@@ -219,6 +250,8 @@ const TasksManagement = () => {
             justifyContent: 'center',
             alignItems: 'flex-start'
         }}>
+            {/* Floating Notification Panel */}
+            <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
             <div style={{
                 width: '100%',
                 maxWidth: '1200px',
@@ -267,27 +300,27 @@ const TasksManagement = () => {
                         </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                    <StyledButton 
-                        onClick={()=>navigate('/dashboard')} 
-                        variant="outline"
-                        icon={<ArrowLeft size={18} />}
-                    >
-                        Dashboard
-                    </StyledButton>
-                    <StyledButton 
-                        onClick={()=>navigate('/taskscheduler')} 
-                        variant="outline"
-                        icon={<Plus size={18} />}
-                    >
-                        Create Task
-                    </StyledButton>
-                    <StyledButton 
-                        onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} 
-                        variant="outline"
-                        icon={<RefreshCw size={18} />}
-                    >
-                        Refresh
-                    </StyledButton>
+                        <StyledButton
+                            onClick={() => navigate('/dashboard')}
+                            variant="outline"
+                            icon={<ArrowLeft size={18} />}
+                        >
+                            Dashboard
+                        </StyledButton>
+                        <StyledButton
+                            onClick={() => navigate('/taskscheduler')}
+                            variant="outline"
+                            icon={<Plus size={18} />}
+                        >
+                            Create Task
+                        </StyledButton>
+                        <StyledButton
+                            onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                            variant="outline"
+                            icon={<RefreshCw size={18} />}
+                        >
+                            Refresh
+                        </StyledButton>
                     </div>
                 </div>
 
@@ -303,39 +336,8 @@ const TasksManagement = () => {
                         <StatCard title="Upcoming" value={upcomingCount} color="#059669" />
                     </div>
 
-                    {/* Response Messages */}
-                    {response && (
-                        <div style={{
-                            marginBottom: '30px',
-                            padding: '20px 25px',
-                            borderRadius: '15px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '15px',
-                            backgroundColor: response.type === 'success' ? '#E0F2FE' : '#FEF2F2',
-                            border: `2px solid ${response.type === 'success' ? '#49A3C4' : '#EF4444'}`,
-                            color: '#00364A'
-                        }}>
-                            <div style={{
-                                color: response.type === 'success' ? '#49A3C4' : '#EF4444'
-                            }}>
-                                {response.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-                            </div>
-                            <span style={{ fontWeight: '500', flex: 1 }}>{response.message}</span>
-                            <button 
-                                onClick={() => setResponse(null)}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    color: '#00364A',
-                                    opacity: 0.5
-                                }}
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-                    )}
+                    {/* Response Messages - REMOVED: now using NotificationPanel */}
+
 
                     {/* Task List */}
                     {sortedTasks.length === 0 ? (
@@ -372,7 +374,7 @@ const TasksManagement = () => {
                                             }}>
                                                 Editing: <span style={{ color: '#49A3C4' }}>{task.task_name}</span>
                                             </h3>
-                                            
+
                                             <div style={{ display: 'grid', gap: '20px' }}>
                                                 <StyledInput
                                                     label="Task Name"
@@ -380,7 +382,7 @@ const TasksManagement = () => {
                                                     value={editTaskName}
                                                     onChange={(e) => setEditTaskName(e.target.value)}
                                                 />
-                                                
+
                                                 <StyledInput
                                                     label="Max Items"
                                                     icon={<Maximize size={16} />}
@@ -414,15 +416,15 @@ const TasksManagement = () => {
                                                 </div>
 
                                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', marginTop: '10px' }}>
-                                                    <StyledButton 
-                                                        onClick={handleCancelEdit} 
+                                                    <StyledButton
+                                                        onClick={handleCancelEdit}
                                                         variant="secondary"
                                                         icon={<X size={18} />}
                                                     >
                                                         Cancel
                                                     </StyledButton>
-                                                    <StyledButton 
-                                                        onClick={() => handleUpdateTask(task.id)} 
+                                                    <StyledButton
+                                                        onClick={() => handleUpdateTask(task.id)}
                                                         variant="primary"
                                                         disabled={loading}
                                                         icon={loading ? <Loader2 size={18} className="spin" /> : <Save size={18} />}
@@ -443,8 +445,8 @@ const TasksManagement = () => {
                                                 flexWrap: 'wrap'
                                             }}>
                                                 {/* Left Side: Task Info */}
-                                                <div style={{ 
-                                                    flex: '1 1 300px', 
+                                                <div style={{
+                                                    flex: '1 1 300px',
                                                     minWidth: '0' /* Crucial for text truncation in flex/grid */
                                                 }}>
                                                     <h3 style={{
@@ -458,11 +460,11 @@ const TasksManagement = () => {
                                                     }}>
                                                         {task.task_name}
                                                     </h3>
-                                                    
-                                                    <div style={{ 
-                                                        display: 'grid', 
-                                                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', 
-                                                        gap: '15px' 
+
+                                                    <div style={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                                                        gap: '15px'
                                                     }}>
                                                         <InfoItem icon={<Database size={14} />} label="Source">{task.source_name}</InfoItem>
                                                         <InfoItem icon={<Map size={14} />} label="Mapping">{task.mapping_name}</InfoItem>
@@ -474,28 +476,28 @@ const TasksManagement = () => {
                                                         </InfoItem>
                                                     </div>
                                                 </div>
-                                                
+
                                                 {/* Right Side: Actions */}
-                                                <div style={{ 
-                                                    display: 'flex', 
-                                                    flexDirection: 'column', 
-                                                    alignItems: 'flex-end', 
+                                                <div style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'flex-end',
                                                     gap: '15px',
                                                     flexShrink: 0, /* Prevents actions from being pushed or wrapping strangely */
                                                     marginLeft: 'auto'
                                                 }}>
                                                     {getStatusBadge(task.scheduled_time)}
                                                     <div style={{ display: 'flex', gap: '10px' }}>
-                                                        <IconButton 
-                                                            onClick={() => handleEditClick(task)} 
-                                                            icon={<Edit3 size={16} />} 
+                                                        <IconButton
+                                                            onClick={() => handleEditClick(task)}
+                                                            icon={<Edit3 size={16} />}
                                                             color="#49A3C4"
                                                             disabled={loading}
                                                             title="Edit Task"
                                                         />
-                                                        <IconButton 
-                                                            onClick={() => handleDeleteTask(task.id, task.task_name)} 
-                                                            icon={<Trash2 size={16} />} 
+                                                        <IconButton
+                                                            onClick={() => handleDeleteTask(task.id, task.task_name)}
+                                                            icon={<Trash2 size={16} />}
                                                             color="#EF4444"
                                                             disabled={loading}
                                                             title="Delete Task"
@@ -522,207 +524,235 @@ const TasksManagement = () => {
 // Helper Components
 
 const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled, style }) => {
-  const [hover, setHover] = useState(false);
-  
-  const styles = {
-    primary: {
-      bg: '#00364A', color: 'white', border: '2px solid #00364A',
-      hoverBg: 'white', hoverColor: '#00364A'
-    },
-    outline: {
-      bg: 'white', color: '#00364A', border: '2px solid #00364A',
-      hoverBg: '#00364A', hoverColor: 'white'
-    },
-    secondary: {
-      bg: 'white', color: '#00364A', border: '2px solid rgba(0, 54, 74, 0.2)',
-      hoverBg: '#F3F4F6', hoverColor: '#00364A'
-    }
-  };
+    const [hover, setHover] = useState(false);
 
-  const currentStyle = styles[variant];
+    const styles = {
+        primary: {
+            bg: '#00364A', color: 'white', border: '2px solid #00364A',
+            hoverBg: 'white', hoverColor: '#00364A'
+        },
+        outline: {
+            bg: 'white', color: '#00364A', border: '2px solid #00364A',
+            hoverBg: '#00364A', hoverColor: 'white'
+        },
+        secondary: {
+            bg: 'white', color: '#00364A', border: '2px solid rgba(0, 54, 74, 0.2)',
+            hoverBg: '#F3F4F6', hoverColor: '#00364A'
+        }
+    };
 
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-        padding: '12px 24px',
-        borderRadius: '12px',
-        fontWeight: '600',
-        fontSize: '15px',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.7 : 1,
-        transition: 'all 0.3s',
-        backgroundColor: hover && !disabled ? currentStyle.hoverBg : currentStyle.bg,
-        color: hover && !disabled ? currentStyle.hoverColor : currentStyle.color,
-        border: currentStyle.border,
-        boxShadow: hover && !disabled ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
-        transform: hover && !disabled ? 'translateY(-2px)' : 'none',
-        ...style
-      }}
-    >
-      {icon}
-      {children}
-    </button>
-  );
+    const currentStyle = styles[variant];
+
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '12px 24px',
+                borderRadius: '12px',
+                fontWeight: '600',
+                fontSize: '15px',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.7 : 1,
+                transition: 'all 0.3s',
+                backgroundColor: hover && !disabled ? currentStyle.hoverBg : currentStyle.bg,
+                color: hover && !disabled ? currentStyle.hoverColor : currentStyle.color,
+                border: currentStyle.border,
+                boxShadow: hover && !disabled ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
+                transform: hover && !disabled ? 'translateY(-2px)' : 'none',
+                ...style
+            }}
+        >
+            {icon}
+            {children}
+        </button>
+    );
 };
 
 const StyledInput = ({ label, icon, value, onChange, placeholder, type = "text" }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-    {label && (
-      <label style={{
-        fontSize: '14px',
-        fontWeight: '600',
-        color: '#00364A',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px'
-      }}>
-        {icon && React.cloneElement(icon, { color: '#49A3C4' })}
-        {label}
-      </label>
-    )}
-    <input
-      type={type}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      style={{
-        padding: '14px 20px',
-        borderRadius: '12px',
-        border: 'none',
-        backgroundColor: 'rgba(73, 163, 196, 0.15)',
-        color: '#00364A',
-        fontSize: '15px',
-        outline: 'none',
-        transition: 'all 0.3s',
-        width: '100%',
-        boxSizing: 'border-box'
-      }}
-      onFocus={(e) => {
-        e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
-        e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
-      }}
-      onBlur={(e) => {
-        e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
-        e.target.style.boxShadow = 'none';
-      }}
-    />
-  </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {label && (
+            <label style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#00364A',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+            }}>
+                {icon && React.cloneElement(icon, { color: '#49A3C4' })}
+                {label}
+            </label>
+        )}
+        <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            style={{
+                padding: '14px 20px',
+                borderRadius: '12px',
+                border: 'none',
+                backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                color: '#00364A',
+                fontSize: '15px',
+                outline: 'none',
+                transition: 'all 0.3s',
+                width: '100%',
+                boxSizing: 'border-box'
+            }}
+            onFocus={(e) => {
+                e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
+                e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
+            }}
+            onBlur={(e) => {
+                e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
+                e.target.style.boxShadow = 'none';
+            }}
+        />
+    </div>
 );
 
 const StyledSelect = ({ value, onChange, children }) => (
-  <select
-    value={value}
-    onChange={onChange}
-    style={{
-      padding: '14px 20px',
-      borderRadius: '12px',
-      border: 'none',
-      backgroundColor: 'rgba(73, 163, 196, 0.15)',
-      color: '#00364A',
-      fontSize: '15px',
-      outline: 'none',
-      width: '100%',
-      cursor: 'pointer',
-      appearance: 'none',
-      backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2300364A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`,
-      backgroundRepeat: 'no-repeat',
-      backgroundPosition: 'right 20px top 50%',
-      backgroundSize: '12px auto'
-    }}
-  >
-    {children}
-  </select>
+    <select
+        value={value}
+        onChange={onChange}
+        style={{
+            padding: '14px 20px',
+            borderRadius: '12px',
+            border: 'none',
+            backgroundColor: 'rgba(73, 163, 196, 0.15)',
+            color: '#00364A',
+            fontSize: '15px',
+            outline: 'none',
+            width: '100%',
+            cursor: 'pointer',
+            appearance: 'none',
+            backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2300364A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right 20px top 50%',
+            backgroundSize: '12px auto'
+        }}
+    >
+        {children}
+    </select>
 );
 
 const StatCard = ({ title, value, color }) => (
-  <div style={{
-    backgroundColor: 'white',
-    borderRadius: '15px',
-    padding: '25px',
-    border: '2px solid rgba(0, 54, 74, 0.05)',
-    textAlign: 'center',
-    boxShadow: '0 4px 15px rgba(0, 54, 74, 0.03)'
-  }}>
-    <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', opacity: 0.6, marginBottom: '5px' }}>{title}</h4>
-    <p style={{ fontSize: '32px', fontWeight: '800', color: color, margin: 0 }}>{value}</p>
-  </div>
+    <div style={{
+        backgroundColor: 'white',
+        borderRadius: '15px',
+        padding: '25px',
+        border: '2px solid rgba(0, 54, 74, 0.05)',
+        textAlign: 'center',
+        boxShadow: '0 4px 15px rgba(0, 54, 74, 0.03)'
+    }}>
+        <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#00364A', opacity: 0.6, marginBottom: '5px' }}>{title}</h4>
+        <p style={{ fontSize: '32px', fontWeight: '800', color: color, margin: 0 }}>{value}</p>
+    </div>
 );
 
 const InfoItem = ({ icon, label, children }) => (
-  <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: '8px', 
-      fontSize: '14px', 
-      color: '#00364A',
-      minWidth: 0 /* Allows flex child to shrink below content size if needed */
-  }}>
-    <span style={{ color: '#49A3C4', flexShrink: 0 }}>{icon}</span>
-    <span style={{ fontWeight: '600', opacity: 0.9, flexShrink: 0 }}>{label}:</span>
-    <span style={{ 
-        opacity: 0.8,
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis'
-    }}>{children}</span>
-  </div>
+    <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontSize: '14px',
+        color: '#00364A',
+        minWidth: 0 /* Allows flex child to shrink below content size if needed */
+    }}>
+        <span style={{ color: '#49A3C4', flexShrink: 0 }}>{icon}</span>
+        <span style={{ fontWeight: '600', opacity: 0.9, flexShrink: 0 }}>{label}:</span>
+        <span style={{
+            opacity: 0.8,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+        }}>{children}</span>
+    </div>
 );
 
 const IconButton = ({ onClick, icon, color, disabled, title }) => {
-  const [hover, setHover] = useState(false);
-  
-  // Use a hex code to ensure background opacity logic works
-  const effectiveColor = disabled ? '#cccccc' : color;
-  
-  const getBgColor = () => {
-    if (disabled) return '#f5f5f5';
-    // If hovering, add transparency to hex color, or fallback to gray
-    if (hover) {
-        if (effectiveColor.startsWith('#')) return `${effectiveColor}15`; 
-        return '#f0f0f0';
-    }
-    return '#F8FBFF';
-  };
+    const [hover, setHover] = useState(false);
 
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        width: '40px',
-        minWidth: '40px', // FIX: Prevents button from being squashed
-        height: '40px',
-        borderRadius: '10px',
-        border: `1px solid ${disabled ? '#eee' : 'rgba(0,54,74,0.1)'}`,
-        backgroundColor: getBgColor(),
-        color: effectiveColor,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        transition: 'all 0.2s',
-        flexShrink: 0, // FIX: Prevents flexbox from shrinking the button
-        padding: 0
-      }}
-    >
-      {/* 
+    // Use a hex code to ensure background opacity logic works
+    const effectiveColor = disabled ? '#cccccc' : color;
+
+    const getBgColor = () => {
+        if (disabled) return '#f5f5f5';
+        // If hovering, add transparency to hex color, or fallback to gray
+        if (hover) {
+            if (effectiveColor.startsWith('#')) return `${effectiveColor}15`;
+            return '#f0f0f0';
+        }
+        return '#F8FBFF';
+    };
+
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            title={title}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            style={{
+                width: '40px',
+                minWidth: '40px', // FIX: Prevents button from being squashed
+                height: '40px',
+                borderRadius: '10px',
+                border: `1px solid ${disabled ? '#eee' : 'rgba(0,54,74,0.1)'}`,
+                backgroundColor: getBgColor(),
+                color: effectiveColor,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+                flexShrink: 0, // FIX: Prevents flexbox from shrinking the button
+                padding: 0
+            }}
+        >
+            {/* 
          Icons automatically inherit the text color of the button.
          No need for cloneElement if the parent button has the correct 'color' style.
       */}
-      {icon}
-    </button>
-  );
+            {icon}
+        </button>
+    );
 };
 
 export default TasksManagement;
+
+// Floating toast notification panel
+const NotificationPanel = ({ notifications, onRemove }) => {
+    if (!notifications.length) return null;
+    return (
+        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '400px' }}>
+            {notifications.map(notif => (
+                <div key={notif.id} style={{
+                    backgroundColor: notif.type === 'success' ? '#10B981' : '#EF4444',
+                    color: 'white', padding: '16px 20px', borderRadius: '12px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
+                    display: 'flex', alignItems: 'flex-start', gap: '12px',
+                    animation: 'slideIn 0.3s ease', border: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                    <div style={{ flexShrink: 0, marginTop: '2px' }}>
+                        {notif.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                    </div>
+                    <div style={{ flex: 1, fontSize: '14px', fontWeight: '500', lineHeight: '1.5' }}>{notif.message}</div>
+                    <button onClick={() => onRemove(notif.id)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '4px', flexShrink: 0 }}
+                        onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.8'}>
+                        <X size={16} />
+                    </button>
+                </div>
+            ))}
+            <style>{`@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+        </div>
+    );
+};

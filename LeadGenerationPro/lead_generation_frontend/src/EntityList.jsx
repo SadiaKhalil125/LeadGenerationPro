@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { 
-  Database, 
-  Edit3, 
-  Trash2, 
-  Plus, 
-  Save, 
-  X, 
-  ChevronDown, 
-  ChevronRight, 
-  AlertCircle, 
-  CheckCircle, 
-  Undo, 
-  Columns, 
-  List, 
-  Search, 
-  RefreshCw, 
-  Shield, 
+import {
+  Database,
+  Edit3,
+  Trash2,
+  Plus,
+  Save,
+  X,
+  ChevronDown,
+  ChevronRight,
+  AlertCircle,
+  CheckCircle,
+  Undo,
+  Columns,
+  List,
+  Search,
+  RefreshCw,
+  Shield,
   Type,
   ArrowLeft,
   FileText,
@@ -45,14 +45,15 @@ const EntityList = () => {
           "ngrok-skip-browser-warning": "true"
         }
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       return data.entities || [];
     },
+    refetchOnMount: true, // Override global false — refetch if stale (e.g. after invalidateQueries from EntityForm)
   });
 
   // Fetch entity details only when expanded (lazy loading)
@@ -60,17 +61,17 @@ const EntityList = () => {
     queryKey: ['entity-details', expandedEntity],
     queryFn: async () => {
       if (!expandedEntity) return null;
-      
+
       const response = await fetch(`${API_BASE}/entity/entity-info/${expandedEntity}`, {
         headers: {
           "ngrok-skip-browser-warning": "true"
         }
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       if (data.success) {
         return {
@@ -88,18 +89,18 @@ const EntityList = () => {
   const handleCSVExport = async (e, entityName) => {
     e.stopPropagation();
     setExportLoading(prev => ({ ...prev, csv: entityName }));
-    
+
     try {
       const response = await fetch(`${API_BASE}/export/csv/${entityName}`, {
         headers: {
           "ngrok-skip-browser-warning": "true"
         }
       });
-      
+
       if (!response.ok) {
         throw new Error(`Export failed: ${response.status}`);
       }
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -109,21 +110,21 @@ const EntityList = () => {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      
-      setResponse({ 
-        type: "success", 
-        message: `Successfully exported ${entityName} as CSV` 
+
+      setResponse({
+        type: "success",
+        message: `Successfully exported ${entityName} as CSV`
       });
     } catch (error) {
       console.error("CSV Export error:", error);
-      setResponse({ 
-        type: "error", 
-        message: `Failed to export ${entityName} as CSV: ${error.message}` 
+      setResponse({
+        type: "error",
+        message: `Failed to export ${entityName} as CSV: ${error.message}`
       });
     } finally {
       setExportLoading(prev => ({ ...prev, csv: null }));
     }
-    
+
     setTimeout(() => setResponse(null), 5000);
   };
 
@@ -131,18 +132,18 @@ const EntityList = () => {
   const handleExcelExport = async (e, entityName) => {
     e.stopPropagation();
     setExportLoading(prev => ({ ...prev, excel: entityName }));
-    
+
     try {
       const response = await fetch(`${API_BASE}/export/excel/${entityName}`, {
         headers: {
           "ngrok-skip-browser-warning": "true"
         }
       });
-      
+
       if (!response.ok) {
         throw new Error(`Export failed: ${response.status}`);
       }
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -152,21 +153,21 @@ const EntityList = () => {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      
-      setResponse({ 
-        type: "success", 
-        message: `Successfully exported ${entityName} as Excel` 
+
+      setResponse({
+        type: "success",
+        message: `Successfully exported ${entityName} as Excel`
       });
     } catch (error) {
       console.error("Excel Export error:", error);
-      setResponse({ 
-        type: "error", 
-        message: `Failed to export ${entityName} as Excel: ${error.message}` 
+      setResponse({
+        type: "error",
+        message: `Failed to export ${entityName} as Excel: ${error.message}`
       });
     } finally {
       setExportLoading(prev => ({ ...prev, excel: null }));
     }
-    
+
     setTimeout(() => setResponse(null), 5000);
   };
 
@@ -199,31 +200,31 @@ const EntityList = () => {
   };
 
   const addAttribute = () => {
-    setEditAttributes([...editAttributes, { 
-      name: "", 
-      originalName: null, 
-      datatype: "text", 
+    setEditAttributes([...editAttributes, {
+      name: "",
+      originalName: null,
+      datatype: "text",
       nullable: "optional",
-      action: 'add' 
+      action: 'add'
     }]);
   };
 
   const updateAttribute = (index, field, value) => {
     const updated = [...editAttributes];
     updated[index][field] = value;
-    
+
     if (field === 'name' && updated[index].originalName && updated[index].originalName !== value) {
       updated[index].action = 'rename';
     } else if (field === 'name' && updated[index].originalName && updated[index].originalName === value) {
       updated[index].action = 'keep';
     }
-    
+
     setEditAttributes(updated);
   };
 
   const removeAttribute = (index) => {
     const attr = editAttributes[index];
-    
+
     if (attr.originalName) {
       const updated = [...editAttributes];
       updated[index].action = 'remove';
@@ -258,14 +259,14 @@ const EntityList = () => {
 
         const addResponse = await fetch(`${API_BASE}/entity/edit-entity/${editingEntity}`, {
           method: "PUT",
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "ngrok-skip-browser-warning": "true"
           },
           body: JSON.stringify(addPayload),
         });
         const addData = await addResponse.json();
-        
+
         if (addData.success) {
           operations.push(`Added ${toAdd.length} column(s)`);
         } else {
@@ -281,7 +282,7 @@ const EntityList = () => {
           }
         });
         const removeData = await removeResponse.json();
-        
+
         if (removeData.success) {
           operations.push(`Removed column '${attr.originalName}'`);
         } else {
@@ -296,7 +297,7 @@ const EntityList = () => {
             "ngrok-skip-browser-warning": "true"
           }
         });
-        
+
         if (renameResponse.ok) {
           const renameData = await renameResponse.json();
           if (renameData.success) {
@@ -310,14 +311,14 @@ const EntityList = () => {
       }
 
       if (allSuccessful && operations.length > 0) {
-        setResponse({ 
-          type: "success", 
-          message: `Entity updated successfully: ${operations.join(', ')}` 
+        setResponse({
+          type: "success",
+          message: `Entity updated successfully: ${operations.join(', ')}`
         });
       } else if (operations.length > 0) {
-        setResponse({ 
-          type: "success", 
-          message: `Partially updated: ${operations.join(', ')}` 
+        setResponse({
+          type: "success",
+          message: `Partially updated: ${operations.join(', ')}`
         });
       } else {
         setResponse({ type: "error", message: "No changes were made" });
@@ -373,7 +374,7 @@ const EntityList = () => {
     setEditAttributes([]);
   };
 
-  const filteredEntities = (entities || []).filter(entity => 
+  const filteredEntities = (entities || []).filter(entity =>
     entity.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -391,12 +392,12 @@ const EntityList = () => {
         gap: '20px'
       }}>
         <div style={{
-           width: '40px',
-           height: '40px',
-           border: '4px solid #49A3C4',
-           borderTop: '4px solid transparent',
-           borderRadius: '50%',
-           animation: 'spin 1s linear infinite'
+          width: '40px',
+          height: '40px',
+          border: '4px solid #49A3C4',
+          borderTop: '4px solid transparent',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
         }} />
         <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Entities...</h1>
         <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
@@ -476,7 +477,7 @@ const EntityList = () => {
                 alignItems: 'center',
                 gap: '8px',
                 padding: '12px 24px',
-                backgroundColor: '#004e6b'  ,
+                backgroundColor: '#004e6b',
                 color: 'white',
                 borderRadius: '12px',
                 border: 'none',
@@ -522,7 +523,7 @@ const EntityList = () => {
               <ArrowLeft size={18} />
               Dashboard
             </button>
-            <button 
+            <button
               onClick={() => queryClient.invalidateQueries({ queryKey: ['entities'] })}
               style={{
                 display: 'flex',
@@ -650,7 +651,7 @@ const EntityList = () => {
                   }}>
                     {/* Left: Entity Info */}
                     <div style={{ display: 'flex', alignItems: 'center', flex: '1 1 300px', minWidth: 0 }}>
-                      <button 
+                      <button
                         onClick={() => toggleExpand(entity.name)}
                         style={{
                           marginRight: '15px',
@@ -669,10 +670,10 @@ const EntityList = () => {
                         {expandedEntity === entity.name ? <ChevronDown size={24} /> : <ChevronRight size={24} />}
                       </button>
                       <div style={{ minWidth: 0 }}>
-                        <h3 style={{ 
-                          fontSize: '18px', 
-                          fontWeight: '700', 
-                          color: '#00364A', 
+                        <h3 style={{
+                          fontSize: '18px',
+                          fontWeight: '700',
+                          color: '#00364A',
                           margin: 0,
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -686,7 +687,7 @@ const EntityList = () => {
                     {/* Right: Actions */}
                     <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
                       {/* View Data Button */}
-                      <IconButton 
+                      <IconButton
                         onClick={(e) => {
                           e.stopPropagation();
                           navigate(`/entity-data?entity=${entity.name}`);
@@ -695,11 +696,11 @@ const EntityList = () => {
                         color="#8B5CF6"
                         title="View Entity Data"
                       />
-                      
-                    
-                      
+
+
+
                       {/* Edit Button */}
-                      <IconButton 
+                      <IconButton
                         onClick={(e) => {
                           e.stopPropagation();
                           if (expandedEntity !== entity.name) {
@@ -712,19 +713,19 @@ const EntityList = () => {
                             }
                           }, 100);
                         }}
-                        icon={<Edit3 size={18} />} 
-                        color="#49A3C4" 
+                        icon={<Edit3 size={18} />}
+                        color="#49A3C4"
                         title="Edit Entity"
                       />
-                      
+
                       {/* Delete Button */}
-                      <IconButton 
+                      <IconButton
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteEntity(entity.name);
                         }}
-                        icon={<Trash2 size={18} />} 
-                        color="#EF4444" 
+                        icon={<Trash2 size={18} />}
+                        color="#EF4444"
                         title="Delete Entity"
                       />
                     </div>
@@ -761,7 +762,7 @@ const EntityList = () => {
                               ({entityDetails.row_count || 0} rows)
                             </span>
                           </h4>
-                          
+
                           {editingEntity === entity.name ? (
                             /* Editing Mode */
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -835,10 +836,10 @@ const EntityList = () => {
                                         </select>
                                       </div>
                                       <div style={{ display: 'flex', alignItems: 'end', height: '100%', paddingBottom: '2px' }}>
-                                        <IconButton 
-                                          onClick={() => removeAttribute(index)} 
-                                          icon={<Trash2 size={16} />} 
-                                          color="#EF4444" 
+                                        <IconButton
+                                          onClick={() => removeAttribute(index)}
+                                          icon={<Trash2 size={16} />}
+                                          color="#EF4444"
                                           title="Remove"
                                         />
                                       </div>
@@ -846,7 +847,7 @@ const EntityList = () => {
                                   )}
                                 </div>
                               ))}
-                              
+
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
                                 <StyledButton onClick={addAttribute} icon={<Plus size={16} />}>Add Attribute</StyledButton>
                                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -893,7 +894,7 @@ const EntityList = () => {
                                   </div>
                                 ))}
                               </div>
-                              
+
                               <div style={{ marginTop: '25px' }}>
                                 <StyledButton onClick={() => startEditing(entityDetails)} icon={<Edit3 size={16} />}>Edit Entity</StyledButton>
                               </div>
@@ -934,14 +935,14 @@ const EntityList = () => {
 
 const IconButton = ({ onClick, icon, color, disabled, title }) => {
   const [hover, setHover] = useState(false);
-  
+
   const effectiveColor = disabled ? '#cccccc' : color;
-  
+
   const getBgColor = () => {
     if (disabled) return '#f5f5f5';
     if (hover) {
-        if (effectiveColor.startsWith('#')) return `${effectiveColor}15`; 
-        return '#f0f0f0';
+      if (effectiveColor.startsWith('#')) return `${effectiveColor}15`;
+      return '#f0f0f0';
     }
     return '#F8FBFF';
   };
@@ -977,7 +978,7 @@ const IconButton = ({ onClick, icon, color, disabled, title }) => {
 
 const StyledButton = ({ onClick, icon, children, variant = 'primary' }) => {
   const [hover, setHover] = useState(false);
-  
+
   let bg = '#00364A';
   let color = 'white';
   let border = 'none';
