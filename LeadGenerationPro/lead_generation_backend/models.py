@@ -274,8 +274,6 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-from pydantic import BaseModel
-from typing import List, Dict, Optional
 
 class OutreachRequest(BaseModel):
     provider: str
@@ -284,3 +282,14 @@ class OutreachRequest(BaseModel):
     subject: str
     message: str
     contacts: List[Dict]
+
+
+class SourceRequest(BaseModel):
+    """Request model for creating/updating a source"""
+    name: str
+    url: str
+    pagination_config: Optional[PaginationConfig] = None
+    is_captcha_protected: bool = False
+    captcha_params: Optional[CaptchaParams] = None
+    is_auth_protected: bool = False
+    auth_config: Optional[AuthConfig] = None

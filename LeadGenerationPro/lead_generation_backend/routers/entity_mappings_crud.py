@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from fastapi import Body
-from models import MappingsListResponse, MappingInfo, MappingFormRequest
+from models import MappingsListResponse, MappingInfo, MappingFormRequest, SourceRequest
 from psycopg2.extras import Json
 from urllib.parse import urlparse
 from routers.source_crud import save_source
@@ -33,7 +33,11 @@ async def save_entity_mapping(mapping: MappingFormRequest):
             normalized_url = f'https://{normalized_url}'
 
         # Save/verify the source
-        source_result = await save_source(mapping.source, normalized_url)
+        source_req = SourceRequest(
+            name=mapping.source,
+            url=normalized_url
+        )
+        source_result = await save_source(source_req)
         source_id = source_result.get("id")
         if not source_id:
             raise HTTPException(status_code=500, detail="Failed to retrieve source_id.")

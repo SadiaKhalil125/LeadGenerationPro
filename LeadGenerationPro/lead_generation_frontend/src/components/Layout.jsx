@@ -90,6 +90,7 @@ const Layout = ({ children, pageTitle }) => {
       WebkitBackgroundClip: "text",
       WebkitTextFillColor: "white",
       backgroundClip: "text",
+      cursor: "pointer",
     },
     menuButton: (isActive) => ({
       width: "100%",
@@ -192,7 +193,13 @@ const Layout = ({ children, pageTitle }) => {
       {/* Sidebar */}
       <aside style={sidebarStyles.sidebar}>
         <div style={sidebarStyles.sidebarInner}>
-          <h2 style={sidebarStyles.sidebarHeader}>SCOUT</h2>
+          <h2
+            style={sidebarStyles.sidebarHeader}
+            onClick={() => navigate('/dashboard')}
+            title="Go to Dashboard"
+          >
+            SCOUT
+          </h2>
 
           {Object.entries(menuContent).map(([key, { label, icon }]) => (
             <div key={key}>

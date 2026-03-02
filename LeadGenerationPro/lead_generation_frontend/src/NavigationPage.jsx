@@ -8,8 +8,8 @@ import {
   ClipboardPlus,
   CalendarCheck,
   Settings,
-} 
-from "lucide-react";
+}
+  from "lucide-react";
 
 const NavigationPage = () => {
   const [openMenu, setOpenMenu] = useState(null);
@@ -17,9 +17,6 @@ const NavigationPage = () => {
   const [hoveredItem, setHoveredItem] = useState(null);
   const navigate = useNavigate();
 
-  const toggleMenu = (menu) => {
-    setOpenMenu(openMenu === menu ? null : menu);
-  };
 
   const menuContent = {
     entity: {
@@ -48,7 +45,7 @@ const NavigationPage = () => {
       items: [
         { label: "Entity Mapping List", path: "/mappingmanager", description: "View all existing entity mappings" },
         { label: "Create Entity Mapping", path: "/entitymappingform", description: "Define relationships between entities" },
-       
+
       ],
     },
     task: {
@@ -61,7 +58,6 @@ const NavigationPage = () => {
         { label: "Task Executor", path: "/taskexecutor", description: "Execute web scraping tasks" },
       ],
     },
-
   };
 
   const styles = {
@@ -105,6 +101,7 @@ const NavigationPage = () => {
       WebkitBackgroundClip: "text",
       WebkitTextFillColor: "white",
       backgroundClip: "text",
+      cursor: "pointer",
     },
     menuButton: (isActive) => ({
       width: "100%",
@@ -131,29 +128,7 @@ const NavigationPage = () => {
       textAlign: "left",
       display: sidebarOpen ? "block" : "none",
     },
-    submenuContainer: (isOpen) => ({
-      maxHeight: isOpen ? "500px" : "0",
-      overflow: "hidden",
-      transition: "max-height 0.3s ease",
-      marginLeft: sidebarOpen ? "20px" : "0",
-      marginTop: "4px",
-    }),
-    submenuItem: {
-      width: "100%",
-      padding: "12px 16px",
-      backgroundColor: "transparent",
-      border: "none",
-      color: "white",
-      fontSize: "14px",
-      fontWeight: "500",
-      textAlign: "left",
-      cursor: "pointer",
-      borderRadius: "8px",
-      transition: "all 0.2s ease",
-      marginBottom: "4px",
-      display: sidebarOpen ? "block" : "none",
-    },
-
+    // Remove submenuContainer and submenuItem styles since we're not using them
     mainContent: {
       flex: 1,
       transition: "all 0.3s ease-in-out",
@@ -200,7 +175,7 @@ const NavigationPage = () => {
     main: {
       padding: "40px",
       // Fix for background color issue:
-      flex: 1, 
+      flex: 1,
       width: "100%",
     },
 
@@ -352,61 +327,38 @@ const NavigationPage = () => {
       {/* Sidebar */}
       <aside style={styles.sidebar}>
         <div style={styles.sidebarInner}>
-          <h2 style={styles.sidebarHeader}>SCOUT</h2>
+          <h2
+            style={styles.sidebarHeader}
+            onClick={() => navigate('/dashboard')}
+            title="Go to Dashboard"
+          >
+            SCOUT
+          </h2>
 
           {Object.entries(menuContent).map(([key, { label, icon, mainPath }]) => (
             <div key={key}>
               <button
                 onClick={() => {
-                  toggleMenu(key);
+                  // Remove toggleMenu - just navigate directly
                   if (mainPath) navigate(mainPath);
                 }}
-                style={styles.menuButton(openMenu === key)}
+                style={styles.menuButton(false)} // Set isActive to false since we're not using openMenu anymore
                 onMouseEnter={(e) => {
-                  if (openMenu !== key) {
-                    e.currentTarget.style.backgroundColor =
-                      styles.menuButtonHover.backgroundColor;
-                  }
+                  e.currentTarget.style.backgroundColor =
+                    styles.menuButtonHover.backgroundColor;
                 }}
                 onMouseLeave={(e) => {
-                  if (openMenu !== key) {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                  }
+                  e.currentTarget.style.backgroundColor = "transparent";
                 }}
               >
                 {icon}
                 {sidebarOpen && <span style={styles.menuLabel}>{label}</span>}
-                {sidebarOpen &&
-                  (openMenu === key ? (
-                    <ChevronDown size={20} />
-                  ) : (
-                    <ChevronRight size={20} />
-                  ))}
+                {/* Remove the chevron icons since we don't have submenus anymore */}
               </button>
 
-              <div style={styles.submenuContainer(openMenu === key)}>
-                {menuContent[key].items.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => navigate(item.path)}
-                    style={styles.submenuItem}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor =
-                        "rgba(255, 255, 255, 0.1)";
-                      e.currentTarget.style.paddingLeft = "20px";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "transparent";
-                      e.currentTarget.style.paddingLeft = "16px";
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+              {/* Remove the submenu container entirely */}
             </div>
           ))}
-          
         </div>
       </aside>
 
@@ -418,9 +370,6 @@ const NavigationPage = () => {
             <button
               onClick={() => {
                 setSidebarOpen(!sidebarOpen);
-                if (sidebarOpen) {
-                  setOpenMenu(null);
-                }
               }}
               style={styles.menuToggle}
               onMouseEnter={(e) => {
@@ -440,212 +389,161 @@ const NavigationPage = () => {
 
         {/* Content Area */}
         <main style={styles.main}>
-          {!openMenu && (
-            <div>
-              <h2 style={styles.quickAccessTitle}>Quick Access</h2>
-              <div style={styles.quickAccessGrid}>
-                <div
-                  style={styles.quickAccessCard}
+          {/* Always show Quick Access - remove the conditional rendering based on openMenu */}
+          <div>
+            <h2 style={styles.quickAccessTitle}>Quick Access</h2>
+            <div style={styles.quickAccessGrid}>
+              <div
+                style={styles.quickAccessCard}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
+                  e.currentTarget.style.borderColor = "#5A7A8C";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
+                  e.currentTarget.style.borderColor = "#E0E0E0";
+                }}
+              >
+                <div style={styles.quickAccessIconSmall}>
+                  <LayoutGrid size={24} strokeWidth={2} />
+                </div>
+                <h2 style={styles.stepLabel}>Step 1</h2>
+                <h3 style={styles.quickAccessCardTitle}>Create an Entity</h3>
+                <p style={styles.quickAccessCardText}>
+                  Add a new custom entity to the database
+                </p>
+                <button
+                  style={styles.actionButton("#2C5F6F")}
+                  onClick={() => navigate("/entityform")}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
-                    e.currentTarget.style.borderColor = "#5A7A8C";
+                    e.currentTarget.style.backgroundColor = "white";
+                    e.currentTarget.style.color = "#2C5F6F";
+                    e.currentTarget.style.border = "2px solid #2C5F6F";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
-                    e.currentTarget.style.borderColor = "#E0E0E0";
+                    e.currentTarget.style.backgroundColor = "#2C5F6F";
+                    e.currentTarget.style.color = "white";
+                    e.currentTarget.style.border = "2px solid #2C5F6F";
                   }}
                 >
-                  <div style={styles.quickAccessIconSmall}>
-                    <LayoutGrid size={24} strokeWidth={2} />
-                  </div>
-                  <h2 style={styles.stepLabel}>Step 1</h2>
-                  <h3 style={styles.quickAccessCardTitle}>Create an Entity</h3>
-                  <p style={styles.quickAccessCardText}>
-                    Add a new custom entity to the database
-                  </p>
-                  <button
-                    style={styles.actionButton("#2C5F6F")}
-                    onClick={() => navigate("/entityform")}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "white";
-                      e.currentTarget.style.color = "#2C5F6F";
-                      e.currentTarget.style.border = "2px solid #2C5F6F";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "#2C5F6F";
-                      e.currentTarget.style.color = "white";
-                      e.currentTarget.style.border = "2px solid #2C5F6F";
-                    }}
-                  >
-                    Create Entity
-                  </button>
-                </div>
+                  Create Entity
+                </button>
+              </div>
 
-                <div
-                  style={styles.quickAccessCard}
+              <div
+                style={styles.quickAccessCard}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
+                  e.currentTarget.style.borderColor = "#5A7A8C";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
+                  e.currentTarget.style.borderColor = "#E0E0E0";
+                }}
+              >
+                <div style={styles.quickAccessIconSmall}>
+                  <Settings size={24} strokeWidth={2} />
+                </div>
+                <h2 style={styles.stepLabel}>Step 2</h2>
+                <h3 style={styles.quickAccessCardTitle}>Add New Source</h3>
+                <p style={styles.quickAccessCardText}>
+                  Register and manage Web-based or API-based data sources to scrape
+                </p>
+                <button
+                  style={styles.actionButton("#2C5F6F")}
+                  onClick={() => navigate("/addsource")}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
-                    e.currentTarget.style.borderColor = "#5A7A8C";
+                    e.currentTarget.style.backgroundColor = "white";
+                    e.currentTarget.style.color = "#2C5F6F";
+                    e.currentTarget.style.border = "2px solid #2C5F6F";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
-                    e.currentTarget.style.borderColor = "#E0E0E0";
+                    e.currentTarget.style.backgroundColor = "#2C5F6F";
+                    e.currentTarget.style.color = "white";
+                    e.currentTarget.style.border = "2px solid #2C5F6F";
                   }}
                 >
-                  <div style={styles.quickAccessIconSmall}>
-                    <Settings size={24} strokeWidth={2} />
-                  </div>
-                  <h2 style={styles.stepLabel}>Step 2</h2>
-                  <h3 style={styles.quickAccessCardTitle}>Add New Source</h3>
-                  <p style={styles.quickAccessCardText}>
-                    Register and manage Web-based or API-based data sources to scrape
-                  </p>
-                  <button
-                    style={styles.actionButton("#2C5F6F")}
-                    onClick={() => navigate("/addsource")}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "white";
-                      e.currentTarget.style.color = "#2C5F6F";
-                      e.currentTarget.style.border = "2px solid #2C5F6F";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "#2C5F6F";
-                      e.currentTarget.style.color = "white";
-                      e.currentTarget.style.border = "2px solid #2C5F6F";
-                    }}
-                  >
-                    Add Source
-                  </button>
-                </div>
+                  Add Source
+                </button>
+              </div>
 
-                <div
-                  style={styles.quickAccessCard}
+              <div
+                style={styles.quickAccessCard}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
+                  e.currentTarget.style.borderColor = "#5A7A8C";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
+                  e.currentTarget.style.borderColor = "#E0E0E0";
+                }}
+              >
+                <div style={styles.quickAccessIconSmall}>
+                  <ClipboardPlus size={24} strokeWidth={2} />
+                </div>
+                <h2 style={styles.stepLabel}>Step 3</h2>
+                <h3 style={styles.quickAccessCardTitle}>Entity Mapping</h3>
+                <p style={styles.quickAccessCardText}>
+                  Define relationships between a source and entities with Live Website Preview
+                </p>
+                <button
+                  style={styles.actionButton("#2C5F6F")}
+                  onClick={() => navigate("/entitymappingform")}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
-                    e.currentTarget.style.borderColor = "#5A7A8C";
+                    e.currentTarget.style.backgroundColor = "white";
+                    e.currentTarget.style.color = "#2C5F6F";
+                    e.currentTarget.style.border = "2px solid #2C5F6F";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
-                    e.currentTarget.style.borderColor = "#E0E0E0";
+                    e.currentTarget.style.backgroundColor = "#2C5F6F";
+                    e.currentTarget.style.color = "white";
+                    e.currentTarget.style.border = "2px solid #2C5F6F";
                   }}
                 >
-                  <div style={styles.quickAccessIconSmall}>
-                    <ClipboardPlus size={24} strokeWidth={2} />
-                  </div>
-                  <h2 style={styles.stepLabel}>Step 3</h2>
-                  <h3 style={styles.quickAccessCardTitle}>Entity Mapping</h3>
-                  <p style={styles.quickAccessCardText}>
-                    Define relationships between a source and entities with Live Website Preview
-                  </p>
-                  <button
-                    style={styles.actionButton("#2C5F6F")}
-                    onClick={() => navigate("/entitymappingform")}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "white";
-                      e.currentTarget.style.color = "#2C5F6F";
-                      e.currentTarget.style.border = "2px solid #2C5F6F";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "#2C5F6F";
-                      e.currentTarget.style.color = "white";
-                      e.currentTarget.style.border = "2px solid #2C5F6F";
-                    }}
-                  >
-                    Define Mapping
-                  </button>
-                </div>
+                  Define Mapping
+                </button>
+              </div>
 
-                <div
-                  style={styles.quickAccessCard}
+              <div
+                style={styles.quickAccessCard}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
+                  e.currentTarget.style.borderColor = "#5A7A8C";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
+                  e.currentTarget.style.borderColor = "#E0E0E0";
+                }}
+              >
+                <div style={styles.quickAccessIconSmall}>
+                  <CalendarCheck size={24} strokeWidth={2} />
+                </div>
+                <h2 style={styles.stepLabel}>Step 4</h2>
+                <h3 style={styles.quickAccessCardTitle}>Schedule a Task</h3>
+                <p style={styles.quickAccessCardText}>
+                  Create and schedule new scraping tasks
+                </p>
+                <button
+                  style={styles.actionButton("#2C5F6F")}
+                  onClick={() => navigate("/taskscheduler")}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(90, 122, 140, 0.25)";
-                    e.currentTarget.style.borderColor = "#5A7A8C";
+                    e.currentTarget.style.backgroundColor = "white";
+                    e.currentTarget.style.color = "#2C5F6F";
+                    e.currentTarget.style.border = "2px solid #2C5F6F";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 54, 74, 0.08)";
-                    e.currentTarget.style.borderColor = "#E0E0E0";
+                    e.currentTarget.style.backgroundColor = "#2C5F6F";
+                    e.currentTarget.style.color = "white";
+                    e.currentTarget.style.border = "2px solid #2C5F6F";
                   }}
                 >
-                  <div style={styles.quickAccessIconSmall}>
-                    <CalendarCheck size={24} strokeWidth={2} />
-                  </div>
-                  <h2 style={styles.stepLabel}>Step 4</h2>
-                  <h3 style={styles.quickAccessCardTitle}>Schedule a Task</h3>
-                  <p style={styles.quickAccessCardText}>
-                    Create and schedule new scraping tasks
-                  </p>
-                  <button
-                    style={styles.actionButton("#2C5F6F")}
-                    onClick={() => navigate("/taskscheduler")}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "white";
-                      e.currentTarget.style.color = "#2C5F6F";
-                      e.currentTarget.style.border = "2px solid #2C5F6F";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "#2C5F6F";
-                      e.currentTarget.style.color = "white";
-                      e.currentTarget.style.border = "2px solid #2C5F6F";
-                    }}
-                  >
-                    Schedule Task
-                  </button>
-                </div>
+                  Schedule Task
+                </button>
               </div>
             </div>
-          )}
+          </div>
 
-          {openMenu && (
-            <div style={styles.contentCard}>
-              <h2 style={styles.contentTitle}>
-                {menuContent[openMenu].label} Options
-              </h2>
-              <div style={styles.gridContainer}>
-                {menuContent[openMenu].items.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => navigate(item.path)}
-                    style={styles.gridItem}
-                    onMouseEnter={(e) => {
-                      setHoveredItem(item);
-                      e.currentTarget.style.backgroundColor = "#A9D2FF";
-                      e.currentTarget.style.transform =
-                        "translateY(-4px) scale(1.02)";
-                      e.currentTarget.style.boxShadow =
-                        "0 8px 20px rgba(0, 54, 74, 0.15)";
-                      e.currentTarget.style.borderColor = "#00364A";
-                    }}
-                    onMouseLeave={(e) => {
-                      setHoveredItem(null);
-                      e.currentTarget.style.backgroundColor = "#E0EFFF";
-                      e.currentTarget.style.transform =
-                        "translateY(0) scale(1)";
-                      e.currentTarget.style.boxShadow =
-                        "0 4px 12px rgba(0, 54, 74, 0.05)";
-                      e.currentTarget.style.borderColor =
-                        "rgba(0, 54, 74, 0.15)";
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Description Section */}
-              <div style={styles.descriptionSection}>
-                <div style={styles.descriptionTitle}>Description</div>
-                {hoveredItem ? (
-                  <div style={styles.descriptionText}>
-                    {hoveredItem.description}
-                  </div>
-                ) : (
-                  <div style={styles.descriptionPlaceholder}>
-                    Hover over an option to see its description
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Remove the conditional rendering for openMenu content - it's no longer needed */}
         </main>
       </div>
     </div>

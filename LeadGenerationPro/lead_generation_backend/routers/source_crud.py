@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from datetime import datetime
 import asyncio
-from models import AuthConfig, SourceInfo, SourcesListResponse, PaginationConfig, SourceUpdateRequest, CaptchaParams
+from models import AuthConfig, SourceRequest, SourceInfo, SourcesListResponse, PaginationConfig, SourceUpdateRequest, CaptchaParams
 from utils import extract_value, fetch_page
 import asyncio
 from fastapi import APIRouter
@@ -87,22 +87,13 @@ async def get_source_by_id(source_id: int):
         print(f"Error fetching source: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch source: {str(e)}")
 
-
 @router.post("/save-source", response_model=dict)
-async def save_source(
-    name: str,
-    url: str,
-    pagination_config: PaginationConfig = None,
-    is_captcha_protected: bool = False,
-    captcha_params: CaptchaParams = None,
-    is_auth_protected: bool = False,
-    auth_config: Optional[AuthConfig] = None
-):
+async def save_source(request: SourceRequest):
     """Save a website source in 'sources' table or reuse if it already exists."""
     conn, cur = get_db_cursor()
     try:
-        name = name.strip()
-        url = url.strip()
+        name = request.name.strip()
+        url = request.url.strip()
 
         if not name or not url:
             raise HTTPException(status_code=400, detail="Source name and URL required.")
@@ -143,11 +134,11 @@ async def save_source(
             (
                 name,
                 url,
-                Json(pagination_config.model_dump() if pagination_config else None),
-                is_captcha_protected,
-                Json(captcha_params.model_dump() if captcha_params else None),
-                is_auth_protected,
-                Json(auth_config.model_dump() if auth_config else None)
+                Json(request.pagination_config.model_dump() if request.pagination_config else None),
+                request.is_captcha_protected,
+                Json(request.captcha_params.model_dump() if request.captcha_params else None),
+                request.is_auth_protected,
+                Json(request.auth_config.model_dump() if request.auth_config else None)
             )
         )
 
@@ -157,7 +148,7 @@ async def save_source(
         return {
             "success": True,
             "id": new_id,
-            "message": f"Source '{name}' saved successfully. With authentication: {is_auth_protected}"
+            "message": f"Source '{name}' saved successfully. With authentication: {request.is_auth_protected}"
         }
 
     except Exception as e:
@@ -165,7 +156,6 @@ async def save_source(
         raise HTTPException(status_code=500, detail=f"Failed to save source: {str(e)}")
     finally:
         cur.close()
-
 
 @router.put("/source/{source_id}", response_model=dict)
 async def update_source(source_id: int, update_request: SourceUpdateRequest):

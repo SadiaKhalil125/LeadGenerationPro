@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from typing import Dict, Any
 import os
 from routers.get_db_connection import get_db_cursor
+from fastapi import Query
 
 router = APIRouter()
 
@@ -395,56 +396,84 @@ async def get_entity_info(table_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get entity info: {str(e)}")
 
+
 @router.get("/entities", response_model=EntitiesListResponse)
-async def get_all_entities():
-    """
-    Get all saved entities (tables) with their column information.
-    """
+async def get_all_entities(
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=100)
+):
     try:
         conn, cur = get_db_cursor()
-        
-        
-        # Get all user-created tables (excluding system tables)
+
+        # ---- total count (always)
         cur.execute("""
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_type = 'BASE TABLE'
-            AND table_name NOT IN ('entity_mappings','sources','tasks','quick_extract_results','quick_extract_logs','task_execution_logs','chat_messages','chat_sessions','event','user','users','task_logs','leads','api_sources')
-            ORDER BY table_name
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_type = 'BASE TABLE'
+              AND table_name NOT IN (
+                'entity_mappings','sources','tasks','quick_extract_results',
+                'quick_extract_logs','task_execution_logs','chat_messages',
+                'chat_sessions','event','user','users','task_logs',
+                'leads','api_sources'
+              )
         """)
-        
+        total_entities = cur.fetchone()[0]
+
+        # ---- base query
+        base_query = """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_type = 'BASE TABLE'
+              AND table_name NOT IN (
+                'entity_mappings','sources','tasks','quick_extract_results',
+                'quick_extract_logs','task_execution_logs','chat_messages',
+                'chat_sessions','event','user','users','task_logs',
+                'leads','api_sources'
+              )
+            ORDER BY table_name
+        """
+
+        params = []
+
+        # ---- optional pagination
+        if page is not None and page_size is not None:
+            offset = (page - 1) * page_size
+            base_query += " LIMIT %s OFFSET %s"
+            params.extend([page_size, offset])
+
+        cur.execute(base_query, params)
         table_names = [row[0] for row in cur.fetchall()]
+
         entities = []
-        
+
         for table_name in table_names:
-            # Get columns for each table
             cur.execute("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = %s 
-                AND table_schema = 'public'
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = %s
                 ORDER BY ordinal_position
             """, (table_name,))
-            
+
             columns = [row[0] for row in cur.fetchall()]
-            
+
             entities.append(EntityInfo(
                 name=table_name,
                 columns=columns
             ))
-        
+
         cur.close()
-        
+
         return EntitiesListResponse(
-            total_entities=len(entities),
+            total_entities=total_entities,
             entities=entities
         )
-        
+
     except Exception as e:
-        print(f"Error fetching entities: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch entities: {str(e)}")
-    
+        print(f"Error fetching entities: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch entities")
 
 @router.get("/entity-data/{table_name}", response_model=dict)
 async def get_entity_data(

@@ -4,20 +4,45 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
 import Layout from "./components/Layout"; // Import the Layout component
+import NotificationPanel from "./components/NotificationPanel"; // Import the NotificationPanel component
 
 const EntityForm = () => {
   const [entityName, setEntityName] = useState("");
   const [attributes, setAttributes] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [validationErrors, setValidationErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Validation rules
+  const VALIDATION_RULES = {
+    entityName: {
+      required: true,
+      minLength: 2,
+      maxLength: 50,
+      pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/,
+      patternMessage: "Must start with a letter and contain only letters, numbers, and underscores",
+      reservedKeywords: ['user', 'users', 'admin', 'system', 'config', 'migration'] // Add more as needed
+    },
+    attributeName: {
+      required: true,
+      minLength: 1,
+      maxLength: 50,
+      pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/,
+      patternMessage: "Must start with a letter and contain only letters, numbers, and underscores",
+      reservedKeywords: ['id', 'modified_at', 'source', 'name', 'created_at', 'updated_at']
+    }
+  };
+
+  // Allowed data types (should match backend TYPE_MAP)
+  const ALLOWED_DATA_TYPES = ['text', 'int', 'bool', 'float', 'date'];
 
   // Notification system
   const addNotification = (type, message) => {
     const id = Date.now();
     setNotifications(prev => [...prev, { id, type, message }]);
 
-    // Auto-remove after 5 seconds
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 5000);
@@ -27,41 +52,219 @@ const EntityForm = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
+  // Validation functions
+  const validateEntityName = (name) => {
+    const errors = [];
+    const trimmedName = name.trim();
+
+    if (!trimmedName && VALIDATION_RULES.entityName.required) {
+      errors.push("Entity name is required");
+    } else if (trimmedName) {
+      if (trimmedName.length < VALIDATION_RULES.entityName.minLength) {
+        errors.push(`Entity name must be at least ${VALIDATION_RULES.entityName.minLength} characters`);
+      }
+      if (trimmedName.length > VALIDATION_RULES.entityName.maxLength) {
+        errors.push(`Entity name must be less than ${VALIDATION_RULES.entityName.maxLength} characters`);
+      }
+      if (!VALIDATION_RULES.entityName.pattern.test(trimmedName)) {
+        errors.push(VALIDATION_RULES.entityName.patternMessage);
+      }
+      if (VALIDATION_RULES.entityName.reservedKeywords.includes(trimmedName.toLowerCase())) {
+        errors.push(`"${trimmedName}" is a reserved name and cannot be used`);
+      }
+    }
+
+    return errors;
+  };
+
+  const validateAttributeName = (name, index, allAttributes) => {
+    const errors = [];
+    const trimmedName = name.trim();
+
+    if (!trimmedName && VALIDATION_RULES.attributeName.required) {
+      errors.push("Attribute name is required");
+    } else if (trimmedName) {
+      if (trimmedName.length < VALIDATION_RULES.attributeName.minLength) {
+        errors.push(`Attribute name must be at least ${VALIDATION_RULES.attributeName.minLength} character`);
+      }
+      if (trimmedName.length > VALIDATION_RULES.attributeName.maxLength) {
+        errors.push(`Attribute name must be less than ${VALIDATION_RULES.attributeName.maxLength} characters`);
+      }
+      if (!VALIDATION_RULES.attributeName.pattern.test(trimmedName)) {
+        errors.push(VALIDATION_RULES.attributeName.patternMessage);
+      }
+      if (VALIDATION_RULES.attributeName.reservedKeywords.includes(trimmedName.toLowerCase())) {
+        errors.push(`"${trimmedName}" is a reserved attribute name`);
+      }
+
+      // Check for duplicate attribute names (case-insensitive)
+      const duplicateIndex = allAttributes.findIndex((attr, i) => 
+        i !== index && attr.name.trim().toLowerCase() === trimmedName.toLowerCase()
+      );
+      if (duplicateIndex !== -1) {
+        errors.push(`Duplicate attribute name: "${trimmedName}"`);
+      }
+    }
+
+    return errors;
+  };
+
+  const validateDataType = (datatype) => {
+    return ALLOWED_DATA_TYPES.includes(datatype) ? [] : [`Invalid data type: "${datatype}"`];
+  };
+
+  const validateAllAttributes = (attributes) => {
+    const errors = {};
+
+    attributes.forEach((attr, index) => {
+      const attrErrors = {};
+
+      const nameErrors = validateAttributeName(attr.name, index, attributes);
+      if (nameErrors.length > 0) {
+        attrErrors.name = nameErrors;
+      }
+
+      const datatypeErrors = validateDataType(attr.datatype);
+      if (datatypeErrors.length > 0) {
+        attrErrors.datatype = datatypeErrors;
+      }
+
+      if (Object.keys(attrErrors).length > 0) {
+        errors[index] = attrErrors;
+      }
+    });
+
+    return errors;
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    // Validate entity name
+    const entityNameErrors = validateEntityName(entityName);
+    if (entityNameErrors.length > 0) {
+      newErrors.entityName = entityNameErrors;
+    }
+
+    // Validate attributes
+    const attributeErrors = validateAllAttributes(attributes);
+    if (Object.keys(attributeErrors).length > 0) {
+      newErrors.attributes = attributeErrors;
+    }
+
+    setValidationErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const addAttribute = () => {
     setAttributes([...attributes, { name: "", datatype: "text", check_for_unique: false }]);
+    // Clear validation errors for new attribute
+    setValidationErrors(prev => {
+      const newErrors = { ...prev };
+      if (newErrors.attributes) {
+        delete newErrors.attributes[attributes.length];
+        if (Object.keys(newErrors.attributes).length === 0) {
+          delete newErrors.attributes;
+        }
+      }
+      return newErrors;
+    });
   };
 
   const updateAttribute = (index, field, value) => {
     const updated = [...attributes];
     updated[index][field] = value;
     setAttributes(updated);
+
+    // Clear validation error for this attribute when user starts typing
+    if (validationErrors.attributes?.[index]?.[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        if (newErrors.attributes?.[index]) {
+          delete newErrors.attributes[index][field];
+          if (Object.keys(newErrors.attributes[index]).length === 0) {
+            delete newErrors.attributes[index];
+          }
+          if (Object.keys(newErrors.attributes).length === 0) {
+            delete newErrors.attributes;
+          }
+        }
+        return newErrors;
+      });
+    }
   };
 
   const deleteAttribute = (index) => {
     setAttributes(attributes.filter((_, i) => i !== index));
+    
+    // Clean up validation errors for deleted attribute
+    setValidationErrors(prev => {
+      const newErrors = { ...prev };
+      if (newErrors.attributes) {
+        delete newErrors.attributes[index];
+        // Re-index remaining errors
+        const reindexedErrors = {};
+        Object.keys(newErrors.attributes).forEach(key => {
+          const newKey = parseInt(key) > index ? parseInt(key) - 1 : parseInt(key);
+          reindexedErrors[newKey] = newErrors.attributes[key];
+        });
+        newErrors.attributes = reindexedErrors;
+        
+        if (Object.keys(newErrors.attributes).length === 0) {
+          delete newErrors.attributes;
+        }
+      }
+      return newErrors;
+    });
+
     addNotification('info', 'Attribute removed');
   };
 
   const submitEntity = async () => {
+    // Clear previous notifications
+    setNotifications([]);
+
+    // Validate form before submission
+    if (!validateForm()) {
+      addNotification('error', "Please fix the validation errors before submitting");
+      return;
+    }
+
+    // Additional checks
     if (!entityName.trim()) {
       addNotification('error', "Please enter entity name!");
       return;
     }
+    
     if (attributes.length === 0) {
       addNotification('error', "Please add at least one attribute!");
       return;
     }
 
-    // Validate attribute names
+    // Check for empty attribute names
     const emptyAttribute = attributes.find(attr => !attr.name.trim());
     if (emptyAttribute) {
       addNotification('error', "All attributes must have a name!");
       return;
     }
 
+    // Check for duplicate attribute names (case-insensitive)
+    const attributeNames = attributes.map(attr => attr.name.trim().toLowerCase());
+    const hasDuplicates = attributeNames.some((name, index) => attributeNames.indexOf(name) !== index);
+    if (hasDuplicates) {
+      addNotification('error', "Duplicate attribute names are not allowed!");
+      return;
+    }
+
+    setIsSubmitting(true);
+
     const payload = {
-      name: entityName,
-      attributes: attributes
+      name: entityName.trim(),
+      attributes: attributes.map(attr => ({
+        ...attr,
+        name: attr.name.trim(),
+        datatype: attr.datatype
+      }))
     };
 
     console.log("Submitting:", payload);
@@ -75,99 +278,65 @@ const EntityForm = () => {
         },
         body: JSON.stringify(payload),
       });
+      
       const data = await response.json();
 
-      if (data.success === true) {
+      if (response.ok && data.success === true) {
         addNotification('success', "Entity saved successfully!");
         queryClient.invalidateQueries({ queryKey: ['entities'] });
         setEntityName("");
         setAttributes([]);
+        setValidationErrors({});
       } else {
-        addNotification('error', data.message || "Failed to save entity!");
+        // Handle backend validation errors
+        const errorMessage = data.message || data.detail || "Failed to save entity!";
+        addNotification('error', errorMessage);
+        
+        // If backend returns field-specific errors, you can parse them here
+        if (data.errors) {
+          // Parse and display backend validation errors
+          console.error("Backend validation errors:", data.errors);
+        }
       }
     } catch (err) {
       console.error("Error:", err);
-      addNotification('error', "Something went wrong! Please try again.");
+      addNotification('error', "Network error! Please check your connection and try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Notification Component
-  const NotificationPanel = ({ notifications, onRemove }) => {
-    if (!notifications.length) return null;
+  // Render validation error component
+  const ValidationErrors = ({ errors }) => {
+    if (!errors || errors.length === 0) return null;
 
     return (
       <div style={{
-        position: 'fixed',
-        top: '20px',
-        right: '20px',
-        zIndex: 9999,
+        marginTop: '6px',
+        fontSize: '12px',
+        color: '#EF4444',
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px',
-        maxWidth: '400px'
+        gap: '2px'
       }}>
-        {notifications.map(notif => (
-          <div
-            key={notif.id}
-            style={{
-              backgroundColor: notif.type === 'success' ? '#10B981' :
-                notif.type === 'error' ? '#EF4444' :
-                  '#3B82F6',
-              color: 'white',
-              padding: '16px 20px',
-              borderRadius: '12px',
-              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '12px',
-              animation: 'slideIn 0.3s ease',
-              border: '1px solid rgba(255, 255, 255, 0.1)'
-            }}
-          >
-            <div style={{ flexShrink: 0, marginTop: '2px' }}>
-              {notif.type === 'success' ? (
-                <CheckCircle size={20} />
-              ) : notif.type === 'error' ? (
-                <AlertCircle size={20} />
-              ) : (
-                <AlertCircle size={20} />
-              )}
-            </div>
-            <div style={{ flex: 1, fontSize: '14px', fontWeight: '500', lineHeight: '1.5' }}>
-              {notif.message}
-            </div>
-            <button
-              onClick={() => onRemove(notif.id)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'white',
-                cursor: 'pointer',
-                opacity: 0.8,
-                padding: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '4px',
-                flexShrink: 0
-              }}
-              onMouseEnter={(e) => e.target.style.opacity = '1'}
-              onMouseLeave={(e) => e.target.style.opacity = '0.8'}
-            >
-              <X size={16} />
-            </button>
+        {errors.map((error, index) => (
+          <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <AlertCircle size={12} />
+            <span>{error}</span>
           </div>
         ))}
       </div>
     );
   };
 
+  // Rest of your component remains the same until the input fields...
+
   return (
     <Layout pageTitle="Entity Creation Form">
-      {/* Notification Panel */}
+      {/* Notification Panel (same as before) */}
       <NotificationPanel notifications={notifications} onRemove={removeNotification} />
 
-      {/* Animation Styles */}
+      {/* Animation Styles (same as before) */}
       <style>{`
         @keyframes slideIn {
           from {
@@ -191,7 +360,7 @@ const EntityForm = () => {
         overflow: 'hidden'
       }}>
         <div style={{ padding: '40px' }}>
-          {/* Header with Title and Actions */}
+          {/* Header with Title and Actions (same as before) */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
@@ -200,7 +369,6 @@ const EntityForm = () => {
             flexWrap: 'wrap',
             gap: '20px'
           }}>
-            {/* Title on the left */}
             <h2 style={{
               fontSize: '24px',
               fontWeight: '700',
@@ -225,7 +393,6 @@ const EntityForm = () => {
               Create Entity
             </h2>
 
-            {/* Actions on the right */}
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 style={{
@@ -274,7 +441,7 @@ const EntityForm = () => {
             </div>
           </div>
 
-          {/* Entity Name Input */}
+          {/* Entity Name Input with Validation */}
           <div style={{ marginBottom: '40px' }}>
             <label htmlFor="entityName" style={{
               fontSize: '18px',
@@ -300,13 +467,23 @@ const EntityForm = () => {
               id="entityName"
               placeholder="e.g. user, product, company"
               value={entityName}
-              onChange={(e) => setEntityName(e.target.value)}
+              onChange={(e) => {
+                setEntityName(e.target.value);
+                // Clear entity name validation error when user types
+                if (validationErrors.entityName) {
+                  setValidationErrors(prev => {
+                    const newErrors = { ...prev };
+                    delete newErrors.entityName;
+                    return newErrors;
+                  });
+                }
+              }}
               style={{
                 width: '100%',
                 padding: '16px 24px',
                 borderRadius: '12px',
-                border: 'none',
-                backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                border: validationErrors.entityName ? '2px solid #EF4444' : 'none',
+                backgroundColor: validationErrors.entityName ? 'rgba(239, 68, 68, 0.05)' : 'rgba(73, 163, 196, 0.15)',
                 color: '#00364A',
                 fontSize: '16px',
                 outline: 'none',
@@ -315,16 +492,24 @@ const EntityForm = () => {
               }}
               onFocus={(e) => {
                 e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
-                e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
+                e.target.style.boxShadow = validationErrors.entityName ? '0 0 0 3px rgba(239, 68, 68, 0.2)' : '0 0 0 3px rgba(73, 163, 196, 0.2)';
               }}
               onBlur={(e) => {
-                e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
+                e.target.style.backgroundColor = validationErrors.entityName ? 'rgba(239, 68, 68, 0.05)' : 'rgba(73, 163, 196, 0.15)';
                 e.target.style.boxShadow = 'none';
+                // Validate on blur
+                const errors = validateEntityName(e.target.value);
+                if (errors.length > 0) {
+                  setValidationErrors(prev => ({ ...prev, entityName: errors }));
+                }
               }}
             />
+            {validationErrors.entityName && (
+              <ValidationErrors errors={validationErrors.entityName} />
+            )}
           </div>
 
-          {/* Attributes Section Header */}
+          {/* Attributes Section Header (same as before) */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
             <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#00364A', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
@@ -349,7 +534,7 @@ const EntityForm = () => {
             </span>
           </div>
 
-          {/* Attributes List */}
+          {/* Attributes List with Validation */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '40px' }}>
             {attributes.length === 0 ? (
               <div style={{
@@ -373,18 +558,24 @@ const EntityForm = () => {
                     gap: '20px',
                     padding: '25px',
                     backgroundColor: 'white',
-                    border: '2px solid rgba(0, 54, 74, 0.08)',
+                    border: validationErrors.attributes?.[index] 
+                      ? '2px solid #EF4444' 
+                      : '2px solid rgba(0, 54, 74, 0.08)',
                     borderRadius: '20px',
-                    boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
+                    boxShadow: validationErrors.attributes?.[index]
+                      ? '0 4px 15px rgba(239, 68, 68, 0.1)'
+                      : '0 4px 15px rgba(0, 54, 74, 0.05)',
                     transition: 'all 0.3s'
                   }}
                 >
-                  {/* Left side grid (Name + Datatype + Checkbox) */}
                   <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', alignItems: 'start' }}>
-
-                    {/* Name */}
+                    {/* Name with Validation */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>Name</label>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>
+                        Name {validationErrors.attributes?.[index]?.name && 
+                          <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>
+                        }
+                      </label>
                       <input
                         type="text"
                         placeholder="e.g. name, email"
@@ -394,20 +585,33 @@ const EntityForm = () => {
                           width: '100%',
                           padding: '12px 16px',
                           borderRadius: '10px',
-                          border: '1px solid rgba(0, 54, 74, 0.15)',
+                          border: validationErrors.attributes?.[index]?.name 
+                            ? '1px solid #EF4444' 
+                            : '1px solid rgba(0, 54, 74, 0.15)',
                           fontSize: '14px',
                           color: '#00364A',
                           outline: 'none',
                           boxSizing: 'border-box'
                         }}
-                        onFocus={(e) => e.target.style.borderColor = '#49A3C4'}
-                        onBlur={(e) => e.target.style.borderColor = 'rgba(0, 54, 74, 0.15)'}
+                        onFocus={(e) => e.target.style.borderColor = validationErrors.attributes?.[index]?.name ? '#EF4444' : '#49A3C4'}
+                        onBlur={(e) => {
+                          if (!validationErrors.attributes?.[index]?.name) {
+                            e.target.style.borderColor = 'rgba(0, 54, 74, 0.15)';
+                          }
+                        }}
                       />
+                      {validationErrors.attributes?.[index]?.name && (
+                        <ValidationErrors errors={validationErrors.attributes[index].name} />
+                      )}
                     </div>
 
-                    {/* Datatype */}
+                    {/* Datatype with Validation */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>Data Type</label>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>
+                        Data Type {validationErrors.attributes?.[index]?.datatype && 
+                          <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>
+                        }
+                      </label>
                       <select
                         value={attr.datatype}
                         onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
@@ -415,7 +619,9 @@ const EntityForm = () => {
                           width: '100%',
                           padding: '12px 16px',
                           borderRadius: '10px',
-                          border: '1px solid rgba(0, 54, 74, 0.15)',
+                          border: validationErrors.attributes?.[index]?.datatype 
+                            ? '1px solid #EF4444' 
+                            : '1px solid rgba(0, 54, 74, 0.15)',
                           fontSize: '14px',
                           color: '#00364A',
                           backgroundColor: 'white',
@@ -428,15 +634,18 @@ const EntityForm = () => {
                           backgroundSize: '10px auto'
                         }}
                       >
-                        <option value="text">String</option>
-                        <option value="int">Integer</option>
-                        <option value="bool">Boolean</option>
-                        <option value="float">Float</option>
-                        <option value="date">Date</option>
+                        {ALLOWED_DATA_TYPES.map(type => (
+                          <option key={type} value={type}>
+                            {type.charAt(0).toUpperCase() + type.slice(1)}
+                          </option>
+                        ))}
                       </select>
+                      {validationErrors.attributes?.[index]?.datatype && (
+                        <ValidationErrors errors={validationErrors.attributes[index].datatype} />
+                      )}
                     </div>
 
-                    {/* Checkbox */}
+                    {/* Checkbox (no validation needed) */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '35px' }}>
                       <input
                         type="checkbox"
@@ -452,7 +661,6 @@ const EntityForm = () => {
                       />
                       <label htmlFor={`unique-${index}`} style={{ fontSize: '14px', color: '#00364A', cursor: 'pointer' }}>Check Duplicate</label>
                     </div>
-
                   </div>
 
                   {/* Delete Button */}
@@ -484,7 +692,7 @@ const EntityForm = () => {
             )}
           </div>
 
-          {/* Add Attribute Button */}
+          {/* Add Attribute Button (same as before) */}
           <div style={{ marginBottom: '40px' }}>
             <button
               type="button"
@@ -517,7 +725,7 @@ const EntityForm = () => {
             </button>
           </div>
 
-          {/* Submit Button */}
+          {/* Submit Button with Loading State */}
           <div style={{
             display: 'flex',
             justifyContent: 'center',
@@ -526,37 +734,67 @@ const EntityForm = () => {
           }}>
             <button
               type="button"
+              disabled={isSubmitting}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
                 padding: '16px 40px',
-                backgroundColor: '#00364A',
+                backgroundColor: isSubmitting ? '#94A3B8' : '#00364A',
                 color: 'white',
                 border: 'none',
                 borderRadius: '12px',
                 fontSize: '16px',
                 fontWeight: '600',
-                cursor: 'pointer',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
                 transition: 'all 0.3s',
-                boxShadow: '0 4px 15px rgba(0, 54, 74, 0.2)'
+                boxShadow: '0 4px 15px rgba(0, 54, 74, 0.2)',
+                opacity: isSubmitting ? 0.7 : 1
               }}
               onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 6px 20px rgba(0, 54, 74, 0.3)';
+                if (!isSubmitting) {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 6px 20px rgba(0, 54, 74, 0.3)';
+                }
               }}
               onMouseLeave={(e) => {
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 4px 15px rgba(0, 54, 74, 0.2)';
+                if (!isSubmitting) {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 4px 15px rgba(0, 54, 74, 0.2)';
+                }
               }}
               onClick={submitEntity}
             >
-              <Save size={20} />
-              Save Entity
+              {isSubmitting ? (
+                <>
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    border: '3px solid rgba(255,255,255,0.3)',
+                    borderTop: '3px solid white',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save size={20} />
+                  Save Entity
+                </>
+              )}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Add spin animation for loading state */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </Layout>
   );
 };

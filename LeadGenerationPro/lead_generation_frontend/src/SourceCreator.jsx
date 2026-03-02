@@ -133,52 +133,108 @@ const SourceCreator = () => {
     setAuthConfig((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Add this validation function before sending
+  const validateWebForm = () => {
+    const errors = [];
+
+    if (!webName.trim()) {
+      errors.push("Source name is required");
+    } else if (webName.trim().length < 2) {
+      errors.push("Source name must be at least 2 characters");
+    } else if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(webName.trim())) {
+      errors.push("Source name must start with a letter and contain only letters, numbers, and underscores");
+    }
+
+    if (!webUrl.trim()) {
+      errors.push("Source URL is required");
+    } else {
+      try {
+        new URL(webUrl.trim());
+      } catch {
+        errors.push("Please enter a valid URL");
+      }
+    }
+
+    if (isAuthProtected) {
+      if (!authConfig.login_url) errors.push("Login URL is required for authentication");
+      if (!authConfig.username) errors.push("Username is required for authentication");
+      if (!authConfig.password) errors.push("Password is required for authentication");
+    }
+
+    if (isCaptchaProtected) {
+      if (!captchaParams.api_key) errors.push("API key is required for CAPTCHA protection");
+      if (!captchaParams.site_key) errors.push("Site key is required for CAPTCHA protection");
+      if (!captchaParams.captcha_type) errors.push("CAPTCHA type is required");
+    }
+
+    return errors;
+  };
+
+
   const handleWebSubmit = async (e) => {
     e.preventDefault();
+    // Then in handleWebSubmit, after e.preventDefault():
+    const validationErrors = validateWebForm();
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(error => addNotification('error', error));
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    // notifications cleared automatically by auto-dismiss
 
+    // Prepare pagination config
     const paginationPayload = paginationType
-      ? { type: paginationType, ...paginationConfig }
+      ? { 
+          type: paginationType, 
+          ...paginationConfig 
+        }
       : null;
 
+    // Prepare captcha params
     const captchaPayload = isCaptchaProtected ? captchaParams : null;
+      
+    // Prepare auth config
     const authPayload = isAuthProtected ? authConfig : null;
 
-    const targetUrl =
-      `${API_BASE}/source/save-source?` +
-      `name=${encodeURIComponent(webName)}` +
-      `&url=${encodeURIComponent(webUrl)}` +
-      `&is_captcha_protected=${isCaptchaProtected}` +
-      `&is_auth_protected=${isAuthProtected}`;
-
-    const body = {
+    // Create the request body matching SourceRequest model
+    const requestBody = {
+      name: webName.trim(),
+      url: webUrl.trim(),
       pagination_config: paginationPayload,
+      is_captcha_protected: isCaptchaProtected,
       captcha_params: captchaPayload,
+      is_auth_protected: isAuthProtected,
       auth_config: authPayload
     };
 
+    console.log("Submitting source:", requestBody); // For debugging
+
     try {
-      const res = await fetch(targetUrl, {
+      const res = await fetch(`${API_BASE}/source/save-source`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "ngrok-skip-browser-warning": "true",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || data.message || 'Failed to save source');
+      }
+
       addNotification('success', data.message);
       queryClient.invalidateQueries({ queryKey: ['sources'] });
       resetWebForm();
     } catch (err) {
-      addNotification('error', 'Failed to save source.');
+      console.error("Error saving source:", err);
+      addNotification('error', err.message || 'Failed to save source.');
     } finally {
       setLoading(false);
     }
   };
-
   const resetWebForm = () => {
     setWebName("");
     setWebUrl("");
@@ -210,8 +266,7 @@ const SourceCreator = () => {
           .filter(col => !['id', 'source', 'modified_at', 'created_at'].includes(col))
           .map(col => ({
             api_field: '',
-            db_field: col,
-            transform: ''
+            db_field: col
           }))
         : []
     }));
@@ -1337,53 +1392,56 @@ const SourceCreator = () => {
                     ))}
                   </div>
                 </div>
-              </section>
+                  </section>
 
-              {/* Section 3: Response Structure */}
-              <section>
-                <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px' }}>3. Data Handling</h2>
-                <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>JSONPath to Results Array *</label>
-                <ApiStyledInput value={apiFormData.response_structure.data_path} onChange={(e) => handleNestedChange('response_structure', 'data_path', e.target.value)} placeholder="e.g., $ or $.items" required />
-              </section>
+                  {/* Section 3: Response Structure */}
+                  <section>
+                    <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px' }}>3. Data Handling</h2>
+                    <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px' }}>JSONPath to Results Array *</label>
+                    <ApiStyledInput value={apiFormData.response_structure.data_path} onChange={(e) => handleNestedChange('response_structure', 'data_path', e.target.value)} placeholder="e.g., $ or $.items" required />
+                  </section>
 
-              {/* Section 4: Attribute Mapping */}
-              <section>
-                <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <List size={20} /> 4. Field Mapping
-                </h2>
+                  {/* Section 4: Attribute Mapping */}
+                  <section>
+                    <h2 style={{ fontSize: '20px', fontWeight: '700', borderBottom: '3px solid #49A3C4', paddingBottom: '10px', marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <List size={20} /> 4. Field Mapping
+                    </h2>
 
-                {apiFormData.field_mappings.length > 0 ? (
-                  <div style={{ display: 'grid', gap: '15px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '20px', padding: '0 10px', opacity: 0.6 }}>
-                      <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Database Attribute</span>
-                      <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>API JSON Field Name</span>
-                      <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Transform</span>
-                    </div>
+                    {apiFormData.field_mappings.length > 0 ? (
+                      <div style={{ display: 'grid', gap: '15px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.5fr', gap: '20px', padding: '0 10px', opacity: 0.6 }}>
+                          <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>Attribute</span>
+                          <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase' }}>API JSON Field Name</span>
+                        </div>
 
-                    {apiFormData.field_mappings.map((m, i) => (
-                      <div key={m.db_field} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '20px', background: '#F8FBFE', padding: '15px', borderRadius: '15px', border: '1px solid rgba(0,54,74,0.05)', alignItems: 'center' }}>
-                        <div style={{ fontWeight: '700', color: '#00364A' }}>{m.db_field}</div>
-                        <ApiStyledInput placeholder={`e.g., user.id`} value={m.api_field} onChange={(e) => handleMappingUpdate(i, 'api_field', e.target.value)} style={{ border: '1px solid #CBD5E1' }} />
-                        <ApiStyledInput placeholder="Optional" value={m.transform} onChange={(mVal) => handleMappingUpdate(i, 'transform', mVal.target.value)} style={{ border: '1px solid #CBD5E1' }} />
+                        {apiFormData.field_mappings.map((m, i) => (
+                          <div key={m.db_field} style={{ display: 'grid', gridTemplateColumns: '1fr 2.5fr', gap: '20px', background: '#F8FBFE', padding: '15px', borderRadius: '15px', border: '1px solid rgba(0,54,74,0.05)', alignItems: 'center' }}>
+                            <div style={{ fontWeight: '700', color: '#00364A' }}>{m.db_field}</div>
+                            <ApiStyledInput
+                              placeholder={`e.g, user.id`}
+                              value={m.api_field}
+                              onChange={(e) => handleMappingUpdate(i, 'api_field', e.target.value)}
+                              style={{ border: '1px solid #CBD5E1' }}
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ textAlign: 'center', opacity: 0.5 }}>Select an Entity to see attributes.</p>
-                )}
-              </section>
-
-              <button type="submit" disabled={loading} style={{
-                padding: '18px', background: '#00364A', color: 'white', border: 'none', borderRadius: '15px',
-                fontSize: '18px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px'
-              }}>
-                {loading ? <Loader2 size={22} className="spin" /> : <Save size={22} />}
-                Save API Source
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
+                    ) : (
+                      <p style={{ textAlign: 'center', opacity: 0.5 }}>Select an Entity to see attributes.</p>
+                    )}
+                  </section>              <button type="submit"
+                    disabled={loading || !webName || !webUrl || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password))}
+                    style={{
+                      padding: '18px', background: '#00364A', color: 'white', border: 'none', borderRadius: '15px',
+                      fontSize: '18px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px'
+                    }}>
+                    {loading ? <Loader2 size={22} className="spin" /> : <Save size={22} />}
+                    Save API Source
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
         </main>
       </div>
       <style>{`
