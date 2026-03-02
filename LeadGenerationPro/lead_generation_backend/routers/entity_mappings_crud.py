@@ -417,3 +417,59 @@ async def get_mappings_by_source(source_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch mappings: {str(e)}")
+
+@router.get("/get-mapping-by-source-entity", response_model=dict)
+async def get_mapping_by_source_and_entity(
+    source_name: str,
+    entity_name: str
+):
+    """Get the unique mapping for a source + entity."""
+    try:
+        conn, cur = get_db_cursor()
+        
+        cur.execute("""
+            SELECT
+                em.id,
+                em.mapping_name,
+                em.entity_name,
+                em.container_selector,
+                em.enabled,
+                em.field_mappings,  -- Add this
+                em.follow_links,      -- Add this
+                s.url
+            FROM entity_mappings em
+            JOIN sources s ON s.id = em.source_id
+            WHERE s.name = %s
+              AND em.entity_name = %s
+        """, (source_name, entity_name))
+
+        row = cur.fetchone()
+        cur.close()
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Mapping not found for source '{source_name}' and entity '{entity_name}'"
+            )
+
+        return {
+            "success": True,
+            "mapping": {
+                "id": row[0],
+                "mapping_name": row[1],
+                "entity_name": row[2],
+                "container_selector": row[3],
+                "enabled": row[4] if row[4] is not None else True,
+                "field_mappings": row[5] or {},  # Add this
+                "follow_links": row[6] or [],
+                "source_url": row[7]  # Add this
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch mapping: {str(e)}"
+        )

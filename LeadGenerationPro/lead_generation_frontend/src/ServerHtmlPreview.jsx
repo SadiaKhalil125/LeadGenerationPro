@@ -1,6 +1,6 @@
 // SmartWebsitePreview.jsx - MODIFIED: Auto-copy on double-click + right-click context menu at cursor position
 import React, { useState, useEffect, useRef } from "react";
-import { Code, AlertTriangle, Copy, Eye, X } from "lucide-react";
+import { Code, AlertTriangle, Copy, Eye, X, RefreshCw, Square } from "lucide-react";
 import API_BASE from "./api_base";
 
 export default function SmartWebsitePreview({ url, onSelectorSelected }) {
@@ -15,6 +15,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
   const selectedCallbackRef = useRef(null);
   const contextMenuRef = useRef(null);
   const containerRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   // Set the callback for when a selector is selected
   useEffect(() => {
@@ -58,25 +59,46 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
       }
     }, 500);
 
-    return () => clearTimeout(handler);
+    return () => {
+      clearTimeout(handler);
+      stopFetching(); // Auto-stop previous fetch if URL changes
+    };
   }, [url]);
 
+  const stopFetching = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (status === "loading") {
+      setStatus("idle");
+      setErrorMessage("Fetch cancelled by user.");
+    }
+  };
+
   const fetchContent = async (urlToFetch) => {
+    // Create new controller for this specific fetch
+    abortControllerRef.current = new AbortController();
+    
     setStatus("loading");
     setHtmlContent("");
     setErrorMessage("");
     setLastSelectedSelector("");
 
     try {
-      await fetchPreview(urlToFetch);
+      await fetchPreview(urlToFetch, abortControllerRef.current.signal);
     } catch (err) {
-      console.error("Fetch error:", err);
-      setErrorMessage(err.message);
-      setStatus("error");
+      if (err.name === 'AbortError') {
+        console.log("Fetch aborted");
+      } else {
+        console.error("Fetch error:", err);
+        setErrorMessage(err.message);
+        setStatus("error");
+      }
     }
   };
 
-  const fetchPreview = async (urlToFetch) => {
+  const fetchPreview = async (urlToFetch, signal) => {
     try {
       let res = await fetch(`${API_BASE}/fetchcontent`, {
         method: "POST",
@@ -85,6 +107,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
           "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({ url: urlToFetch }),
+        signal: signal // Attach signal here
       });
 
       let data = await res.json();
@@ -106,6 +129,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
             "ngrok-skip-browser-warning": "true",
           },
           body: JSON.stringify({ url: urlToFetch }),
+          signal: signal // Attach signal here
         });
 
         data = await res.json();
@@ -118,6 +142,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
       setHtmlContent(modifiedHtml);
       setStatus("success");
     } catch (error) {
+      if (error.name === 'AbortError') throw error;
       throw new Error(`Preview failed: ${error.message}`);
     }
   };
@@ -529,18 +554,56 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
 
   return (
     <div ref={containerRef} className="relative w-full h-full flex flex-col bg-gray-800">
-      {/* Simple Header */}
+      {/* Simple Header with Reload button and instructions */}
       <div className="flex items-center justify-between p-3 bg-gray-900 border-b border-gray-700">
-        <div className="flex items-center gap-2">
-          <div
-            className="px-2 py-1 rounded-lg text-xs font-semibold text-white"
-            style={{ backgroundColor: 'rgb(56, 149, 183)' }}
-          >
-            Interactive Preview
-          </div>
+        {/* Instructions on the left */}
+        <div className="text-gray-100 text-sm">
+          Hover to highlight | <strong>Double-click to auto-copy</strong> | Right-click for menu
         </div>
-        <div className="text-gray-100 text-sm flex gap-4">
-          <span>Hover to highlight | <strong>Double-click to auto-copy</strong> | Right-click for menu</span>
+        
+        {/* Reload Button on the right */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+                fetchContent(url);
+              }
+            }}
+            disabled={!url || status === "loading"}
+            style={{
+              padding: '7px 10px',
+              backgroundColor: '#49A3C4',
+              color: 'white',
+              border: 'none',
+              borderRadius: '10px',
+              fontWeight: '600',
+              fontSize: '14px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(0, 54, 74, 0.2)',
+              transition: 'all 0.3s',
+              opacity: !url || status === "loading" ? 0.5 : 1,
+              pointerEvents: !url || status === "loading" ? 'none' : 'auto'
+            }}
+            onMouseEnter={(e) => {
+              if (!(!url || status === "loading")) {
+                e.target.style.backgroundColor = '#00364A';
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 6px 16px rgba(0, 54, 74, 0.3)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#49A3C4';
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 4px 12px rgba(0, 54, 74, 0.2)';
+            }}
+            title="Reload preview"
+          >
+            <RefreshCw size={16} />
+            Reload
+          </button>
         </div>
       </div>
 
@@ -621,6 +684,7 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
           </div>
         </>
       )}
+
       {/* Content States */}
       {status === "idle" && (
         <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
@@ -635,7 +699,14 @@ export default function SmartWebsitePreview({ url, onSelectorSelected }) {
           <div className="animate-spin text-teal-500">
             <Code size={48} />
           </div>
-          <p className="mt-4 font-semibold">Loading Website...</p>
+          <p className="mt-4 font-semibold">Loading Website Content...</p>
+          <button
+            onClick={stopFetching}
+            className="mt-4 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-medium rounded-lg border border-red-500/30 transition-colors flex items-center gap-2"
+          >
+            <Square size={14} fill="currentColor" />
+            Cancel
+          </button>
         </div>
       )}
 

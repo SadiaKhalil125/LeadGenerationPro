@@ -1,15 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, ArrowRight, ArrowLeft, ArrowRightCircle, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, Info, AlertTriangle, AlertCircle, CheckCircle, Code, RefreshCw } from "lucide-react";
-import SmartWebsitePreview from "./ServerHtmlPreview";
+import { 
+  Eye, ArrowLeft, Search, ChevronDown, ChevronUp, 
+  ChevronLeft, ChevronRight, X, Info, AlertTriangle, 
+  RefreshCw 
+} from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from '@tanstack/react-query';
+
+import SmartWebsitePreview from "./ServerHtmlPreview";
+import PreviewModal from "./components/PreviewModal";
+import NotificationPanel from "./components/NotificationPanel";
 import API_BASE from "./api_base";
 
-// Point this to your new Python API URL
+// Constants
 const PYTHON_API_URL = "http://localhost:8000";
-
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
-
 const GOOGLE_MAPS_FIELDS = {
   name: "Business/Place Name",
   address: "Full Address",
@@ -22,122 +27,7 @@ const GOOGLE_MAPS_FIELDS = {
   description: "Business Description"
 };
 
-const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoading = false }) => {
-  if (!data) return null;
-
-  const getAllHeaders = () => {
-    if (!data.data || data.data.length === 0) return [];
-    const headerSet = new Set();
-    data.data.forEach(row => {
-      Object.keys(row).forEach(key => headerSet.add(key));
-    });
-    return Array.from(headerSet);
-  };
-
-  const headers = getAllHeaders();
-
-  return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
-          <div>
-            <h2 className="text-2xl font-bold text-teal-700">
-              Preview: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{data.entity_name}</span>
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={isLoading}
-            className={`p-2 rounded-full transition-colors ${isLoading ? 'cursor-not-allowed' : 'hover:bg-gray-200'}`}
-          >
-            <X size={24} className={`${isLoading ? 'text-gray-400' : 'text-gray-600'}`} />
-          </button>
-        </div>
-
-        <div className="px-6 py-3 overflow-y-auto flex-grow">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
-              <p className="mt-4 text-gray-600 font-medium">Loading...</p>
-            </div>
-          ) : (
-            <>
-              <div className="mb-4 p-4 bg-teal-50 border border-teal-200 rounded-lg">
-
-              </div>
-
-              {data.data && data.data.length > 0 ? (
-                <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                  <table className="w-full text-sm text-left text-gray-700">
-                    <thead className="bg-gray-100 text-xs text-gray-800 uppercase">
-                      <tr>
-                        {headers.map(header => (
-                          <th key={header} className="px-6 py-3 font-semibold">
-                            {header}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.data.map((item, index) => (
-                        <tr key={index} className="bg-white border-b hover:bg-gray-50">
-                          {headers.map(header => (
-                            <td key={`${index}-${header}`} className="px-6 py-4">
-                              {String(item[header])}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-10">
-                  <p className="text-gray-500">No data returned.</p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        <div className="flex justify-end px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-          <div className="flex gap-2">
-            <button
-              onClick={onPrevious}
-              disabled={currentStep <= 1 || isLoading}
-              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors ${currentStep <= 1 || isLoading
-                ? 'text-gray-400 cursor-not-allowed'
-                : 'text-black'
-                }`}
-            >
-              <ChevronLeft size={16} />
-              Prev
-            </button>
-
-            <button
-              onClick={onNext}
-              disabled={isLoading}
-              className={`px-4 py-2 text-black font-medium rounded-lg flex items-center gap-2 transition-colors ${isLoading
-                ? 'text-gray-400 cursor-not-allowed'
-                : 'text-black'
-                }`}
-            >
-              Next
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
+// Reusable Components
 const MetadataInput = ({ value, onChange, options }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -190,11 +80,10 @@ const MetadataInput = ({ value, onChange, options }) => {
   );
 };
 
-const SelectorInput = ({ value, onChange, placeholder, options = [], entity, attribute, onQuickFill }) => {
+const SelectorInput = ({ value, onChange, placeholder, options = [] }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const dropdownRef = useRef(null);
-  const inputRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -211,9 +100,7 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
       await navigator.clipboard.writeText(text);
       setCopyFeedback(true);
       setTimeout(() => setCopyFeedback(false), 1500);
-      return true;
     } catch (err) {
-      console.error('Failed to copy:', err);
       // Fallback for older browsers
       const textArea = document.createElement('textarea');
       textArea.value = text;
@@ -222,28 +109,17 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
       document.body.appendChild(textArea);
       textArea.focus();
       textArea.select();
-      try {
-        document.execCommand('copy');
-        setCopyFeedback(true);
-        setTimeout(() => setCopyFeedback(false), 1500);
-        document.body.removeChild(textArea);
-        return true;
-      } catch (err2) {
-        console.error('Fallback copy failed:', err2);
-        document.body.removeChild(textArea);
-        return false;
-      }
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 1500);
     }
   };
 
-  const handleDoubleClick = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const textToCopy = value && value.trim();
-    if (!textToCopy) return;
-
-    await copyToClipboard(textToCopy);
+  const handleDoubleClick = async () => {
+    if (value?.trim()) {
+      await copyToClipboard(value);
+    }
   };
 
   const filteredOptions = options.filter(opt =>
@@ -255,7 +131,6 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
       <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
         <div style={{ flex: 1, position: 'relative' }}>
           <input
-            ref={inputRef}
             type="text"
             placeholder={placeholder}
             value={value}
@@ -263,12 +138,7 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
             onDoubleClick={handleDoubleClick}
             title="Double-click to copy selector"
             className="w-full p-3 rounded-xl bg-gray-50 border border-gray-300 focus:ring-2 focus:ring-teal-400 font-mono text-sm"
-            style={{
-              width: '100%',
-              cursor: 'text',
-              userSelect: 'text',
-              paddingRight: '35px'
-            }}
+            style={{ paddingRight: '35px' }}
           />
           <button
             type="button"
@@ -278,14 +148,6 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
               setIsOpen(!isOpen);
             }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-            style={{
-              pointerEvents: 'auto',
-              zIndex: 10,
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px'
-            }}
           >
             {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </button>
@@ -333,7 +195,9 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
               {option}
             </div>
           )) : (
-            <div className="px-4 py-2 text-gray-400 text-xs italic">No matching selectors found in container</div>
+            <div className="px-4 py-2 text-gray-400 text-xs italic">
+              No matching selectors found in container
+            </div>
           )}
         </div>
       )}
@@ -341,16 +205,13 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], entity, att
   );
 };
 
-const handleSelectorFromPreview = (selector, elementInfo) => {
-  console.log("Selector received from preview:", selector, elementInfo);
-};
-
-const handleQuickFillClick = (entity, attribute) => {
-  // This outer stub is intentionally empty; the real notification is fired from the component-level version below
-  console.info('QuickFill:', entity, attribute);
-};
-
+// Main Component
 export default function EntityMappingScreen() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+
+  // State
   const [source, setSource] = useState("");
   const [url, setUrl] = useState("");
   const [existingSources, setExistingSources] = useState([]);
@@ -363,6 +224,7 @@ export default function EntityMappingScreen() {
   const [entitiesDropdownOpen, setEntitiesDropdownOpen] = useState(false);
   const entitiesDropdownRef = useRef(null);
 
+  // Preview state
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -371,24 +233,7 @@ export default function EntityMappingScreen() {
   const [isSubPreviewLoading, setIsSubPreviewLoading] = useState(false);
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
 
-  const navigate = useNavigate();
-  const location = useLocation();
-  const queryClient = useQueryClient();
-
-  const [notifications, setNotifications] = useState([]);
-  const addNotification = (type, message) => {
-    const id = Date.now();
-    setNotifications(prev => [...prev, { id, type, message }]);
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 5000);
-  };
-
-  // Component-level QuickFill handler — has access to addNotification
-  const handleQuickFillClickInner = (entity, attribute) => {
-    addNotification('info', `Now click "Select Elements" in the preview pane, then click on the ${attribute} element you want to capture.`);
-  };
-
+  // Feature state
   const [scanningSelectors, setScanningSelectors] = useState({});
   const [availableSelectors, setAvailableSelectors] = useState({});
   const [isGoogleMaps, setIsGoogleMaps] = useState(false);
@@ -398,11 +243,26 @@ export default function EntityMappingScreen() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [originalMappingName, setOriginalMappingName] = useState(null);
 
+  // Notification state
+  const [notifications, setNotifications] = useState([]);
+  const addNotification = (type, message) => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
+
+  // Refs for preventing multiple API calls
+  const hasCheckedForMapping = useRef(false);
+
+  // Effects
   useEffect(() => {
     const urlLower = url.toLowerCase();
     setIsGoogleMaps(urlLower.includes('google.com/maps') || urlLower.includes('maps.google.com'));
   }, [url]);
 
+  // Fetch entities and create structure
   useEffect(() => {
     const fetchEntities = async () => {
       try {
@@ -413,19 +273,24 @@ export default function EntityMappingScreen() {
         const data = await res.json();
         setEntities(data.entities.map((e) => e.name));
 
-        const initialData = {};
+        // Create initial structure for all entities
+        const initialStructure = {};
         data.entities.forEach((e) => {
-          initialData[e.name] = {
+          initialStructure[e.name] = {
             enabled: true,
             containerSelector: "",
-            fields: e.columns.filter((col) => col !== "modified_at" && col !== "source").map((col) => ({
-              attribute: col,
-              selector: "",
-              metadata: "text",
-            })),
+            fields: e.columns
+              .filter((col) => col !== "modified_at" && col !== "source" && col !== "id")
+              .map((col) => ({
+                attribute: col,
+                selector: "",
+                metadata: "text",
+              })),
           };
         });
-        setEntityData(initialData);
+
+        // Only set initial data if no entity data exists yet
+        setEntityData(prev => Object.keys(prev).length === 0 ? initialStructure : prev);
       } catch (err) {
         console.error("Error fetching entities:", err);
       }
@@ -433,14 +298,13 @@ export default function EntityMappingScreen() {
     fetchEntities();
   }, []);
 
+  // Fetch existing sources
   useEffect(() => {
     const fetchSources = async () => {
       try {
         const res = await fetch(`${API_BASE}/source/sources`, {
           method: "GET",
-          headers: {
-            "ngrok-skip-browser-warning": "true"
-          }
+          headers: { "ngrok-skip-browser-warning": "true" }
         });
         const data = await res.json();
         setExistingSources(data.sources || []);
@@ -451,17 +315,15 @@ export default function EntityMappingScreen() {
     fetchSources();
   }, []);
 
-  // Handle edit mode
+  // Handle edit mode from navigation
   useEffect(() => {
     if (location.state?.editMode && location.state?.mappingData) {
       const mapping = location.state.mappingData;
 
       setIsEditMode(true);
       setOriginalMappingName(mapping.mapping_name);
-
       setSource(mapping.source_name);
       setUrl(mapping.url || "");
-
       setSelectedEntities([mapping.entity_name]);
 
       const fieldsArray = Object.entries(mapping.field_mappings || {}).map(([key, value]) => ({
@@ -479,7 +341,7 @@ export default function EntityMappingScreen() {
         }
       }));
 
-      if (mapping.follow_links && mapping.follow_links.length > 0) {
+      if (mapping.follow_links?.length) {
         const followLinksData = mapping.follow_links.map(fl => ({
           name: fl.name,
           selectorField: fl.selector,
@@ -497,6 +359,86 @@ export default function EntityMappingScreen() {
     }
   }, [location.state]);
 
+  // Auto-load existing mapping when source and entity are selected
+  useEffect(() => {
+    const tryLoadExistingMapping = async () => {
+      // Prevent multiple calls
+      if (hasCheckedForMapping.current) return;
+      if (!source || selectedEntities.length !== 1) return;
+
+      const entity = selectedEntities[0];
+
+      try {
+        const res = await fetch(
+          `${API_BASE}/mapping/get-mapping-by-source-entity?source_name=${encodeURIComponent(source)}&entity_name=${encodeURIComponent(entity)}`,
+          { headers: { "ngrok-skip-browser-warning": "true" } }
+        );
+
+        if (res.status === 404) {
+          hasCheckedForMapping.current = true;
+          return;
+        }
+
+        if (!res.ok) throw new Error("Failed to fetch mapping");
+
+        const data = await res.json();
+        const mapping = data.mapping;
+
+        hasCheckedForMapping.current = true;
+
+        setIsEditMode(true);
+        setOriginalMappingName(mapping.mapping_name);
+        setUrl(mapping.source_url || "");
+
+        const fieldsArray = Object.entries(mapping.field_mappings || {}).map(
+          ([key, value]) => ({
+            attribute: key,
+            selector: value.selector || "",
+            metadata: value.extract || "text"
+          })
+        );
+
+        setEntityData(prev => ({
+          ...prev,
+          [entity]: {
+            enabled: mapping.enabled ?? true,
+            containerSelector: mapping.container_selector || "",
+            fields: fieldsArray
+          }
+        }));
+
+        if (mapping.follow_links?.length) {
+          setFollowLinksConfig({
+            [entity]: mapping.follow_links.map(fl => ({
+              name: fl.name,
+              selectorField: fl.selector,
+              fieldMappings: Object.entries(fl.field_mappings || {}).map(
+                ([k, v]) => ({
+                  attribute: k,
+                  selector: v.selector,
+                  extract: v.extract || "text"
+                })
+              )
+            }))
+          });
+        }
+
+        addNotification('info', 'Existing mapping found — loaded in edit mode.');
+      } catch (err) {
+        console.error("Auto-load mapping failed:", err);
+        hasCheckedForMapping.current = true; // Mark as checked even on error
+      }
+    };
+
+    tryLoadExistingMapping();
+  }, [source, selectedEntities]);
+
+  // Reset mapping check when source or entity changes
+  useEffect(() => {
+    hasCheckedForMapping.current = false;
+  }, [source, selectedEntities]);
+
+  // Handle click outside dropdowns
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (sourcesDropdownRef.current && !sourcesDropdownRef.current.contains(e.target)) {
@@ -510,6 +452,7 @@ export default function EntityMappingScreen() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Handlers
   const handleReloadPreview = () => {
     setPreviewReloadKey(prev => prev + 1);
   };
@@ -527,84 +470,6 @@ export default function EntityMappingScreen() {
         f.attribute === attribute ? { ...f, [key]: value } : f
       );
       return { ...prev, [entity]: { ...cur, fields: updatedFields } };
-    });
-  };
-
-  const handleAddFollowLink = (entity) => {
-    setFollowLinksConfig((prev) => {
-      const entityLinks = prev[entity] || [];
-      return {
-        ...prev,
-        [entity]: [
-          ...entityLinks,
-          {
-            name: `detail_${entityLinks.length + 1}`,
-            selectorField: "",
-            fieldMappings: []
-          }
-        ]
-      };
-    });
-  };
-
-  const handleRemoveFollowLink = (entity, index) => {
-    setFollowLinksConfig((prev) => {
-      const entityLinks = prev[entity] || [];
-      return {
-        ...prev,
-        [entity]: entityLinks.filter((_, i) => i !== index)
-      };
-    });
-  };
-
-  const handleFollowLinkChange = (entity, index, key, value) => {
-    setFollowLinksConfig((prev) => {
-      const entityLinks = prev[entity] || [];
-      const updated = [...entityLinks];
-      updated[index] = { ...updated[index], [key]: value };
-      return { ...prev, [entity]: updated };
-    });
-  };
-
-  const handleUpdateFollowLinkField = (entity, linkIndex, fieldIndex, key, value) => {
-    setFollowLinksConfig((prev) => {
-      const entityLinks = prev[entity] || [];
-      const updated = [...entityLinks];
-      const fieldMappings = [...(updated[linkIndex].fieldMappings || [])];
-      const currentField = fieldMappings[fieldIndex] || {};
-
-      if (key === 'attribute' && value) {
-        const mainField = entityData[entity]?.fields.find(f => f.attribute === value);
-        if (mainField) {
-          fieldMappings[fieldIndex] = {
-            attribute: value,
-            selector: mainField.selector || "",
-            extract: mainField.metadata || "text"
-          };
-        } else {
-          fieldMappings[fieldIndex] = { ...currentField, [key]: value };
-        }
-      } else {
-        fieldMappings[fieldIndex] = { ...currentField, [key]: value };
-      }
-
-      updated[linkIndex] = {
-        ...updated[linkIndex],
-        fieldMappings
-      };
-      return { ...prev, [entity]: updated };
-    });
-  };
-
-  const handleRemoveFollowLinkField = (entity, linkIndex, fieldIndex) => {
-    setFollowLinksConfig((prev) => {
-      const entityLinks = prev[entity] || [];
-      const updated = [...entityLinks];
-      updated[linkIndex] = {
-        ...updated[linkIndex],
-        fieldMappings: (updated[linkIndex].fieldMappings || []).filter((_, i) => i !== fieldIndex)
-      };
-      return { ...prev, [entity]: updated };
     });
   };
 
@@ -639,10 +504,7 @@ export default function EntityMappingScreen() {
       const res = await fetch(`${PYTHON_API_URL}/api/extract-selectors`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: url,
-          container_selector: container
-        })
+        body: JSON.stringify({ url, container_selector: container })
       });
 
       const data = await res.json();
@@ -655,7 +517,6 @@ export default function EntityMappingScreen() {
       } else {
         addNotification('error', 'Failed to extract selectors.');
       }
-
     } catch (e) {
       console.error("Scanning failed", e);
       addNotification('error', 'Error connecting to selector extraction service.');
@@ -664,12 +525,80 @@ export default function EntityMappingScreen() {
     }
   };
 
+  // Follow Links Handlers
+  const handleAddFollowLink = (entity) => {
+    setFollowLinksConfig((prev) => {
+      const entityLinks = prev[entity] || [];
+      return {
+        ...prev,
+        [entity]: [
+          ...entityLinks,
+          { name: `detail_${entityLinks.length + 1}`, selectorField: "", fieldMappings: [] }
+        ]
+      };
+    });
+  };
+
+  const handleRemoveFollowLink = (entity, index) => {
+    setFollowLinksConfig((prev) => ({
+      ...prev,
+      [entity]: (prev[entity] || []).filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleFollowLinkChange = (entity, index, key, value) => {
+    setFollowLinksConfig((prev) => {
+      const updated = [...(prev[entity] || [])];
+      updated[index] = { ...updated[index], [key]: value };
+      return { ...prev, [entity]: updated };
+    });
+  };
+
+  const handleUpdateFollowLinkField = (entity, linkIndex, fieldIndex, key, value) => {
+    setFollowLinksConfig((prev) => {
+      const updated = [...(prev[entity] || [])];
+      const fieldMappings = [...(updated[linkIndex].fieldMappings || [])];
+      const currentField = fieldMappings[fieldIndex] || {};
+
+      if (key === 'attribute' && value) {
+        const mainField = entityData[entity]?.fields.find(f => f.attribute === value);
+        if (mainField) {
+          fieldMappings[fieldIndex] = {
+            attribute: value,
+            selector: mainField.selector || "",
+            extract: mainField.metadata || "text"
+          };
+        } else {
+          fieldMappings[fieldIndex] = { ...currentField, [key]: value };
+        }
+      } else {
+        fieldMappings[fieldIndex] = { ...currentField, [key]: value };
+      }
+
+      updated[linkIndex] = { ...updated[linkIndex], fieldMappings };
+      return { ...prev, [entity]: updated };
+    });
+  };
+
+  const handleRemoveFollowLinkField = (entity, linkIndex, fieldIndex) => {
+    setFollowLinksConfig((prev) => {
+      const updated = [...(prev[entity] || [])];
+      updated[linkIndex] = {
+        ...updated[linkIndex],
+        fieldMappings: (updated[linkIndex].fieldMappings || []).filter((_, i) => i !== fieldIndex)
+      };
+      return { ...prev, [entity]: updated };
+    });
+  };
+
+  // Preview Handlers
   const handlePreview = async (entity, step = 1) => {
     if (!source.trim() || !url.trim()) {
       addNotification('error', 'Source and URL are required!');
       return;
     }
 
+    // Check cache first
     if (previewCache[entity]?.[step]) {
       setPreviewData(previewCache[entity][step]);
       setCurrentStep(step);
@@ -708,12 +637,12 @@ export default function EntityMappingScreen() {
 
     try {
       const follow_links = (followLinksConfig[entity] || [])
-        .filter((fl) => fl.name && fl.name.trim() && fl.selectorField && fl.selectorField.trim())
+        .filter((fl) => fl.name?.trim() && fl.selectorField?.trim())
         .map((fl) => ({
           name: fl.name.trim(),
           selector: fl.selectorField.trim(),
           field_mappings: (fl.fieldMappings || []).reduce((acc, fm) => {
-            if (fm.attribute && fm.selector && fm.selector.trim()) {
+            if (fm.attribute && fm.selector?.trim()) {
               acc[fm.attribute] = {
                 selector: fm.selector.trim(),
                 extract: fm.extract || "text"
@@ -735,14 +664,13 @@ export default function EntityMappingScreen() {
           entity_name: entity,
           container_selector: entityInfo.containerSelector || null,
           field_mappings,
-          follow_links: follow_links.length > 0 ? follow_links : [],
+          follow_links,
           preview_step: step,
         }),
       });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ detail: "Unknown error" }));
-        console.error("Preview error response:", errorData);
         addNotification('error', `Preview failed (${res.status}): ${errorData.detail || errorData.message || res.statusText}`);
         return;
       }
@@ -752,10 +680,7 @@ export default function EntityMappingScreen() {
       if (data.success) {
         setPreviewCache(prev => ({
           ...prev,
-          [entity]: {
-            ...prev[entity],
-            [step]: data
-          }
+          [entity]: { ...prev[entity], [step]: data }
         }));
         setPreviewData(data);
         setCurrentStep(step);
@@ -787,6 +712,7 @@ export default function EntityMappingScreen() {
     setCurrentStep(1);
   };
 
+  // Save Handler
   const handleSave = async () => {
     if (!source.trim() || !url.trim()) {
       addNotification('error', 'Source and URL required!');
@@ -814,12 +740,12 @@ export default function EntityMappingScreen() {
         });
 
       const follow_links = (followLinksConfig[entity] || [])
-        .filter((fl) => fl.name && fl.name.trim() && fl.selectorField && fl.selectorField.trim())
+        .filter((fl) => fl.name?.trim() && fl.selectorField?.trim())
         .map((fl) => ({
           name: fl.name.trim(),
           selector: fl.selectorField.trim(),
           field_mappings: (fl.fieldMappings || []).reduce((acc, fm) => {
-            if (fm.attribute && fm.selector && fm.selector.trim()) {
+            if (fm.attribute && fm.selector?.trim()) {
               acc[fm.attribute] = {
                 selector: fm.selector.trim(),
                 extract: fm.extract || "text"
@@ -845,9 +771,9 @@ export default function EntityMappingScreen() {
       if (isEditMode && originalMappingName) {
         const payload = {
           mapping_name: originalMappingName,
-          source: source,
-          url: url,
-          entity_mappings: entity_mappings
+          source,
+          url,
+          entity_mappings
         };
 
         res = await fetch(`${API_BASE}/mapping/edit-mapping/${encodeURIComponent(originalMappingName)}`, {
@@ -884,6 +810,7 @@ export default function EntityMappingScreen() {
     }
   };
 
+  // Render
   return (
     <div style={{
       display: 'flex',
@@ -891,15 +818,10 @@ export default function EntityMappingScreen() {
       backgroundColor: '#C7D8ED',
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     }}>
-      {/* Floating Notification Panel */}
       <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
-      <div style={{
-        width: '50%',
-        height: '100%',
-        overflowY: 'auto',
-        padding: '20px'
-      }}>
-
+      
+      {/* Left Panel - Configuration */}
+      <div style={{ width: '50%', height: '100%', overflowY: 'auto', padding: '20px' }}>
         <div style={{
           backgroundColor: 'white',
           borderRadius: '25px',
@@ -907,6 +829,7 @@ export default function EntityMappingScreen() {
           padding: '40px',
           borderTop: '8px solid #49A3C4'
         }}>
+          {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
             <button
               style={{
@@ -946,6 +869,7 @@ export default function EntityMappingScreen() {
             </h1>
           </div>
 
+          {/* Edit Mode Banner */}
           {isEditMode && (
             <div style={{
               marginBottom: '20px',
@@ -969,6 +893,7 @@ export default function EntityMappingScreen() {
             </div>
           )}
 
+          {/* Google Maps Banner */}
           {isGoogleMaps && (
             <div style={{
               marginBottom: '25px',
@@ -989,9 +914,13 @@ export default function EntityMappingScreen() {
             </div>
           )}
 
+          {/* Source and URL Inputs */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', marginBottom: '30px' }}>
+            {/* Source Dropdown */}
             <div>
-              <label style={{ display: 'block', marginBottom: '8px', color: '#00364A', fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>Source</label>
+              <label style={{ display: 'block', marginBottom: '8px', color: '#00364A', fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>
+                Source
+              </label>
               <div style={{ position: 'relative' }} ref={sourcesDropdownRef}>
                 <input
                   type="text"
@@ -1063,8 +992,11 @@ export default function EntityMappingScreen() {
               </div>
             </div>
 
+            {/* URL Input */}
             <div>
-              <label style={{ display: 'block', marginBottom: '8px', color: '#00364A', fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>URL</label>
+              <label style={{ display: 'block', marginBottom: '8px', color: '#00364A', fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>
+                URL
+              </label>
               <input
                 type="url"
                 value={url}
@@ -1085,6 +1017,7 @@ export default function EntityMappingScreen() {
             </div>
           </div>
 
+          {/* Entity Selection */}
           <div style={{ marginBottom: '30px', position: 'relative' }} ref={entitiesDropdownRef}>
             <label style={{ display: 'block', marginBottom: '16px', color: '#00364A', fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>
               Select Entities
@@ -1157,6 +1090,7 @@ export default function EntityMappingScreen() {
             )}
           </div>
 
+          {/* Entity Configuration Sections */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
             {selectedEntities.map((entity) => (
               <div
@@ -1170,6 +1104,7 @@ export default function EntityMappingScreen() {
                   boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)'
                 }}
               >
+                {/* Entity Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
                   <h2 style={{ fontSize: '24px', fontWeight: '800', color: entityData[entity]?.enabled ? '#00364A' : '#6B7280', margin: 0 }}>
                     {entity}
@@ -1199,6 +1134,7 @@ export default function EntityMappingScreen() {
                   </div>
                 </div>
 
+                {/* Container Selector (non-Google Maps) */}
                 {!isGoogleMaps && (
                   <div style={{ marginBottom: '25px' }}>
                     <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px', textTransform: 'uppercase' }}>
@@ -1218,14 +1154,10 @@ export default function EntityMappingScreen() {
                           flex: 1,
                           padding: '12px 16px',
                           borderRadius: '12px',
-                          border: 'none',
-                          backgroundColor: 'white',
                           border: '1px solid rgba(0, 54, 74, 0.15)',
                           outline: 'none',
                           color: '#00364A'
                         }}
-                        onFocus={(e) => e.target.style.borderColor = '#49A3C4'}
-                        onBlur={(e) => e.target.style.borderColor = 'rgba(0, 54, 74, 0.15)'}
                       />
                       <button
                         onClick={() => handleScanSelectors(entity)}
@@ -1251,7 +1183,7 @@ export default function EntityMappingScreen() {
                             borderTop: '2px solid transparent',
                             borderRadius: '50%',
                             animation: 'spin 1s linear infinite'
-                          }}></div>
+                          }} />
                         ) : (
                           <Search size={20} />
                         )}
@@ -1259,12 +1191,13 @@ export default function EntityMappingScreen() {
                     </div>
                     {availableSelectors[entity] && (
                       <p style={{ fontSize: '12px', color: '#059669', marginTop: '8px', fontWeight: '600' }}>
-                        ✓ Found {availableSelectors[entity].length} possible child elements. Use dropdowns below.
+                        ✓ Found {availableSelectors[entity].length} possible child elements
                       </p>
                     )}
                   </div>
                 )}
 
+                {/* Field Mappings */}
                 {entityData[entity]?.fields
                   .filter((field) => field.attribute.toLowerCase() !== "id")
                   .map((field) => {
@@ -1297,9 +1230,6 @@ export default function EntityMappingScreen() {
                             value={field.selector}
                             onChange={(val) => handleFieldChange(entity, field.attribute, "selector", val)}
                             options={availableSelectors[entity] || []}
-                            entity={entity}
-                            attribute={field.attribute}
-                            onQuickFill={handleQuickFillClickInner}
                           />
 
                           <MetadataInput
@@ -1312,7 +1242,9 @@ export default function EntityMappingScreen() {
                     );
                   })}
 
+                {/* Follow Links Section */}
                 <div style={{ marginTop: '30px', padding: '20px', backgroundColor: '#F0F9FF', borderRadius: '12px', border: '2px solid #49A3C4' }}>
+                  {/* Follow Links Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                     <div>
                       <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', margin: 0 }}>
@@ -1339,6 +1271,7 @@ export default function EntityMappingScreen() {
                     </button>
                   </div>
 
+                  {/* Follow Links Instructions */}
                   <div style={{
                     marginBottom: '20px',
                     padding: '15px',
@@ -1358,21 +1291,20 @@ export default function EntityMappingScreen() {
                             <strong>Click "Add Detail Page"</strong> below to add a new detail page configuration.
                           </li>
                           <li style={{ marginBottom: '6px' }}>
-                            <strong>Enter the Link CSS Selector:</strong> Enter the CSS selector for the link element (e.g., "a.profile-link"). The system will automatically extract the href attribute.
+                            <strong>Enter the Link CSS Selector:</strong> Enter the CSS selector for the link element.
                           </li>
                           <li style={{ marginBottom: '6px' }}>
-                            <strong>Add fields to extract from detail pages:</strong> Select attributes and their selectors. Selectors will be auto-filled if the same attribute exists in the main mapping above.
+                            <strong>Add fields to extract from detail pages:</strong> Select attributes and their selectors.
                           </li>
                         </ol>
-                        <div style={{ marginTop: '12px', padding: '10px', backgroundColor: 'white', borderRadius: '6px', fontSize: '12px', color: '#00364A' }}>
-                          <strong>💡 How it works:</strong> The system will extract the URL from your CSS selector, visit each detail page, scrape the additional fields you configure, and merge everything into a single record. <strong>You don't need to add a link field in the entity mapping above.</strong>
-                        </div>
                       </div>
                     </div>
                   </div>
 
+                  {/* Follow Links List */}
                   {(followLinksConfig[entity] || []).map((fl, flIndex) => (
                     <div key={flIndex} style={{ marginBottom: '20px', padding: '15px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #49A3C4' }}>
+                      {/* Follow Link Header */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                         <div style={{ flex: 1, marginRight: '15px' }}>
                           <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#00364A', marginBottom: '6px', textTransform: 'uppercase' }}>
@@ -1397,14 +1329,11 @@ export default function EntityMappingScreen() {
                             Link CSS Selector
                           </label>
                           <SelectorInput
-                            placeholder="e.g., a.profile-link, .detail-page-url"
+                            placeholder="e.g., a.profile-link"
                             value={fl.selectorField || ""}
                             onChange={(val) => handleFollowLinkChange(entity, flIndex, 'selectorField', val)}
                             options={availableSelectors[entity] || []}
                           />
-                          <p style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>
-                            Enter the CSS selector for the link element (e.g., "a.profile-link"). The system will extract the href attribute automatically.
-                          </p>
                         </div>
                         <button
                           onClick={() => handleRemoveFollowLink(entity, flIndex)}
@@ -1422,6 +1351,7 @@ export default function EntityMappingScreen() {
                         </button>
                       </div>
 
+                      {/* Follow Link Fields */}
                       <div style={{ marginTop: '15px' }}>
                         <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#00364A', marginBottom: '10px', textTransform: 'uppercase' }}>
                           Fields to Extract from Detail Page
@@ -1441,14 +1371,11 @@ export default function EntityMappingScreen() {
                               <option value="">Select attribute...</option>
                               {entityData[entity]?.fields
                                 .filter((f) => f.attribute.toLowerCase() !== "id")
-                                .map((f) => {
-                                  const hasSelector = f.selector && f.selector.trim();
-                                  return (
-                                    <option key={f.attribute} value={f.attribute}>
-                                      {f.attribute}{hasSelector ? ' ✓' : ''}
-                                    </option>
-                                  );
-                                })}
+                                .map((f) => (
+                                  <option key={f.attribute} value={f.attribute}>
+                                    {f.attribute}{f.selector?.trim() ? ' ✓' : ''}
+                                  </option>
+                                ))}
                             </select>
 
                             <SelectorInput
@@ -1457,11 +1384,13 @@ export default function EntityMappingScreen() {
                               onChange={(val) => handleUpdateFollowLinkField(entity, flIndex, fmIndex, 'selector', val)}
                               options={availableSelectors[entity] || []}
                             />
+                            
                             <MetadataInput
                               value={fm.extract || "text"}
                               onChange={(val) => handleUpdateFollowLinkField(entity, flIndex, fmIndex, 'extract', val)}
                               options={METADATA_OPTIONS}
                             />
+                            
                             <button
                               onClick={() => handleRemoveFollowLinkField(entity, flIndex, fmIndex)}
                               style={{
@@ -1477,6 +1406,7 @@ export default function EntityMappingScreen() {
                             </button>
                           </div>
                         ))}
+                        
                         <button
                           onClick={() => {
                             const updated = [...(fl.fieldMappings || []), { attribute: "", selector: "", extract: "text" }];
@@ -1499,39 +1429,11 @@ export default function EntityMappingScreen() {
                     </div>
                   ))}
 
+                  {/* Empty State */}
                   {(followLinksConfig[entity] || []).length === 0 && (
                     <div style={{ textAlign: 'center', padding: '20px', color: '#6B7280', fontSize: '14px' }}>
-                      <div style={{ marginBottom: '12px' }}>
-                        <AlertTriangle size={24} color="#F59E0B" style={{ marginBottom: '8px' }} />
-                      </div>
+                      <AlertTriangle size={24} color="#F59E0B" style={{ marginBottom: '8px' }} />
                       <p style={{ fontWeight: '600', marginBottom: '8px', color: '#374151' }}>No detail pages configured yet.</p>
-                      <p style={{ fontSize: '13px', marginBottom: '12px', color: '#6B7280' }}>
-                        To enable multi-page scraping:
-                      </p>
-                      <div style={{
-                        textAlign: 'left',
-                        display: 'inline-block',
-                        backgroundColor: 'white',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: '1px solid #E5E7EB',
-                        fontSize: '12px',
-                        color: '#374151',
-                        maxWidth: '400px'
-                      }}>
-                        <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: '600' }}>1️⃣</span>
-                          <span>Click <strong>"Add Detail Page"</strong> button</span>
-                        </p>
-                        <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: '600' }}>2️⃣</span>
-                          <span>Enter the <strong>CSS selector</strong> for the link (e.g., "a.profile-link")</span>
-                        </p>
-                        <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: '600' }}>3️⃣</span>
-                          <span>Add fields to extract from detail pages</span>
-                        </p>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -1539,6 +1441,7 @@ export default function EntityMappingScreen() {
             ))}
           </div>
 
+          {/* Action Buttons */}
           {selectedEntities.length > 0 && (
             <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'center', gap: '20px' }}>
               <button
@@ -1561,7 +1464,7 @@ export default function EntityMappingScreen() {
                 {isEditMode ? 'Update Mapping' : 'Save Configuration'}
               </button>
               <button
-                onClick={() => window.location.href = "/mappingmanager"}
+                onClick={() => navigate('/mappingmanager')}
                 style={{
                   padding: '16px 40px',
                   backgroundColor: '#E0F2FE',
@@ -1584,13 +1487,8 @@ export default function EntityMappingScreen() {
         </div>
       </div>
 
-      <div style={{
-        width: '50%',
-        height: '100%',
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      {/* Right Panel - Preview */}
+      <div style={{ width: '50%', height: '100%', padding: '20px', display: 'flex', flexDirection: 'column' }}>
         <div style={{
           backgroundColor: 'white',
           width: '100%',
@@ -1601,51 +1499,15 @@ export default function EntityMappingScreen() {
           overflow: 'hidden',
           position: 'relative'
         }}>
-          <button
-            onClick={handleReloadPreview}
-            style={{
-              position: 'absolute',
-              top: '6px',
-              left: '135px',
-              zIndex: 100,
-              padding: '7px 10px',
-              backgroundColor: '#49A3C4',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
-              fontWeight: '600',
-              fontSize: '14px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 12px rgba(0, 54, 74, 0.2)',
-              transition: 'all 0.3s'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#00364A';
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 6px 16px rgba(0, 54, 74, 0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = '#49A3C4';
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = '0 4px 12px rgba(0, 54, 74, 0.2)';
-            }}
-            title="Reload preview page"
-          >
-            <RefreshCw size={16} />
-            Reload
-          </button>
-
           <SmartWebsitePreview
             key={previewReloadKey}
             url={url}
-            onSelectorSelected={handleSelectorFromPreview}
+            onSelectorSelected={() => { }} // Empty handler since we're not using it
           />
         </div>
       </div>
 
+      {/* Preview Modal */}
       {previewData && (
         <PreviewModal
           data={previewData}
@@ -1656,6 +1518,8 @@ export default function EntityMappingScreen() {
           isLoading={isSubPreviewLoading}
         />
       )}
+
+      {/* Styles */}
       <style>{`
         @keyframes spin { 
           0% { transform: rotate(0deg); } 
@@ -1671,31 +1535,3 @@ export default function EntityMappingScreen() {
     </div>
   );
 }
-
-// Floating toast notification panel (same pattern as EntityForm)
-const NotificationPanel = ({ notifications, onRemove }) => {
-  if (!notifications.length) return null;
-  return (
-    <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '400px' }}>
-      {notifications.map(notif => (
-        <div key={notif.id} style={{
-          backgroundColor: notif.type === 'success' ? '#10B981' : notif.type === 'info' ? '#3B82F6' : '#EF4444',
-          color: 'white', padding: '16px 20px', borderRadius: '12px',
-          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
-          display: 'flex', alignItems: 'flex-start', gap: '12px',
-          animation: 'slideIn 0.3s ease', border: '1px solid rgba(255,255,255,0.1)'
-        }}>
-          <div style={{ flexShrink: 0, marginTop: '2px' }}>
-            {notif.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-          </div>
-          <div style={{ flex: 1, fontSize: '14px', fontWeight: '500', lineHeight: '1.5' }}>{notif.message}</div>
-          <button onClick={() => onRemove(notif.id)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', opacity: 0.8, padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '4px', flexShrink: 0 }}
-            onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.8'}>
-            <X size={16} />
-          </button>
-        </div>
-      ))}
-      <style>{`@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
-    </div>
-  );
-};
