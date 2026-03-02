@@ -3,6 +3,7 @@ import { Plus, Trash2, Save, List, Database, Columns, Sparkles, ArrowLeft, X, Ch
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
+import Layout from "./components/Layout"; // Import the Layout component
 
 const EntityForm = () => {
   const [entityName, setEntityName] = useState("");
@@ -162,17 +163,7 @@ const EntityForm = () => {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#C7D8ED',
-      color: '#00364A',
-      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      padding: '40px 20px',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'flex-start',
-      position: 'relative'
-    }}>
+    <Layout pageTitle="Entity Creation Form">
       {/* Notification Panel */}
       <NotificationPanel notifications={notifications} onRemove={removeNotification} />
 
@@ -193,69 +184,61 @@ const EntityForm = () => {
       <div style={{
         width: '100%',
         maxWidth: '800px',
+        margin: '0 auto',
         backgroundColor: 'white',
         borderRadius: '25px',
         boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
         overflow: 'hidden'
       }}>
-        <div style={{ padding: '50px' }}>
-          {/* Header */}
+        <div style={{ padding: '40px' }}>
+          {/* Header with Title and Actions */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '40px',
-            borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
-            paddingBottom: '20px'
+            marginBottom: '30px',
+            flexWrap: 'wrap',
+            gap: '20px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            {/* Title on the left */}
+            <h2 style={{
+              fontSize: '24px',
+              fontWeight: '700',
+              color: '#00364A',
+              margin: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
               <div style={{
-                width: '56px',
-                height: '56px',
+                width: '40px',
+                height: '40px',
                 backgroundColor: '#49A3C4',
-                borderRadius: '15px',
+                borderRadius: '10px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: 'white'
               }}>
-                <Database size={28} />
+                <Database size={20} />
               </div>
-              <div>
-                <h1 style={{
-                  fontSize: '32px',
-                  fontWeight: '800',
-                  color: '#00364A',
-                  margin: 0,
-                  lineHeight: '1.2'
-                }}>Create Entity</h1>
-                <p style={{
-                  fontSize: '16px',
-                  color: '#00364A',
-                  opacity: 0.7,
-                  margin: '5px 0 0 0'
-                }}>Define your data structure</p>
-              </div>
-            </div>
-            <div style={{
-              padding: '10px 10px',
-              display: 'flex',
-              justifyContent: 'right',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '10px'
-            }}>
+              Create Entity
+            </h2>
+
+            {/* Actions on the right */}
+            <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  padding: '12px 24px',
+                  padding: '10px 20px',
                   backgroundColor: 'rgba(73, 163, 196, 0.1)',
                   color: '#00364A',
-                  borderRadius: '12px',
+                  borderRadius: '10px',
                   border: 'none',
                   fontWeight: '600',
+                  fontSize: '14px',
                   cursor: 'pointer',
                   transition: 'all 0.3s'
                 }}
@@ -263,7 +246,7 @@ const EntityForm = () => {
                 onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.1)'}
                 onClick={() => navigate('/dashboard')}
               >
-                <ArrowLeft size={18} />
+                <ArrowLeft size={16} />
                 Dashboard
               </button>
               <button
@@ -271,12 +254,13 @@ const EntityForm = () => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  padding: '12px 24px',
+                  padding: '10px 20px',
                   backgroundColor: 'rgba(73, 163, 196, 0.1)',
                   color: '#00364A',
-                  borderRadius: '12px',
+                  borderRadius: '10px',
                   border: 'none',
                   fontWeight: '600',
+                  fontSize: '14px',
                   cursor: 'pointer',
                   transition: 'all 0.3s'
                 }}
@@ -284,7 +268,7 @@ const EntityForm = () => {
                 onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.1)'}
                 onClick={() => navigate('/entitylist')}
               >
-                <List size={18} />
+                <List size={16} />
                 View All
               </button>
             </div>
@@ -447,15 +431,16 @@ const EntityForm = () => {
                         <option value="text">String</option>
                         <option value="int">Integer</option>
                         <option value="bool">Boolean</option>
-                        <option value="Float">Float</option>
-                        <option value="Date">Date</option>
+                        <option value="float">Float</option>
+                        <option value="date">Date</option>
                       </select>
                     </div>
 
-                    {/* NEW — Checkbox */}
+                    {/* Checkbox */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '35px' }}>
                       <input
                         type="checkbox"
+                        id={`unique-${index}`}
                         checked={attr.check_for_unique}
                         onChange={(e) => updateAttribute(index, "check_for_unique", e.target.checked)}
                         style={{
@@ -465,7 +450,7 @@ const EntityForm = () => {
                           cursor: 'pointer'
                         }}
                       />
-                      <label style={{ fontSize: '14px', color: '#00364A', cursor: 'pointer' }}>Check Duplicate</label>
+                      <label htmlFor={`unique-${index}`} style={{ fontSize: '14px', color: '#00364A', cursor: 'pointer' }}>Check Duplicate</label>
                     </div>
 
                   </div>
@@ -484,7 +469,8 @@ const EntityForm = () => {
                       transition: 'all 0.2s',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                      justifyContent: 'center',
+                      flexShrink: 0
                     }}
                     onMouseEnter={(e) => e.target.style.backgroundColor = '#FEE2E2'}
                     onMouseLeave={(e) => e.target.style.backgroundColor = '#FEF2F2'}
@@ -571,7 +557,7 @@ const EntityForm = () => {
           </div>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 

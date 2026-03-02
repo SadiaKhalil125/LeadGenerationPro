@@ -20,7 +20,15 @@ import {
   ArrowLeft,
   FileText,
   FileSpreadsheet,
-  Eye
+  Eye,
+  Menu,
+  ChevronDown as ChevronDownIcon,
+  ChevronRight as ChevronRightIcon,
+  LayoutGrid,
+  ClipboardPlus,
+  CalendarCheck,
+  Settings,
+  Loader2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,8 +41,189 @@ const EntityList = () => {
   const [response, setResponse] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [exportLoading, setExportLoading] = useState({ csv: null, excel: null });
+  const [openMenu, setOpenMenu] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const toggleMenu = (menu) => {
+    setOpenMenu(openMenu === menu ? null : menu);
+  };
+
+  const menuContent = {
+    entity: {
+      label: "Entities",
+      icon: <LayoutGrid size={20} />,
+      items: [
+        { label: "Entity List", path: "/entitylist" },
+        { label: "Create Entity", path: "/entityform" },
+        { label: "Entity Data Table", path: "/entity-data" },
+      ],
+    },
+    manager: {
+      label: "Sources",
+      icon: <Settings size={20} />,
+      items: [
+        { label: "Source Manager", path: "/sourcemanagement" },
+        { label: "Add Source", path: "/addsource" },
+      ],
+    },
+    mapping: {
+      label: "Mappings",
+      icon: <ClipboardPlus size={20} />,
+      items: [
+        { label: "Entity Mapping List", path: "/mappingmanager" },
+        { label: "Create Entity Mapping", path: "/entitymappingform" },
+      ],
+    },
+    task: {
+      label: "Tasks",
+      icon: <CalendarCheck size={20} />,
+      items: [
+        { label: "Schedule a Task", path: "/taskscheduler" },
+        { label: "Task List", path: "/tasksmanagement" },
+        { label: "Task Executor", path: "/taskexecutor" },
+      ],
+    },
+  };
+
+  const sidebarStyles = {
+    container: {
+      minHeight: "100vh",
+      display: "flex",
+      backgroundColor: "#F1F6FB",
+      color: "#00364A",
+      fontFamily: "'Inter', sans-serif",
+    },
+    sidebar: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      height: "100%",
+      backgroundColor: "#2C5F6F",
+      color: "white",
+      boxShadow: "rgb(0 0 0 / 15%) 10px 0px 20px",
+      zIndex: 40,
+      transition: "all 0.3s ease-in-out",
+      width: sidebarOpen ? "280px" : "80px",
+      overflow: "hidden",
+    },
+    sidebarInner: {
+      padding: "24px 16px",
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+    },
+    sidebarHeader: {
+      fontSize: "36px",
+      fontWeight: "900",
+      textAlign: "center",
+      marginBottom: "40px",
+      opacity: sidebarOpen ? 1 : 0,
+      transition: "opacity 0.3s ease",
+      letterSpacing: "4px",
+      fontFamily: "'Montserrat', 'Arial Black', sans-serif",
+      textTransform: "uppercase",
+      background: "linear-gradient(135deg, #ffffff 0%, #a9d2ff 100%)",
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "white",
+      backgroundClip: "text",
+    },
+    menuButton: (isActive) => ({
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      padding: "14px 16px",
+      borderRadius: "12px",
+      fontSize: "16px",
+      fontWeight: "600",
+      border: "none",
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+      backgroundColor: isActive ? "rgba(255, 255, 255, 0.15)" : "transparent",
+      color: "white",
+      marginBottom: "8px",
+      justifyContent: sidebarOpen ? "flex-start" : "center",
+    }),
+    menuButtonHover: {
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+    },
+    menuLabel: {
+      marginLeft: "16px",
+      flex: 1,
+      textAlign: "left",
+      display: sidebarOpen ? "block" : "none",
+    },
+    submenuContainer: (isOpen) => ({
+      maxHeight: isOpen ? "500px" : "0",
+      overflow: "hidden",
+      transition: "max-height 0.3s ease",
+      marginLeft: sidebarOpen ? "20px" : "0",
+      marginTop: "4px",
+    }),
+    submenuItem: {
+      width: "100%",
+      padding: "12px 16px",
+      backgroundColor: "transparent",
+      border: "none",
+      color: "white",
+      fontSize: "14px",
+      fontWeight: "500",
+      textAlign: "left",
+      cursor: "pointer",
+      borderRadius: "8px",
+      transition: "all 0.2s ease",
+      marginBottom: "4px",
+      display: sidebarOpen ? "block" : "none",
+    },
+    mainContent: {
+      flex: 1,
+      transition: "all 0.3s ease-in-out",
+      marginLeft: sidebarOpen ? "280px" : "80px",
+      minHeight: "100vh",
+      backgroundColor: "#F1F6FB",
+      display: "flex",
+      flexDirection: "column",
+    },
+    header: {
+      width: "100%",
+      background: "#2C5F6F",
+      color: "white",
+      padding: "20px 32px",
+      boxShadow: "0 4px 12px rgba(0, 54, 74, 0.1)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    headerLeft: {
+      display: "flex",
+      alignItems: "center",
+      gap: "16px",
+    },
+    menuToggle: {
+      padding: "10px",
+      backgroundColor: "rgba(255, 255, 255, 0.15)",
+      border: "none",
+      borderRadius: "10px",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "white",
+      transition: "all 0.2s ease",
+    },
+    headerTitle: {
+      fontSize: "28px",
+      fontWeight: "700",
+      color: "white",
+      letterSpacing: "0.5px",
+    },
+    main: {
+      padding: "40px",
+      flex: 1,
+      width: "100%",
+    },
+  };
 
   // Fetch entities list only (lightweight)
   const { data: entities, isLoading: isLoadingEntities } = useQuery({
@@ -53,7 +242,7 @@ const EntityList = () => {
       const data = await response.json();
       return data.entities || [];
     },
-    refetchOnMount: true, // Override global false — refetch if stale (e.g. after invalidateQueries from EntityForm)
+    refetchOnMount: true,
   });
 
   // Fetch entity details only when expanded (lazy loading)
@@ -382,544 +571,629 @@ const EntityList = () => {
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: '#C7D8ED',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'column',
-        gap: '20px'
-      }}>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          border: '4px solid #49A3C4',
-          borderTop: '4px solid transparent',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }} />
-        <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Entities...</h1>
-        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      <div style={sidebarStyles.container}>
+        <aside style={sidebarStyles.sidebar}>
+          <div style={sidebarStyles.sidebarInner}>
+            <h2 style={sidebarStyles.sidebarHeader}>SCOUT</h2>
+            {Object.entries(menuContent).map(([key, { label, icon }]) => (
+              <div key={key}>
+                <button
+                  onClick={() => toggleMenu(key)}
+                  style={sidebarStyles.menuButton(openMenu === key)}
+                >
+                  {icon}
+                  {sidebarOpen && <span style={sidebarStyles.menuLabel}>{label}</span>}
+                  {sidebarOpen &&
+                    (openMenu === key ? (
+                      <ChevronDownIcon size={20} />
+                    ) : (
+                      <ChevronRightIcon size={20} />
+                    ))}
+                </button>
+              </div>
+            ))}
+          </div>
+        </aside>
+        <div style={sidebarStyles.mainContent}>
+          <header style={sidebarStyles.header}>
+            <div style={sidebarStyles.headerLeft}>
+              <button
+                onClick={() => {
+                  setSidebarOpen(!sidebarOpen);
+                  if (sidebarOpen) {
+                    setOpenMenu(null);
+                  }
+                }}
+                style={sidebarStyles.menuToggle}
+              >
+                <Menu size={24} />
+              </button>
+              <h1 style={sidebarStyles.headerTitle}>Entity List</h1>
+            </div>
+          </header>
+          <main style={sidebarStyles.main}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              flexDirection: 'column',
+              gap: '20px',
+              height: '50vh'
+            }}>
+              <Loader2 size={40} className="spin" style={{ color: '#00364A' }} />
+              <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Entities...</h1>
+            </div>
+          </main>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#C7D8ED',
-      color: '#00364A',
-      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      padding: '40px 20px',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'flex-start'
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: '1200px',
-        backgroundColor: 'white',
-        borderRadius: '25px',
-        boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
-        overflow: 'hidden'
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: '40px 50px',
-          borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '20px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{
-              width: '56px',
-              height: '56px',
-              backgroundColor: '#49A3C4',
-              borderRadius: '15px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white'
-            }}>
-              <Database size={28} />
+    <div style={sidebarStyles.container}>
+      {/* Sidebar */}
+      <aside style={sidebarStyles.sidebar}>
+        <div style={sidebarStyles.sidebarInner}>
+          <h2 style={sidebarStyles.sidebarHeader}>SCOUT</h2>
+
+          {Object.entries(menuContent).map(([key, { label, icon }]) => (
+            <div key={key}>
+              <button
+                onClick={() => toggleMenu(key)}
+                style={sidebarStyles.menuButton(openMenu === key)}
+                onMouseEnter={(e) => {
+                  if (openMenu !== key) {
+                    e.currentTarget.style.backgroundColor =
+                      sidebarStyles.menuButtonHover.backgroundColor;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (openMenu !== key) {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }
+                }}
+              >
+                {icon}
+                {sidebarOpen && <span style={sidebarStyles.menuLabel}>{label}</span>}
+                {sidebarOpen &&
+                  (openMenu === key ? (
+                    <ChevronDownIcon size={20} />
+                  ) : (
+                    <ChevronRightIcon size={20} />
+                  ))}
+              </button>
+
+              <div style={sidebarStyles.submenuContainer(openMenu === key)}>
+                {menuContent[key].items.map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => navigate(item.path)}
+                    style={sidebarStyles.submenuItem}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor =
+                        "rgba(255, 255, 255, 0.1)";
+                      e.currentTarget.style.paddingLeft = "20px";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.paddingLeft = "16px";
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <h1 style={{
-                fontSize: '32px',
-                fontWeight: '800',
-                color: '#00364A',
-                margin: 0,
-                lineHeight: '1.2'
-              }}>Entity Manager</h1>
-              <p style={{
-                fontSize: '16px',
-                color: '#00364A',
-                opacity: 0.7,
-                margin: '5px 0 0 0'
-              }}>View and manage your database entities</p>
-            </div>
-          </div>
-          <div style={{
-            padding: '10px 10px',
-            display: 'flex',
-            justifyContent: 'right',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '20px'
-          }}>
-            <button
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '12px 24px',
-                backgroundColor: '#004e6b',
-                color: 'white',
-                borderRadius: '12px',
-                border: 'none',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#004e6b';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#004e6b';
-              }}
-              onClick={() => navigate('/entityform')}
-            >
-              <Plus size={18} />
-              Create Entity
-            </button>
-            <button
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '12px 24px',
-                backgroundColor: 'white',
-                color: '#00364A',
-                borderRadius: '12px',
-                border: '2px solid #00364A',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#00364A';
-                e.target.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = 'white';
-                e.target.style.color = '#00364A';
-              }}
-              onClick={() => navigate('/dashboard')}
-            >
-              <ArrowLeft size={18} />
-              Dashboard
-            </button>
-            <button
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['entities'] })}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '12px 24px',
-                backgroundColor: 'white',
-                color: '#00364A',
-                borderRadius: '12px',
-                border: '2px solid #00364A',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#00364A';
-                e.target.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = 'white';
-                e.target.style.color = '#00364A';
-              }}
-            >
-              <RefreshCw size={18} />
-              Refresh
-            </button>
-          </div>
+          ))}
         </div>
+      </aside>
 
-        <div style={{ padding: '50px' }}>
-          {/* Search and Stats */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-            <div style={{ position: 'relative', width: '40%' }}>
-              <div style={{ position: 'absolute', top: '50%', left: '15px', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-                <Search size={18} color="#00364A" style={{ opacity: 0.5 }} />
-              </div>
-              <input
-                type="text"
-                placeholder="Search entities..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '14px 20px 14px 45px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  backgroundColor: 'rgba(73, 163, 196, 0.15)',
-                  color: '#00364A',
-                  fontSize: '15px',
-                  outline: 'none',
-                  transition: 'all 0.3s'
-                }}
-                onFocus={(e) => {
-                  e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
-                  e.target.style.boxShadow = 'none';
-                }}
-              />
-            </div>
-            <div style={{
-              backgroundColor: 'rgba(73, 163, 196, 0.1)',
-              color: '#00364A',
-              padding: '10px 20px',
-              borderRadius: '20px',
-              fontWeight: '600',
-              fontSize: '14px'
-            }}>
-              <span>{filteredEntities.length}</span> entities found
-            </div>
+      {/* Main Content */}
+      <div style={sidebarStyles.mainContent}>
+        {/* Header */}
+        <header style={sidebarStyles.header}>
+          <div style={sidebarStyles.headerLeft}>
+            <button
+              onClick={() => {
+                setSidebarOpen(!sidebarOpen);
+                if (sidebarOpen) {
+                  setOpenMenu(null);
+                }
+              }}
+              style={sidebarStyles.menuToggle}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.25)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.15)";
+              }}
+            >
+              <Menu size={24} />
+            </button>
+            <h1 style={sidebarStyles.headerTitle}>Entity Manager</h1>
           </div>
+        </header>
 
-          {response && (
+        {/* Content Area */}
+        <main style={sidebarStyles.main}>
+          <div style={{
+            width: '100%',
+            backgroundColor: 'white',
+            borderRadius: '25px',
+            boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+            overflow: 'hidden'
+          }}>
+            {/* Header Actions */}
             <div style={{
-              marginBottom: '30px',
-              padding: '20px 25px',
-              borderRadius: '15px',
+              padding: '40px 50px',
+              borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
               display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
-              gap: '15px',
-              backgroundColor: response.type === "success" ? '#E0F2FE' : '#FEF2F2',
-              border: `2px solid ${response.type === "success" ? '#49A3C4' : '#EF4444'}`,
-              color: '#00364A'
+              flexWrap: 'wrap',
+              gap: '20px'
             }}>
-              <div style={{ color: response.type === "success" ? '#49A3C4' : '#EF4444' }}>
-                {response.type === "success" ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-              </div>
-              <span style={{ fontWeight: '500' }}>{response.message}</span>
-            </div>
-          )}
-
-          {filteredEntities.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '60px',
-              backgroundColor: '#F8FBFF',
-              borderRadius: '20px',
-              border: '2px dashed rgba(0, 54, 74, 0.1)'
-            }}>
-              <List size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />
-              <p style={{ fontSize: '18px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>No entities found</p>
-              <p style={{ color: '#00364A', opacity: 0.6 }}>Create your first entity to get started</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {filteredEntities.map((entity) => (
-                <div key={entity.name} style={{
-                  backgroundColor: 'white',
-                  border: '2px solid rgba(0, 54, 74, 0.08)',
-                  borderRadius: '20px',
-                  boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
-                  overflow: 'hidden',
-                  transition: 'all 0.3s'
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  backgroundColor: '#49A3C4',
+                  borderRadius: '15px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white'
                 }}>
-                  {/* Entity Card Header */}
-                  <div style={{
-                    padding: '25px',
+                  <Database size={28} />
+                </div>
+                <div>
+                  <h1 style={{
+                    fontSize: '32px',
+                    fontWeight: '800',
+                    color: '#00364A',
+                    margin: 0,
+                    lineHeight: '1.2'
+                  }}>Entity Manager</h1>
+                  <p style={{
+                    fontSize: '16px',
+                    color: '#00364A',
+                    opacity: 0.7,
+                    margin: '5px 0 0 0'
+                  }}>View and manage your database entities</p>
+                </div>
+              </div>
+              <div style={{
+                padding: '10px 10px',
+                display: 'flex',
+                justifyContent: 'right',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '20px'
+              }}>
+                <button
+                  style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: '20px',
-                    flexWrap: 'wrap'
-                  }}>
-                    {/* Left: Entity Info */}
-                    <div style={{ display: 'flex', alignItems: 'center', flex: '1 1 300px', minWidth: 0 }}>
-                      <button
-                        onClick={() => toggleExpand(entity.name)}
-                        style={{
-                          marginRight: '15px',
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          color: '#00364A',
-                          opacity: 0.5,
-                          transition: 'opacity 0.2s',
-                          padding: '5px',
-                          flexShrink: 0
-                        }}
-                        onMouseEnter={(e) => e.target.style.opacity = '1'}
-                        onMouseLeave={(e) => e.target.style.opacity = '0.5'}
-                      >
-                        {expandedEntity === entity.name ? <ChevronDown size={24} /> : <ChevronRight size={24} />}
-                      </button>
-                      <div style={{ minWidth: 0 }}>
-                        <h3 style={{
-                          fontSize: '18px',
-                          fontWeight: '700',
-                          color: '#00364A',
-                          margin: 0,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
-                          {entity.name}
-                        </h3>
-                      </div>
-                    </div>
+                    gap: '8px',
+                    padding: '12px 24px',
+                    backgroundColor: '#004e6b',
+                    color: 'white',
+                    borderRadius: '12px',
+                    border: 'none',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.backgroundColor = '#004e6b';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.backgroundColor = '#004e6b';
+                  }}
+                  onClick={() => navigate('/entityform')}
+                >
+                  <Plus size={18} />
+                  Create Entity
+                </button>
+                <button
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ['entities'] })}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 24px',
+                    backgroundColor: 'white',
+                    color: '#00364A',
+                    borderRadius: '12px',
+                    border: '2px solid #00364A',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.backgroundColor = '#00364A';
+                    e.target.style.color = 'white';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#00364A';
+                  }}
+                >
+                  <RefreshCw size={18} />
+                  Refresh
+                </button>
+              </div>
+            </div>
 
-                    {/* Right: Actions */}
-                    <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
-                      {/* View Data Button */}
-                      <IconButton
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/entity-data?entity=${entity.name}`);
-                        }}
-                        icon={<Eye size={18} />}
-                        color="#8B5CF6"
-                        title="View Entity Data"
-                      />
-
-
-
-                      {/* Edit Button */}
-                      <IconButton
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (expandedEntity !== entity.name) {
-                            setExpandedEntity(entity.name);
-                          }
-                          // Wait for details to load before starting edit
-                          setTimeout(() => {
-                            if (entityDetails && entityDetails.name === entity.name) {
-                              startEditing(entityDetails);
-                            }
-                          }, 100);
-                        }}
-                        icon={<Edit3 size={18} />}
-                        color="#49A3C4"
-                        title="Edit Entity"
-                      />
-
-                      {/* Delete Button */}
-                      <IconButton
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteEntity(entity.name);
-                        }}
-                        icon={<Trash2 size={18} />}
-                        color="#EF4444"
-                        title="Delete Entity"
-                      />
-                    </div>
+            <div style={{ padding: '50px' }}>
+              {/* Search and Stats */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+                <div style={{ position: 'relative', width: '40%' }}>
+                  <div style={{ position: 'absolute', top: '50%', left: '15px', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                    <Search size={18} color="#00364A" style={{ opacity: 0.5 }} />
                   </div>
+                  <input
+                    type="text"
+                    placeholder="Search entities..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '14px 20px 14px 45px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                      color: '#00364A',
+                      fontSize: '15px',
+                      outline: 'none',
+                      transition: 'all 0.3s'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.25)';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(73, 163, 196, 0.2)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.backgroundColor = 'rgba(73, 163, 196, 0.15)';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                  />
+                </div>
+                <div style={{
+                  backgroundColor: 'rgba(73, 163, 196, 0.1)',
+                  color: '#00364A',
+                  padding: '10px 20px',
+                  borderRadius: '20px',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}>
+                  <span>{filteredEntities.length}</span> entities found
+                </div>
+              </div>
 
-                  {/* Expanded Content (Attributes) */}
-                  {expandedEntity === entity.name && (
-                    <div style={{
-                      borderTop: '1px solid rgba(0, 54, 74, 0.1)',
-                      padding: '25px',
-                      backgroundColor: '#F8FBFF'
+              {response && (
+                <div style={{
+                  marginBottom: '30px',
+                  padding: '20px 25px',
+                  borderRadius: '15px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '15px',
+                  backgroundColor: response.type === "success" ? '#E0F2FE' : '#FEF2F2',
+                  border: `2px solid ${response.type === "success" ? '#49A3C4' : '#EF4444'}`,
+                  color: '#00364A'
+                }}>
+                  <div style={{ color: response.type === "success" ? '#49A3C4' : '#EF4444' }}>
+                    {response.type === "success" ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                  </div>
+                  <span style={{ fontWeight: '500' }}>{response.message}</span>
+                </div>
+              )}
+
+              {filteredEntities.length === 0 ? (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '60px',
+                  backgroundColor: '#F8FBFF',
+                  borderRadius: '20px',
+                  border: '2px dashed rgba(0, 54, 74, 0.1)'
+                }}>
+                  <List size={48} style={{ color: '#49A3C4', marginBottom: '15px', opacity: 0.5 }} />
+                  <p style={{ fontSize: '18px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>No entities found</p>
+                  <p style={{ color: '#00364A', opacity: 0.6 }}>Create your first entity to get started</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {filteredEntities.map((entity) => (
+                    <div key={entity.name} style={{
+                      backgroundColor: 'white',
+                      border: '2px solid rgba(0, 54, 74, 0.08)',
+                      borderRadius: '20px',
+                      boxShadow: '0 4px 15px rgba(0, 54, 74, 0.05)',
+                      overflow: 'hidden',
+                      transition: 'all 0.3s'
                     }}>
-                      {entityDetails ? (
-                        <>
-                          <h4 style={{
-                            fontSize: '16px',
-                            fontWeight: '700',
-                            color: '#00364A',
-                            marginBottom: '20px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px'
-                          }}>
-                            <div style={{
-                              padding: '6px',
-                              backgroundColor: 'rgba(73, 163, 196, 0.15)',
-                              borderRadius: '8px',
-                              display: 'flex'
+                      {/* Entity Card Header */}
+                      <div style={{
+                        padding: '25px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '20px',
+                        flexWrap: 'wrap'
+                      }}>
+                        {/* Left: Entity Info */}
+                        <div style={{ display: 'flex', alignItems: 'center', flex: '1 1 300px', minWidth: 0 }}>
+                          <button
+                            onClick={() => toggleExpand(entity.name)}
+                            style={{
+                              marginRight: '15px',
+                              border: 'none',
+                              background: 'none',
+                              cursor: 'pointer',
+                              color: '#00364A',
+                              opacity: 0.5,
+                              transition: 'opacity 0.2s',
+                              padding: '5px',
+                              flexShrink: 0
+                            }}
+                            onMouseEnter={(e) => e.target.style.opacity = '1'}
+                            onMouseLeave={(e) => e.target.style.opacity = '0.5'}
+                          >
+                            {expandedEntity === entity.name ? <ChevronDown size={24} /> : <ChevronRight size={24} />}
+                          </button>
+                          <div style={{ minWidth: 0 }}>
+                            <h3 style={{
+                              fontSize: '18px',
+                              fontWeight: '700',
+                              color: '#00364A',
+                              margin: 0,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
                             }}>
-                              <Columns size={16} color="#49A3C4" />
-                            </div>
-                            Attributes
-                            <span style={{ fontSize: '13px', fontWeight: '500', opacity: 0.6, marginLeft: '10px' }}>
-                              ({entityDetails.row_count || 0} rows)
-                            </span>
-                          </h4>
+                              {entity.name}
+                            </h3>
+                          </div>
+                        </div>
 
-                          {editingEntity === entity.name ? (
-                            /* Editing Mode */
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                              {editAttributes.map((attr, index) => (
-                                <div key={index} style={{
-                                  padding: '20px',
-                                  borderRadius: '15px',
-                                  backgroundColor: attr.action === 'remove' ? '#FEF2F2' : 'white',
-                                  border: `1px solid ${attr.action === 'remove' ? '#FCA5A5' : 'rgba(0, 54, 74, 0.1)'}`
+                        {/* Right: Actions */}
+                        <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+                          {/* View Data Button */}
+                          <IconButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/entity-data?entity=${entity.name}`);
+                            }}
+                            icon={<Eye size={18} />}
+                            color="#8B5CF6"
+                            title="View Entity Data"
+                          />
+
+                          {/* Edit Button */}
+                          <IconButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (expandedEntity !== entity.name) {
+                                setExpandedEntity(entity.name);
+                              }
+                              // Wait for details to load before starting edit
+                              setTimeout(() => {
+                                if (entityDetails && entityDetails.name === entity.name) {
+                                  startEditing(entityDetails);
+                                }
+                              }, 100);
+                            }}
+                            icon={<Edit3 size={18} />}
+                            color="#49A3C4"
+                            title="Edit Entity"
+                          />
+
+                          {/* Delete Button */}
+                          <IconButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteEntity(entity.name);
+                            }}
+                            icon={<Trash2 size={18} />}
+                            color="#EF4444"
+                            title="Delete Entity"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Expanded Content (Attributes) */}
+                      {expandedEntity === entity.name && (
+                        <div style={{
+                          borderTop: '1px solid rgba(0, 54, 74, 0.1)',
+                          padding: '25px',
+                          backgroundColor: '#F8FBFF'
+                        }}>
+                          {entityDetails ? (
+                            <>
+                              <h4 style={{
+                                fontSize: '16px',
+                                fontWeight: '700',
+                                color: '#00364A',
+                                marginBottom: '20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px'
+                              }}>
+                                <div style={{
+                                  padding: '6px',
+                                  backgroundColor: 'rgba(73, 163, 196, 0.15)',
+                                  borderRadius: '8px',
+                                  display: 'flex'
                                 }}>
-                                  {attr.action === 'remove' ? (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <span style={{ color: '#991B1B', fontWeight: '600' }}>
-                                        Column '{attr.originalName}' will be deleted
-                                      </span>
-                                      <button
-                                        onClick={() => undoRemove(index)}
-                                        style={{
+                                  <Columns size={16} color="#49A3C4" />
+                                </div>
+                                Attributes
+                                <span style={{ fontSize: '13px', fontWeight: '500', opacity: 0.6, marginLeft: '10px' }}>
+                                  ({entityDetails.row_count || 0} rows)
+                                </span>
+                              </h4>
+
+                              {editingEntity === entity.name ? (
+                                /* Editing Mode */
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                  {editAttributes.map((attr, index) => (
+                                    <div key={index} style={{
+                                      padding: '20px',
+                                      borderRadius: '15px',
+                                      backgroundColor: attr.action === 'remove' ? '#FEF2F2' : 'white',
+                                      border: `1px solid ${attr.action === 'remove' ? '#FCA5A5' : 'rgba(0, 54, 74, 0.1)'}`
+                                    }}>
+                                      {attr.action === 'remove' ? (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <span style={{ color: '#991B1B', fontWeight: '600' }}>
+                                            Column '{attr.originalName}' will be deleted
+                                          </span>
+                                          <button
+                                            onClick={() => undoRemove(index)}
+                                            style={{
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '5px',
+                                              padding: '8px 16px',
+                                              backgroundColor: '#FECACA',
+                                              color: '#991B1B',
+                                              border: 'none',
+                                              borderRadius: '10px',
+                                              fontSize: '13px',
+                                              fontWeight: '600',
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            <Undo size={14} /> Undo
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 0.5fr', gap: '20px', alignItems: 'start' }}>
+                                          <div>
+                                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Name</label>
+                                            <input
+                                              type="text"
+                                              value={attr.name}
+                                              onChange={(e) => updateAttribute(index, "name", e.target.value)}
+                                              style={inputStyle}
+                                            />
+                                            {attr.action === 'rename' && <p style={{ fontSize: '11px', color: '#49A3C4', marginTop: '4px' }}>Renaming from '{attr.originalName}'</p>}
+                                            {attr.action === 'add' && <p style={{ fontSize: '11px', color: '#059669', marginTop: '4px' }}>New column</p>}
+                                          </div>
+                                          <div>
+                                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Type</label>
+                                            <select
+                                              value={attr.datatype}
+                                              onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
+                                              style={inputStyle}
+                                            >
+                                              <option value="text">String</option>
+                                              <option value="int">Integer</option>
+                                              <option value="bool">Boolean</option>
+                                              <option value="float">Float</option>
+                                              <option value="datetime">Date/Time</option>
+                                            </select>
+                                          </div>
+                                          <div>
+                                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Constraint</label>
+                                            <select
+                                              value={attr.nullable}
+                                              onChange={(e) => updateAttribute(index, "nullable", e.target.value)}
+                                              style={inputStyle}
+                                            >
+                                              <option value="optional">Optional</option>
+                                              <option value="required">Required</option>
+                                            </select>
+                                          </div>
+                                          <div style={{ display: 'flex', alignItems: 'end', height: '100%', paddingBottom: '2px' }}>
+                                            <IconButton
+                                              onClick={() => removeAttribute(index)}
+                                              icon={<Trash2 size={16} />}
+                                              color="#EF4444"
+                                              title="Remove"
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
+                                    <StyledButton onClick={addAttribute} icon={<Plus size={16} />}>Add Attribute</StyledButton>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                      <StyledButton onClick={saveChanges} variant="success" icon={<Save size={16} />}>Save Changes</StyledButton>
+                                      <StyledButton onClick={cancelEditing} variant="secondary" icon={<X size={16} />}>Cancel</StyledButton>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                /* View Mode */
+                                <div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+                                    {entityDetails.columns?.filter(col => col.name !== 'modified_at').map((column) => (
+                                      <div key={column.name} style={{
+                                        backgroundColor: 'white',
+                                        padding: '15px',
+                                        borderRadius: '12px',
+                                        border: '1px solid rgba(0, 54, 74, 0.1)',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                      }}>
+                                        <div>
+                                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                                            <Type size={14} color="#49A3C4" style={{ marginRight: '8px' }} />
+                                            <span style={{ fontWeight: '600', color: '#00364A' }}>{column.name}</span>
+                                          </div>
+                                          <span style={{ fontSize: '12px', color: '#00364A', opacity: 0.6, marginLeft: '22px' }}>{column.type}</span>
+                                        </div>
+                                        <span style={{
+                                          fontSize: '11px',
+                                          fontWeight: '700',
+                                          padding: '4px 10px',
+                                          borderRadius: '10px',
+                                          backgroundColor: column.nullable === 'NO' ? '#FEE2E2' : '#ECFDF5',
+                                          color: column.nullable === 'NO' ? '#991B1B' : '#065F46',
                                           display: 'flex',
                                           alignItems: 'center',
-                                          gap: '5px',
-                                          padding: '8px 16px',
-                                          backgroundColor: '#FECACA',
-                                          color: '#991B1B',
-                                          border: 'none',
-                                          borderRadius: '10px',
-                                          fontSize: '13px',
-                                          fontWeight: '600',
-                                          cursor: 'pointer'
-                                        }}
-                                      >
-                                        <Undo size={14} /> Undo
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 0.5fr', gap: '20px', alignItems: 'start' }}>
-                                      <div>
-                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Name</label>
-                                        <input
-                                          type="text"
-                                          value={attr.name}
-                                          onChange={(e) => updateAttribute(index, "name", e.target.value)}
-                                          style={inputStyle}
-                                        />
-                                        {attr.action === 'rename' && <p style={{ fontSize: '11px', color: '#49A3C4', marginTop: '4px' }}>Renaming from '{attr.originalName}'</p>}
-                                        {attr.action === 'add' && <p style={{ fontSize: '11px', color: '#059669', marginTop: '4px' }}>New column</p>}
+                                          gap: '4px'
+                                        }}>
+                                          <Shield size={10} />
+                                          {column.nullable === 'NO' ? 'Required' : 'Optional'}
+                                        </span>
                                       </div>
-                                      <div>
-                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Type</label>
-                                        <select
-                                          value={attr.datatype}
-                                          onChange={(e) => updateAttribute(index, "datatype", e.target.value)}
-                                          style={inputStyle}
-                                        >
-                                          <option value="text">String</option>
-                                          <option value="int">Integer</option>
-                                          <option value="bool">Boolean</option>
-                                          <option value="float">Float</option>
-                                          <option value="datetime">Date/Time</option>
-                                        </select>
-                                      </div>
-                                      <div>
-                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#00364A', marginBottom: '5px' }}>Constraint</label>
-                                        <select
-                                          value={attr.nullable}
-                                          onChange={(e) => updateAttribute(index, "nullable", e.target.value)}
-                                          style={inputStyle}
-                                        >
-                                          <option value="optional">Optional</option>
-                                          <option value="required">Required</option>
-                                        </select>
-                                      </div>
-                                      <div style={{ display: 'flex', alignItems: 'end', height: '100%', paddingBottom: '2px' }}>
-                                        <IconButton
-                                          onClick={() => removeAttribute(index)}
-                                          icon={<Trash2 size={16} />}
-                                          color="#EF4444"
-                                          title="Remove"
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
-                                <StyledButton onClick={addAttribute} icon={<Plus size={16} />}>Add Attribute</StyledButton>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                  <StyledButton onClick={saveChanges} variant="success" icon={<Save size={16} />}>Save Changes</StyledButton>
-                                  <StyledButton onClick={cancelEditing} variant="secondary" icon={<X size={16} />}>Cancel</StyledButton>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            /* View Mode */
-                            <div>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                                {entityDetails.columns?.filter(col => col.name !== 'modified_at').map((column) => (
-                                  <div key={column.name} style={{
-                                    backgroundColor: 'white',
-                                    padding: '15px',
-                                    borderRadius: '12px',
-                                    border: '1px solid rgba(0, 54, 74, 0.1)',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                  }}>
-                                    <div>
-                                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
-                                        <Type size={14} color="#49A3C4" style={{ marginRight: '8px' }} />
-                                        <span style={{ fontWeight: '600', color: '#00364A' }}>{column.name}</span>
-                                      </div>
-                                      <span style={{ fontSize: '12px', color: '#00364A', opacity: 0.6, marginLeft: '22px' }}>{column.type}</span>
-                                    </div>
-                                    <span style={{
-                                      fontSize: '11px',
-                                      fontWeight: '700',
-                                      padding: '4px 10px',
-                                      borderRadius: '10px',
-                                      backgroundColor: column.nullable === 'NO' ? '#FEE2E2' : '#ECFDF5',
-                                      color: column.nullable === 'NO' ? '#991B1B' : '#065F46',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '4px'
-                                    }}>
-                                      <Shield size={10} />
-                                      {column.nullable === 'NO' ? 'Required' : 'Optional'}
-                                    </span>
+                                    ))}
                                   </div>
-                                ))}
-                              </div>
 
-                              <div style={{ marginTop: '25px' }}>
-                                <StyledButton onClick={() => startEditing(entityDetails)} icon={<Edit3 size={16} />}>Edit Entity</StyledButton>
-                              </div>
+                                  <div style={{ marginTop: '25px' }}>
+                                    <StyledButton onClick={() => startEditing(entityDetails)} icon={<Edit3 size={16} />}>Edit Entity</StyledButton>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
+                              <div style={{
+                                width: '24px',
+                                height: '24px',
+                                border: '3px solid #49A3C4',
+                                borderTop: '3px solid transparent',
+                                borderRadius: '50%',
+                                animation: 'spin 1s linear infinite'
+                              }} />
                             </div>
                           )}
-                        </>
-                      ) : (
-                        <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
-                          <div style={{
-                            width: '24px',
-                            height: '24px',
-                            border: '3px solid #49A3C4',
-                            borderTop: '3px solid transparent',
-                            borderRadius: '50%',
-                            animation: 'spin 1s linear infinite'
-                          }} />
                         </div>
                       )}
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        </main>
       </div>
       <style>{`
         @keyframes spin {

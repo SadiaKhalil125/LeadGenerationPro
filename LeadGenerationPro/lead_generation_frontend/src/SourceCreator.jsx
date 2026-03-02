@@ -16,7 +16,13 @@ import {
   Layers,
   CheckCircle,
   Info,
-  Shield
+  Shield,
+  Menu,
+  ChevronDown,
+  ChevronRight as ChevronRightIcon,
+  LayoutGrid,
+  ClipboardPlus,
+  CalendarCheck
 } from 'lucide-react';
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
@@ -28,6 +34,8 @@ const SourceCreator = () => {
   const [sourceType, setSourceType] = useState('web'); // 'web' or 'api'
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [openMenu, setOpenMenu] = useState(null);
 
   const addNotification = (type, message) => {
     const id = Date.now();
@@ -323,215 +331,412 @@ const SourceCreator = () => {
     // notifications clear automatically — no action needed
   };
 
+  const toggleMenu = (menu) => {
+    setOpenMenu(openMenu === menu ? null : menu);
+  };
+
+  const menuContent = {
+    entity: {
+      label: "Entities",
+      icon: <LayoutGrid size={20} />,
+      items: [
+        { label: "Entity List", path: "/entitylist" },
+        { label: "Create Entity", path: "/entityform" },
+        { label: "Entity Data Table", path: "/entity-data" },
+      ],
+    },
+    manager: {
+      label: "Sources",
+      icon: <Settings size={20} />,
+      items: [
+        { label: "Source Manager", path: "/sourcemanagement" },
+        { label: "Add Source", path: "/addsource" },
+      ],
+    },
+    mapping: {
+      label: "Mappings",
+      icon: <ClipboardPlus size={20} />,
+      items: [
+        { label: "Entity Mapping List", path: "/mappingmanager" },
+        { label: "Create Entity Mapping", path: "/entitymappingform" },
+      ],
+    },
+    task: {
+      label: "Tasks",
+      icon: <CalendarCheck size={20} />,
+      items: [
+        { label: "Schedule a Task", path: "/taskscheduler" },
+        { label: "Task List", path: "/tasksmanagement" },
+        { label: "Task Executor", path: "/taskexecutor" },
+      ],
+    },
+  };
+
+  const sidebarStyles = {
+    container: {
+      minHeight: "100vh",
+      display: "flex",
+      backgroundColor: "#F1F6FB",
+      color: "#00364A",
+      fontFamily: "'Inter', sans-serif",
+    },
+    sidebar: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      height: "100%",
+      backgroundColor: "#2C5F6F",
+      color: "white",
+      boxShadow: "rgb(0 0 0 / 15%) 10px 0px 20px",
+      zIndex: 40,
+      transition: "all 0.3s ease-in-out",
+      width: sidebarOpen ? "280px" : "80px",
+      overflow: "hidden",
+    },
+    sidebarInner: {
+      padding: "24px 16px",
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+    },
+    sidebarHeader: {
+      fontSize: "36px",
+      fontWeight: "900",
+      textAlign: "center",
+      marginBottom: "40px",
+      opacity: sidebarOpen ? 1 : 0,
+      transition: "opacity 0.3s ease",
+      letterSpacing: "4px",
+      fontFamily: "'Montserrat', 'Arial Black', sans-serif",
+      textTransform: "uppercase",
+      background: "linear-gradient(135deg, #ffffff 0%, #a9d2ff 100%)",
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "white",
+      backgroundClip: "text",
+      cursor: "pointer",
+    },
+    menuButton: (isActive) => ({
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      padding: "14px 16px",
+      borderRadius: "12px",
+      fontSize: "16px",
+      fontWeight: "600",
+      border: "none",
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+      backgroundColor: isActive ? "rgba(255, 255, 255, 0.15)" : "transparent",
+      color: "white",
+      marginBottom: "8px",
+      justifyContent: sidebarOpen ? "flex-start" : "center",
+    }),
+    menuButtonHover: {
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+    },
+    menuLabel: {
+      marginLeft: "16px",
+      flex: 1,
+      textAlign: "left",
+      display: sidebarOpen ? "block" : "none",
+    },
+    submenuContainer: (isOpen) => ({
+      maxHeight: isOpen ? "500px" : "0",
+      overflow: "hidden",
+      transition: "max-height 0.3s ease",
+      marginLeft: sidebarOpen ? "20px" : "0",
+      marginTop: "4px",
+    }),
+    submenuItem: {
+      width: "100%",
+      padding: "12px 16px",
+      backgroundColor: "transparent",
+      border: "none",
+      color: "white",
+      fontSize: "14px",
+      fontWeight: "500",
+      textAlign: "left",
+      cursor: "pointer",
+      borderRadius: "8px",
+      transition: "all 0.2s ease",
+      marginBottom: "4px",
+      display: sidebarOpen ? "block" : "none",
+    },
+    mainContent: {
+      flex: 1,
+      transition: "all 0.3s ease-in-out",
+      marginLeft: sidebarOpen ? "280px" : "80px",
+      minHeight: "100vh",
+      backgroundColor: "#F1F6FB",
+      display: "flex",
+      flexDirection: "column",
+    },
+    header: {
+      width: "100%",
+      background: "#2C5F6F",
+      color: "white",
+      padding: "20px 32px",
+      boxShadow: "0 4px 12px rgba(0, 54, 74, 0.1)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    headerLeft: {
+      display: "flex",
+      alignItems: "center",
+      gap: "16px",
+    },
+    menuToggle: {
+      padding: "10px",
+      backgroundColor: "rgba(255, 255, 255, 0.15)",
+      border: "none",
+      borderRadius: "10px",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "white",
+      transition: "all 0.2s ease",
+    },
+    headerTitle: {
+      fontSize: "28px",
+      fontWeight: "700",
+      color: "white",
+      letterSpacing: "0.5px",
+    },
+    main: {
+      padding: "40px",
+      flex: 1,
+      width: "100%",
+    },
+  };
+
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#C7D8ED',
-      color: '#00364A',
-      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      padding: '40px 20px',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'flex-start'
-    }}>
-      {/* Floating Notification Panel */}
-      <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
+    <div style={sidebarStyles.container}>
+      {/* Sidebar */}
+      <aside style={sidebarStyles.sidebar}>
+        <div style={sidebarStyles.sidebarInner}>
+          <h2 
+            style={sidebarStyles.sidebarHeader}
+            onClick={() => navigate('/dashboard')}
+            title="Go to Dashboard"
+          >
+            SCOUT
+          </h2>
+
+          {Object.entries(menuContent).map(([key, { label, icon }]) => (
+            <div key={key}>
+              <button
+                onClick={() => toggleMenu(key)}
+                style={sidebarStyles.menuButton(openMenu === key)}
+                onMouseEnter={(e) => {
+                  if (openMenu !== key) {
+                    e.currentTarget.style.backgroundColor =
+                      sidebarStyles.menuButtonHover.backgroundColor;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (openMenu !== key) {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }
+                }}
+              >
+                {icon}
+                {sidebarOpen && <span style={sidebarStyles.menuLabel}>{label}</span>}
+                {sidebarOpen &&
+                  (openMenu === key ? (
+                    <ChevronDown size={20} />
+                  ) : (
+                    <ChevronRightIcon size={20} />
+                  ))}
+              </button>
+
+              <div style={sidebarStyles.submenuContainer(openMenu === key)}>
+                {menuContent[key].items.map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => navigate(item.path)}
+                    style={sidebarStyles.submenuItem}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor =
+                        "rgba(255, 255, 255, 0.1)";
+                      e.currentTarget.style.paddingLeft = "20px";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.paddingLeft = "16px";
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div style={sidebarStyles.mainContent}>
+        {/* Header */}
+        <header style={sidebarStyles.header}>
+          <div style={sidebarStyles.headerLeft}>
+            <button
+              onClick={() => {
+                setSidebarOpen(!sidebarOpen);
+                if (sidebarOpen) {
+                  setOpenMenu(null);
+                }
+              }}
+              style={sidebarStyles.menuToggle}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.25)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor =
+                  "rgba(255, 255, 255, 0.15)";
+              }}
+            >
+              <Menu size={24} />
+            </button>
+            <h1 style={sidebarStyles.headerTitle}>Add Source</h1>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <main style={sidebarStyles.main}>
       <div style={{
         width: '100%',
-        maxWidth: '1000px',
         backgroundColor: 'white',
         borderRadius: '25px',
         boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
         overflow: 'hidden'
       }}>
-        {/* Header */}
-        <div style={{
-          padding: '40px 50px',
-          borderBottom: '1px solid rgba(0, 54, 74, 0.1)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '20px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{
-              width: '56px',
-              height: '56px',
-              backgroundColor: '#49A3C4',
-              borderRadius: '15px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white'
-            }}>
-              {sourceType === 'web' ? <Database size={28} /> : <Globe size={28} />}
-            </div>
-            <div>
-              <h1 style={{
-                fontSize: '32px',
-                fontWeight: '800',
-                color: '#00364A',
-                margin: 0,
-                lineHeight: '1.2'
-              }}>
-                Add New {sourceType === 'web' ? 'Web' : 'API'} Source
-              </h1>
-              <p style={{
-                fontSize: '16px',
-                color: '#00364A',
-                opacity: 0.7,
-                margin: '5px 0 0 0'
-              }}>
-                {sourceType === 'web'
-                  ? 'Define the source URL and configuration'
-                  : 'Configure automated endpoints and attribute mappings'}
-              </p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '5px' }}>
-            <button
-              onClick={() => navigate('/dashboard')}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: 'transparent',
-                color: '#00364A',
-                border: '2px solid rgba(0, 54, 74, 0.2)',
-                borderRadius: '12px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.3s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.borderColor = '#00364A';
-                e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
-                e.target.style.backgroundColor = 'transparent';
-              }}
-            >
-              <ArrowLeft size={15} />
-            </button>
-            <button
-              onClick={() => navigate('/sourcemanagement')}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: 'transparent',
-                color: '#00364A',
-                border: '2px solid rgba(0, 54, 74, 0.2)',
-                borderRadius: '12px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.3s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.borderColor = '#00364A';
-                e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
-                e.target.style.backgroundColor = 'transparent';
-              }}
-            >
-              <List size={15} />
-              View All
-            </button>
-            <button
-              onClick={resetForm}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: 'transparent',
-                color: '#00364A',
-                border: '2px solid rgba(0, 54, 74, 0.2)',
-                borderRadius: '12px',
-                fontWeight: '500',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                transition: 'all 0.3s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.borderColor = '#00364A';
-                e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
-                e.target.style.backgroundColor = 'transparent';
-              }}
-            >
-              <X size={15} />
-              Reset Form
-            </button>
-          </div>
-        </div>
+        {/* Floating Notification Panel */}
+        <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
 
         <div style={{ padding: '50px' }}>
           {/* Source Type Toggle */}
           <div style={{
             display: 'flex',
-            justifyContent: 'center',
+            justifyContent: 'space-between',
+            alignItems: 'center',
             marginBottom: '40px',
-            backgroundColor: '#F8FBFF',
-            borderRadius: '15px',
-            padding: '8px',
-            width: 'fit-content',
-            margin: '0 auto 40px auto',
-            boxShadow: '0 2px 8px rgba(0, 54, 74, 0.08)'
+            gap: '20px',
+            flexWrap: 'wrap'
           }}>
-            <button
-              onClick={() => {
-                setSourceType('web');
-                // clear notifications on tab switch — nothing needed
-              }}
-              style={{
-                padding: '12px 30px',
-                borderRadius: '10px',
-                border: 'none',
-                backgroundColor: sourceType === 'web' ? '#00364A' : 'transparent',
-                color: sourceType === 'web' ? 'white' : '#00364A',
-                fontWeight: '600',
-                fontSize: '15px',
-                cursor: 'pointer',
-                transition: 'all 0.3s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              <Database size={18} />
-              Web Scraping
-            </button>
-            <button
-              onClick={() => {
-                setSourceType('api');
-                // clear notifications on tab switch — nothing needed
-              }}
-              style={{
-                padding: '12px 30px',
-                borderRadius: '10px',
-                border: 'none',
-                backgroundColor: sourceType === 'api' ? '#00364A' : 'transparent',
-                color: sourceType === 'api' ? 'white' : '#00364A',
-                fontWeight: '600',
-                fontSize: '15px',
-                cursor: 'pointer',
-                transition: 'all 0.3s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              <Globe size={18} />
-              API Integration
-            </button>
+            <div style={{
+              display: 'flex',
+              backgroundColor: '#F8FBFF',
+              borderRadius: '15px',
+              padding: '8px',
+              boxShadow: '0 2px 8px rgba(0, 54, 74, 0.08)'
+            }}>
+              <button
+                onClick={() => {
+                  setSourceType('web');
+                  // clear notifications on tab switch — nothing needed
+                }}
+                style={{
+                  padding: '12px 30px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  backgroundColor: sourceType === 'web' ? '#00364A' : 'transparent',
+                  color: sourceType === 'web' ? 'white' : '#00364A',
+                  fontWeight: '600',
+                  fontSize: '15px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Database size={18} />
+                Web Scraping
+              </button>
+              <button
+                onClick={() => {
+                  setSourceType('api');
+                  // clear notifications on tab switch — nothing needed
+                }}
+                style={{
+                  padding: '12px 30px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  backgroundColor: sourceType === 'api' ? '#00364A' : 'transparent',
+                  color: sourceType === 'api' ? 'white' : '#00364A',
+                  fontWeight: '600',
+                  fontSize: '15px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Globe size={18} />
+                API Integration
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => navigate('/sourcemanagement')}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: 'transparent',
+                  color: '#00364A',
+                  border: '2px solid rgba(0, 54, 74, 0.2)',
+                  borderRadius: '12px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.3s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.borderColor = '#00364A';
+                  e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
+                  e.target.style.backgroundColor = 'transparent';
+                }}
+              >
+                <List size={15} />
+                View All
+              </button>
+              <button
+                onClick={resetForm}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: 'transparent',
+                  color: '#00364A',
+                  border: '2px solid rgba(0, 54, 74, 0.2)',
+                  borderRadius: '12px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.3s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.borderColor = '#00364A';
+                  e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.borderColor = 'rgba(0, 54, 74, 0.2)';
+                  e.target.style.backgroundColor = 'transparent';
+                }}
+              >
+                <X size={15} />
+                Reset Form
+              </button>
+            </div>
           </div>
 
           {/* Response Messages - REMOVED: now using NotificationPanel */}
@@ -1178,6 +1383,8 @@ const SourceCreator = () => {
             </form>
           )}
         </div>
+      </div>
+        </main>
       </div>
       <style>{`
         @keyframes spin {

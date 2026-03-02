@@ -25,6 +25,7 @@ const NavigationPage = () => {
     entity: {
       label: "Entities",
       icon: <LayoutGrid size={20} />,
+      mainPath: "/entitylist",
       items: [
         { label: "Entity List", path: "/entitylist", description: "View and manage all entities in the system" },
         { label: "Create Entity", path: "/entityform", description: "Add a new entity to the database" },
@@ -34,6 +35,7 @@ const NavigationPage = () => {
     manager: {
       label: "Sources",
       icon: <Settings size={20} />,
+      mainPath: "/sourcemanagement",
       items: [
         { label: "Source Manager", path: "/sourcemanagement", description: "Manage web scraping data sources" },
         { label: "Add Source", path: "/addsource", description: "Configure a new web scraping source" },
@@ -42,6 +44,7 @@ const NavigationPage = () => {
     mapping: {
       label: "Mappings",
       icon: <ClipboardPlus size={20} />,
+      mainPath: "/mappingmanager",
       items: [
         { label: "Entity Mapping List", path: "/mappingmanager", description: "View all existing entity mappings" },
         { label: "Create Entity Mapping", path: "/entitymappingform", description: "Define relationships between entities" },
@@ -51,6 +54,7 @@ const NavigationPage = () => {
     task: {
       label: "Tasks",
       icon: <CalendarCheck size={20} />,
+      mainPath: "/tasksmanagement",
       items: [
         { label: "Schedule a Task", path: "/taskscheduler", description: "Create and schedule new automated tasks" },
         { label: "Task List", path: "/tasksmanagement", description: "View and manage all scheduled tasks" },
@@ -350,10 +354,13 @@ const NavigationPage = () => {
         <div style={styles.sidebarInner}>
           <h2 style={styles.sidebarHeader}>SCOUT</h2>
 
-          {Object.entries(menuContent).map(([key, { label, icon }]) => (
+          {Object.entries(menuContent).map(([key, { label, icon, mainPath }]) => (
             <div key={key}>
               <button
-                onClick={() => toggleMenu(key)}
+                onClick={() => {
+                  toggleMenu(key);
+                  if (mainPath) navigate(mainPath);
+                }}
                 style={styles.menuButton(openMenu === key)}
                 onMouseEnter={(e) => {
                   if (openMenu !== key) {
@@ -454,7 +461,7 @@ const NavigationPage = () => {
                   <h2 style={styles.stepLabel}>Step 1</h2>
                   <h3 style={styles.quickAccessCardTitle}>Create an Entity</h3>
                   <p style={styles.quickAccessCardText}>
-                    Add a new entity to the database
+                    Add a new custom entity to the database
                   </p>
                   <button
                     style={styles.actionButton("#2C5F6F")}
@@ -491,7 +498,7 @@ const NavigationPage = () => {
                   <h2 style={styles.stepLabel}>Step 2</h2>
                   <h3 style={styles.quickAccessCardTitle}>Add New Source</h3>
                   <p style={styles.quickAccessCardText}>
-                    Use the Source Manager to register and manage data sources
+                    Register and manage Web-based or API-based data sources to scrape
                   </p>
                   <button
                     style={styles.actionButton("#2C5F6F")}
@@ -528,12 +535,11 @@ const NavigationPage = () => {
                   <h2 style={styles.stepLabel}>Step 3</h2>
                   <h3 style={styles.quickAccessCardTitle}>Entity Mapping</h3>
                   <p style={styles.quickAccessCardText}>
-                    Review existing mappings and create a new, configured mapping in the Mapping module if none is available.
-
+                    Define relationships between a source and entities with Live Website Preview
                   </p>
                   <button
                     style={styles.actionButton("#2C5F6F")}
-                    onClick={() => navigate("/mappingmanager")}
+                    onClick={() => navigate("/entitymappingform")}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = "white";
                       e.currentTarget.style.color = "#2C5F6F";
@@ -545,7 +551,7 @@ const NavigationPage = () => {
                       e.currentTarget.style.border = "2px solid #2C5F6F";
                     }}
                   >
-                    View Mappings
+                    Define Mapping
                   </button>
                 </div>
 
@@ -566,7 +572,7 @@ const NavigationPage = () => {
                   <h2 style={styles.stepLabel}>Step 4</h2>
                   <h3 style={styles.quickAccessCardTitle}>Schedule a Task</h3>
                   <p style={styles.quickAccessCardText}>
-                    Create and schedule new automated tasks
+                    Create and schedule new scraping tasks
                   </p>
                   <button
                     style={styles.actionButton("#2C5F6F")}

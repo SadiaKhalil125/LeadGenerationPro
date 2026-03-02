@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import API_BASE from "./api_base";
+import Layout from './components/Layout';
 
 const TaskExecution = () => {
   const navigate = useNavigate();
@@ -188,32 +189,26 @@ const TaskExecution = () => {
 
   if (pageLoading) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#C7D8ED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
-        <Loader2 size={40} style={{ color: '#49A3C4' }} className="spin" />
-        <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Task Data...</h1>
-        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } .spin { animation: spin 1s linear infinite; }`}</style>
-      </div>
+      <Layout pageTitle="Task Executor">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px', minHeight: '400px' }}>
+          <Loader2 size={40} style={{ color: '#49A3C4' }} className="spin" />
+          <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Task Data...</h1>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } .spin { animation: spin 1s linear infinite; }`}</style>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#C7D8ED',
-      color: '#00364A',
-      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      padding: '40px 20px',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'flex-start'
-    }}>
+    <Layout pageTitle="Task Executor">
       <div style={{
         width: '100%',
-        maxWidth: '1200px',
         backgroundColor: 'white',
         borderRadius: '25px',
         boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        color: '#00364A',
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
       }}>
         {/* Header */}
         <div style={{
@@ -397,7 +392,7 @@ const TaskExecution = () => {
         </div>
       </div>
       <style>{`.spin { animation: rotate 1s linear infinite; } @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .fadeIn { animation: fadeIn 0.3s ease; } @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-    </div>
+    </Layout>
   );
 };
 

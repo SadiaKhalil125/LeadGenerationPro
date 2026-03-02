@@ -27,6 +27,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import API_BASE from "./api_base";
+import Layout from './components/Layout';
 
 const TaskScheduler = () => {
     // --- State for Task Type ---
@@ -280,42 +281,35 @@ const TaskScheduler = () => {
     // --- Loading View ---
     if (pageLoading) {
         return (
-            <div style={{ minHeight: '100vh', backgroundColor: '#C7D8ED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
-                <Loader2 size={40} className="spin" style={{ color: '#49A3C4' }} />
-                <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Scheduler...</h1>
+            <Layout pageTitle="Task Scheduler">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px', minHeight: '400px' }}>
+                    <Loader2 size={40} className="spin" style={{ color: '#49A3C4' }} />
+                    <h1 style={{ fontSize: '24px', color: '#00364A', fontWeight: '700' }}>Loading Scheduler...</h1>
+                </div>
                 <style>{`.spin { animation: rotate 1s linear infinite; } @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-            </div>
+            </Layout>
         );
     }
 
     return (
-        <div style={{ minHeight: '100vh', backgroundColor: '#C7D8ED', color: '#00364A', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", padding: '40px 20px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+        <Layout pageTitle="Task Scheduler">
             {/* Floating Notification Panel */}
             <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
-            <div style={{ width: '100%', maxWidth: '1200px', backgroundColor: 'white', borderRadius: '25px', boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)', overflow: 'hidden' }}>
-                {/* Header */}
-                <div style={{ padding: '40px 50px', borderBottom: '1px solid rgba(0, 54, 74, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <div style={{ width: '56px', height: '56px', backgroundColor: '#49A3C4', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><Clock size={28} /></div>
-                        <div>
-                            <h1 style={{ fontSize: '32px', fontWeight: '800', margin: 0 }}>Task Scheduler</h1>
-                            <p style={{ fontSize: '16px', opacity: 0.7 }}>Schedule automated scraping or API pulls</p>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <StyledButton onClick={() => navigate('/dashboard')} variant="outline" icon={<ArrowLeft size={18} />}>Dashboard</StyledButton>
-                        <StyledButton onClick={() => navigate('/tasksmanagement')} variant="outline" icon={<List size={18} />}>View Tasks</StyledButton>
-                    </div>
-                </div>
-
-                <div style={{ padding: '50px' }}>
+            
+            <div style={{
+                width: '100%',
+                backgroundColor: 'white',
+                borderRadius: '25px',
+                boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)',
+                overflow: 'hidden',
+                padding: '50px'
+            }}>
                     {/* Tabs */}
                     <div style={{ display: 'flex', backgroundColor: '#F3F4F6', padding: '4px', borderRadius: '12px', marginBottom: '40px' }}>
                         <TabButton active={activeTab === 'create'} onClick={() => setActiveTab('create')} icon={<Plus size={16} />}>Create Task</TabButton>
                     </div>
 
                     {/* Response Messages - REMOVED: now using NotificationPanel */}
-
 
                     {activeTab === 'create' && (
                         <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
@@ -497,13 +491,12 @@ const TaskScheduler = () => {
                             </StyledButton>
                         </form>
                     )}
-                </div>
             </div>
             <style>{`
                 .spin { animation: rotate 1s linear infinite; } 
                 @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
             `}</style>
-        </div>
+        </Layout>
     );
 };
 
