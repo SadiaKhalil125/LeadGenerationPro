@@ -52,7 +52,7 @@ const TaskScheduler = () => {
     const [notifications, setNotifications] = useState([]);
     const [activeTab, setActiveTab] = useState('create');
     const [repeat, setRepeat] = useState('once');
-    const [maxItems, setMaxItems] = useState(30);
+    const [maxItems, setMaxItems] = useState(0);
     const [runNow, setRunNow] = useState(false);
 
     const navigate = useNavigate();
