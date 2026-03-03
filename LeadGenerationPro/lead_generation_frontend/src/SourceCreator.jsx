@@ -1430,7 +1430,7 @@ const SourceCreator = () => {
                       <p style={{ textAlign: 'center', opacity: 0.5 }}>Select an Entity to see attributes.</p>
                     )}
                   </section>              <button type="submit"
-                    disabled={loading || !webName || !webUrl || (isAuthProtected && (!authConfig.login_url || !authConfig.username || !authConfig.password))}
+                    disabled={loading || !apiFormData.name || !apiFormData.api_url || !apiFormData.entity_name}
                     style={{
                       padding: '18px', background: '#00364A', color: 'white', border: 'none', borderRadius: '15px',
                       fontSize: '18px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px'
