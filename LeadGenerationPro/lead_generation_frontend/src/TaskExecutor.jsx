@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ListChecks, 
-  RefreshCw, 
-  CheckCircle, 
-  AlertCircle, 
-  Loader2, 
-  Play, 
-  Info, 
-  Calendar, 
-  Database, 
-  Map, 
-  List, 
+  ListChecks,
+  RefreshCw,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Play,
+  Info,
+  Calendar,
+  Database,
+  Map,
+  List,
   FileText,
   Clock,
   RotateCw,
@@ -34,15 +34,17 @@ const TaskExecution = () => {
   const [currentExecutions, setCurrentExecutions] = useState({});
   const queryClient = useQueryClient();
 
-  // Fetch tasks
+  // NOTE: execution summaries (used only for RUNNING badge + "current" filter)
+  // are NOT fetched automatically — only when the user clicks Refresh.
+  // This prevents continuous background calls to task-execution-summary.
+
+  // Fetch tasks — uses global defaults (staleTime 5min, no refetchOnWindowFocus)
   const { data: tasksData, isLoading: isLoadingTasks } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/task/tasks`,{
+      const res = await fetch(`${API_BASE}/task/tasks`, {
         method: 'GET',
-        headers: {
-          "ngrok-skip-browser-warning": "true"
-        }
+        headers: { "ngrok-skip-browser-warning": "true" }
       });
       if (!res.ok) throw new Error('Failed to fetch tasks');
       const data = await res.json();
@@ -53,11 +55,16 @@ const TaskExecution = () => {
   const pageLoading = isLoadingTasks && !tasksData;
   const tasks = tasksData || [];
 
-  useEffect(() => {
-    if (tasks && tasks.length > 0) {
-      Promise.all(tasks.map(t => fetchTaskExecutions(t.id))).catch(e => {});
+  // Called by the Refresh button — refreshes tasks list AND execution summaries
+  const handleRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    // Fetch fresh summaries for all tasks so RUNNING badges are up-to-date
+    const currentTasks = queryClient.getQueryData(['tasks']) || tasks;
+    if (currentTasks.length > 0) {
+      Promise.all(currentTasks.map(t => fetchTaskExecutions(t.id))).catch(() => { });
     }
-  }, [tasks]);
+  };
+
 
   const executeTask = async (taskId, taskName) => {
     if (!confirm(`Are you sure you want to execute task "${taskName}"?`)) {
@@ -102,6 +109,8 @@ const TaskExecution = () => {
       setExecutingTask(null);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       if (executionHistory[taskId]) fetchExecutionHistory(taskId);
+      // Refresh summary for just this task so RUNNING badge updates after execution
+      fetchTaskExecutions(taskId);
     }
   };
 
@@ -117,7 +126,7 @@ const TaskExecution = () => {
 
     try {
       setExecutionHistory(prev => ({ ...prev, [taskId]: { loading: true } }));
-      const res = await fetch(`${API_BASE}/task/task-execution-history/${taskId}`,{
+      const res = await fetch(`${API_BASE}/task/task-execution-history/${taskId}`, {
         method: 'GET',
         headers: { "ngrok-skip-browser-warning": "true" }
       });
@@ -160,18 +169,18 @@ const TaskExecution = () => {
   const scheduledCount = tasks.length - readyCount;
   const currentTasks = tasks.filter(task => !!currentExecutions[task.id]);
   const currentCount = currentTasks.length;
-  
+
   const now = new Date();
   const upcomingTasks = tasks.filter(task => new Date(task.scheduled_time) > now);
   const previousTasks = tasks.filter(task => new Date(task.scheduled_time) <= now || task.last_executed_at);
-  
+
   const getFilteredTasks = () => {
-      if (activeCategory === 'upcoming') return upcomingTasks.sort((a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time));
-      if (activeCategory === 'current') return currentTasks;
-      if (activeCategory === 'previous') return previousTasks.sort((a, b) => new Date(b.last_executed_at || b.scheduled_time) - new Date(a.last_executed_at || a.scheduled_time));
+    if (activeCategory === 'upcoming') return upcomingTasks.sort((a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time));
+    if (activeCategory === 'current') return currentTasks;
+    if (activeCategory === 'previous') return previousTasks.sort((a, b) => new Date(b.last_executed_at || b.scheduled_time) - new Date(a.last_executed_at || a.scheduled_time));
     return sortedTasks;
   };
-  
+
   const fetchTaskExecutions = async (taskId) => {
     try {
       const res = await fetch(`${API_BASE}/task/task-execution-summary/${taskId}`, {
@@ -184,7 +193,7 @@ const TaskExecution = () => {
         const isCurrent = (data.executions || []).some(e => e.is_current);
         setCurrentExecutions(prev => ({ ...prev, [taskId]: !!isCurrent }));
       }
-    } catch (error) {}
+    } catch (error) { }
   };
 
   if (pageLoading) {
@@ -239,9 +248,9 @@ const TaskExecution = () => {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <StyledButton onClick={()=>navigate('/dashboard')} variant="outline" icon={<ArrowLeft size={18} />}>Dashboard</StyledButton>
-            <StyledButton onClick={()=>navigate('/taskscheduler')} variant="outline" icon={<Plus size={18} />}>Create Task</StyledButton>
-            <StyledButton onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} variant="outline" icon={<RefreshCw size={18} />}>Refresh</StyledButton>
+            <StyledButton onClick={() => navigate('/dashboard')} variant="outline" icon={<ArrowLeft size={18} />}>Dashboard</StyledButton>
+            <StyledButton onClick={() => navigate('/taskscheduler')} variant="outline" icon={<Plus size={18} />}>Create Task</StyledButton>
+            <StyledButton onClick={handleRefresh} variant="outline" icon={<RefreshCw size={18} />}>Refresh</StyledButton>
           </div>
         </div>
 
@@ -291,7 +300,7 @@ const TaskExecution = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {getFilteredTasks().map((task) => {
               const isApi = task.source_type === 'api' || !!task.api_source_id;
-              
+
               return (
                 <div key={task.id} style={{
                   backgroundColor: 'white',
@@ -324,7 +333,7 @@ const TaskExecution = () => {
                             {isApi ? 'API BASED' : 'WEB BASED'}
                           </span>
                         </div>
-                        
+
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                           <InfoItem icon={isApi ? <Globe size={14} /> : <Database size={14} />} label={isApi ? "API Source" : "Source"}>
                             {task.source_name}
@@ -350,11 +359,11 @@ const TaskExecution = () => {
                           )}
                           {getStatusBadge(task.scheduled_time)}
                         </div>
-                        
+
                         <div style={{ display: 'flex', gap: '10px' }}>
-                          <IconButton 
+                          <IconButton
                             onClick={() => fetchExecutionHistory(task.id)}
-                            icon={executionHistory[task.id]?.loading ? <Loader2 size={16} className="spin" /> : <Info size={16} />} 
+                            icon={executionHistory[task.id]?.loading ? <Loader2 size={16} className="spin" /> : <Info size={16} />}
                             color="#00364A"
                             disabled={executingTask === task.id}
                           />
@@ -399,28 +408,28 @@ const TaskExecution = () => {
 // Helper Components
 const StyledButton = ({ onClick, variant = 'primary', icon, children, disabled, style }) => {
   const [hover, setHover] = useState(false);
-  
+
   return (
     <button
-      onClick={onClick} 
+      onClick={onClick}
       disabled={disabled}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        gap: '8px', 
-        padding: '12px 24px', 
-        borderRadius: '12px', 
-        fontWeight: '600', 
-        fontSize: '15px', 
-        cursor: disabled ? 'not-allowed' : 'pointer', 
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        padding: '12px 24px',
+        borderRadius: '12px',
+        fontWeight: '600',
+        fontSize: '15px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'all 0.3s',
         backgroundColor: variant === 'primary' ? (hover && !disabled ? '#004e66' : '#00364A') : (hover && !disabled ? '#00364A' : 'white'),
         color: variant === 'primary' ? 'white' : (hover && !disabled ? 'white' : '#00364A'),
-        border: '2px solid #00364A', 
-        opacity: disabled ? 0.7 : 1, 
+        border: '2px solid #00364A',
+        opacity: disabled ? 0.7 : 1,
         ...style
       }}
     >
@@ -446,24 +455,24 @@ const InfoItem = ({ icon, label, children }) => (
 
 const IconButton = ({ onClick, icon, color, disabled }) => {
   const [hover, setHover] = useState(false);
-  
+
   return (
     <button
-      onClick={onClick} 
+      onClick={onClick}
       disabled={disabled}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ 
-        width: '40px', 
-        minWidth: '40px', 
-        height: '40px', 
-        borderRadius: '10px', 
-        border: '1px solid rgba(0,54,74,0.1)', 
-        backgroundColor: hover && !disabled ? `${color}15` : '#F8FBFF', 
-        color, 
-        cursor: disabled ? 'not-allowed' : 'pointer', 
-        display: 'flex', 
-        alignItems: 'center', 
+      style={{
+        width: '40px',
+        minWidth: '40px',
+        height: '40px',
+        borderRadius: '10px',
+        border: '1px solid rgba(0,54,74,0.1)',
+        backgroundColor: hover && !disabled ? `${color}15` : '#F8FBFF',
+        color,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'center',
         transition: 'all 0.2s',
         opacity: disabled ? 0.6 : 1,

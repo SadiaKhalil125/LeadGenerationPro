@@ -158,8 +158,12 @@ while True:
                                 send_status_update(task_id, "failed", failure_msg, result)
                     
                     except Exception as e:
-                        print(f"❌ Exception processing task {task_id}: {str(e)}")
-                        send_status_update(task_id, "failed", f"Exception: {str(e)}")
+                        import traceback
+                        tb = traceback.format_exc()
+                        err_msg = str(e) or type(e).__name__
+                        print(f"❌ Exception processing task {task_id}: {err_msg}")
+                        print(f"   Full traceback:\n{tb}")
+                        send_status_update(task_id, "failed", f"Exception: {err_msg}")
                         task_success = False
                     
                     # Commit offset ONLY if task was successful to prevent reprocessing on failure
