@@ -1,21 +1,73 @@
 import json
+import os
+from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 import asyncio
 from datetime import datetime
+from dotenv import load_dotenv
 from crawl4ai import (
     AsyncWebCrawler,
+    BrowserConfig,
     CrawlerRunConfig,
     CacheMode,
-    JsonCssExtractionStrategy
+    JsonCssExtractionStrategy,
+    ProxyConfig,
 )
+from crawl4ai.proxy_strategy import RoundRobinProxyStrategy
 from models import (
     ScrapeRequest,
     ScrapeResponse,
     FieldMapping,
     PaginationConfig,
     FollowLink,
-    AuthConfig  # NEW: Import AuthConfig
+    AuthConfig
 )
+from dotenv import load_dotenv  
+# Load .env from the same directory as this file
+load_dotenv()
+
+# ===================================================
+# PROXY CONFIGURATION  (optional – toggle here)
+# ===================================================
+# Set USE_PROXY = True to enable rotating-proxy support.
+#
+# Proxies are read from the PROXIES env var in .env:
+#   PROXIES=ip1:port1:user1:pass1,ip2:port2:user2:pass2
+#
+# Formats supported by ProxyConfig.from_env() / from_string():
+#   ip:port:user:pass
+#   ip:port               (unauthenticated)
+#   http://user:pass@ip:port
+#   socks5://ip:port
+#
+# As long as USE_PROXY = False the PROXIES var is ignored completely.
+USE_PROXY: bool = False
+
+# Load proxy list from the PROXIES environment variable defined in .env
+PROXY_LIST: list[ProxyConfig] = ProxyConfig.from_env() if USE_PROXY else []
+
+# Build the rotation strategy once so it is shared across all requests.
+# RoundRobinProxyStrategy cycles through the list in order.
+_proxy_strategy: RoundRobinProxyStrategy | None = (
+    RoundRobinProxyStrategy(PROXY_LIST) if USE_PROXY and PROXY_LIST else None
+)
+
+
+def _get_proxy_kwargs() -> dict:
+    """Return CrawlerRunConfig proxy kwargs when USE_PROXY is enabled.
+
+    Returns an empty dict when USE_PROXY is False, so all call-sites
+    remain unchanged in the no-proxy path.
+    """
+    if not USE_PROXY:
+        return {}
+    if _proxy_strategy:
+        return {"proxy_rotation_strategy": _proxy_strategy}
+    # Fallback: single proxy (works even with only one entry in PROXIES)
+    if PROXY_LIST:
+        return {"proxy_config": PROXY_LIST[0]}
+    return {}
+
 
 # ===================================================
 # PAGINATION URL BUILDERS
@@ -111,7 +163,8 @@ def base_config(strategy, request: ScrapeRequest):
     return CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         extraction_strategy=strategy,
-        page_timeout=(request.timeout or 15) * 1000
+        page_timeout=(request.timeout or 15) * 1000,
+        **_get_proxy_kwargs()  # injects proxy settings only when USE_PROXY=True
     )
 
 
@@ -365,7 +418,18 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
     if request.auth_config:
         print(f"🔐 AUTHENTICATION ENABLED: login_url={request.auth_config.login_url}, type={request.auth_config.auth_type}")
 
-    async with AsyncWebCrawler(verbose=True) as crawler:
+    # When USE_PROXY is True, Playwright requires the browser to be launched with
+    # a global proxy marker even if the actual proxy is set per-context/per-request.
+    # BrowserConfig has two proxy fields:
+    #   proxy (str)        → browser-level, passed to playwright.chromium.launch()
+    #   proxy_config (ProxyConfig) → context-level, used per request
+    # The dummy marker must go into proxy= as a plain string.
+    browser_cfg = BrowserConfig(
+        verbose=True,
+        proxy="http://per-context" if USE_PROXY else None
+    )
+
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
         
         # ===============================================
         # AUTHENTICATION HANDLING (SIMPLIFIED - MATCHES WORKING CODE)
@@ -387,7 +451,8 @@ async def extract_website(request: ScrapeRequest) -> ScrapeResponse:
                     js_code=build_login_js(request.auth_config),
                     page_timeout=30000,  # 30 second timeout
                     cache_mode=CacheMode.BYPASS,
-                    verbose=True
+                    verbose=True,
+                    **_get_proxy_kwargs()  # injects proxy settings only when USE_PROXY=True
                 )
                 
                 login_result = await crawler.arun(
