@@ -1,5 +1,6 @@
 from .providers.factory import ProviderFactory
 from .template_service import render_template
+from .outreach_config import settings
 
 async def execute_campaign(request):
     """
@@ -24,9 +25,16 @@ async def execute_campaign(request):
                 })
                 continue
 
-            # Render template with contact data
-            body = render_template(request.message, contact)
-            subject = render_template(request.subject, contact)  # Also personalize subject
+            # Combine contact data with sender info for template rendering
+            template_data = {
+                **contact,  # All contact fields (name, email, company, etc.)
+                "sender_name": settings.SENDGRID_FROM_NAME or settings.SMTP_NAME_FROM
+            }
+            
+            # Jinja2 will replace {{name}}, {{company}}, {{sender_name}}, etc.
+            body = render_template(request.message, template_data)
+            subject = render_template(request.subject, template_data)
+           
 
             # Send email using the provider
             result = await provider.send(

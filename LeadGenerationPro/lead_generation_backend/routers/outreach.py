@@ -110,3 +110,29 @@ async def send_outreach(request: OutreachRequest):
     except Exception as e:
         logger.error(f"Campaign failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Campaign failed: {str(e)}")
+    
+# Add this new Pydantic model
+class EnrichRequest(BaseModel):
+    contacts: List[Dict]
+
+# Add this new endpoint
+@router.post("/enrich")
+async def enrich_contacts(request: EnrichRequest):
+    """Enrich contact data using AI"""
+    try:
+        from .services.ai_service import enrich_contacts as enrich_service
+        
+        enriched_contacts = await enrich_service(request.contacts)
+        
+        # Count how many were enriched
+        enriched_count = sum(1 for original, enriched in zip(request.contacts, enriched_contacts) 
+                           if original != enriched)
+        
+        return {
+            "contacts": enriched_contacts,
+            "enriched_count": enriched_count,
+            "message": f"Successfully enriched {enriched_count} contacts"
+        }
+    except Exception as e:
+        logger.error(f"Enrichment failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Enrichment failed: {str(e)}")

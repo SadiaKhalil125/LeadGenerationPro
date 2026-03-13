@@ -34,7 +34,7 @@ export default function EmailPreview({ content }) {
         >
           👁️
         </span>
-        Email Preview
+        Email Preview (using 1st contact)
       </div>
 
       <div
