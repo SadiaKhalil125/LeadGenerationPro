@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from helperutil import extract_website
 from scraping_router import route_scraping_request
-from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login, leads_service, api_sources_crud, outreach
+from routers import entity_crud, source_crud, entity_mappings_crud, task_crud, chat_crud, login, leads_service, api_sources_crud, outreach, enrichment
 
 from routers.leads_service import router as leads_service_router
 from routers.scheduler_config import scheduler, task_lifespan
@@ -69,6 +69,7 @@ app.include_router(task_crud.router, prefix="/task", tags=["Task Management"])
 app.include_router(chat_crud.router, prefix="/chat", tags=["Chat Management"])
 app.include_router(login.router, prefix="/auth", tags=["Authentication"])
 app.include_router(outreach.router, prefix="/outreach", tags=["Outreach Management"])
+app.include_router(enrichment.router, prefix="/enrichment", tags=["Enrichment"])
 app.include_router(leads_service_router, tags=["Leads Service"])
 
 

@@ -719,9 +719,17 @@ const EntityDataScreen = () => {
                   Next
                 </StyledButton>
               </div>
-              {/* Export Buttons */}
+              {/* Export and Enrich Buttons */}
               {filteredRows.length > 0 && (
                 <div style={{ display: 'flex', gap: '10px' }}>
+                  <ExportButton
+                    onClick={() => navigate('/enrichment', { state: { selectedEntity } })}
+                    disabled={isFetchingData}
+                    icon={<Database size={18} />}
+                    title="Enrich Entity Data"
+                  >
+                    Enrich
+                  </ExportButton>
                   <ExportButton
                     onClick={handleExportCSV}
                     disabled={exportingCSV || isFetchingData}

@@ -497,6 +497,7 @@ async def get_entity_data(
             SELECT column_name 
             FROM information_schema.columns 
             WHERE table_name = %s
+            ORDER BY ordinal_position
         """, (table_name,))
         columns = [row[0] for row in cur.fetchall()]
         if not columns:
