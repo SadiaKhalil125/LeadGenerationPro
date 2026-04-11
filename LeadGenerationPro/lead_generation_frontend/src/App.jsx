@@ -29,6 +29,8 @@ import ApiSourceManager from './ApiSourceManager';
 import ApiSourceCreator from './ApiSourceCreator';
 import ApiTaskExecutor from './ApiTaskExecutor';
 import Outreach from './Outreach';
+import EnrichmentDashboard from './EnrichmentDashboard';
+import EnrichmentJobsPage from './EnrichmentJobsPage';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useContext(AuthContext);
@@ -83,6 +85,8 @@ function App() {
         <Route path="/userleadsdashboard" element={<LeadGeneratorPage />} />
         <Route path="/leadssync" element= {<LeadSyncTest />} />
         <Route path="/outreach" element={<Outreach />} />
+        <Route path="/enrichment" element={<EnrichmentDashboard />} />
+        <Route path="/enrichment-jobs" element={<EnrichmentJobsPage />} />
           </Routes>
         </Router>
       </AuthProvider>

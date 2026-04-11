@@ -1,2 +1,15 @@
-env
-__pycache__
+# Environments
+env/
+venv/
+.env
+.venv
+
+# Cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS generated files
+.DS_Store
+Thumbs.db
