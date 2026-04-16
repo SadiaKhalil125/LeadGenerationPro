@@ -106,9 +106,11 @@ def _enrich_via_apollo(row: Dict[str, Any], config: Dict[str, Any]) -> Dict[str,
     Call Apollo /v1/people/match for one row.
     Returns dict with 'email' and 'phone' keys (may be None if not found).
     """
-    api_key = config.get("api_key", "")
+    from .services.outreach_config import settings
+    
+    api_key = config.get("api_key") or settings.APOLLO_API_KEY
     if not api_key:
-        raise ValueError("Apollo API key is missing")
+        raise ValueError("Apollo API key is missing. Please set it in .env as APOLLO_API_KEY or provide it in the dashboard.")
 
     payload: Dict[str, Any] = {
         "reveal_personal_emails": True,
@@ -177,9 +179,11 @@ def _enrich_via_hunter(row: Dict[str, Any], config: Dict[str, Any]) -> Dict[str,
     Note: Hunter email-finder does NOT return phone numbers.
     The phone field will remain None unless already present in the row.
     """
-    api_key = config.get("api_key", "")
+    from .services.outreach_config import settings
+    
+    api_key = config.get("api_key") or settings.HUNTER_API_KEY
     if not api_key:
-        raise ValueError("Hunter API key is missing")
+        raise ValueError("Hunter API key is missing. Please set it in .env as HUNTER_API_KEY or provide it in the dashboard.")
 
     # Resolve first_name / last_name / domain
     def _pick(row, *candidates):
@@ -253,11 +257,10 @@ def _enrich_via_website(row: Dict[str, Any], config: Dict[str, Any]) -> Dict[str
     domain = _pick(row, "domain", "website", "company_domain", "company_website", "url")
     result: Dict[str, Any] = {"email": None, "phone": None}
 
-    if not domain:
-         logger.debug("Website skip – missing domain/website field")
-         return result
+    name    = _pick(row, "first_name", "last_name", "name", "full_name")
+    company = _pick(row, "company", "organization", "company_name", "organization_name")
     
-    scrape_result = scrape_site(domain, delay=0.5)
+    scrape_result = scrape_site(domain, delay=0.5, name=name, company=company)
     
     emails = scrape_result.get("emails", [])
     phones = scrape_result.get("phones", [])

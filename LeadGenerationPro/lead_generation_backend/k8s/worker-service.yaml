@@ -29,7 +29,7 @@ spec:
         - name: KAFKA_BOOTSTRAP
           value: "host.docker.internal:9093"
         - name: DB_HOST
-          value: "leadgenerationpro.c6teemao2etw.us-east-1.rds.amazonaws.com" 
+          value: "leadgenerationdb.c1e42aci8a5v.eu-north-1.rds.amazonaws.com" 
         - name: DB_PORT
           value: "5432"
         - name: DB_USER

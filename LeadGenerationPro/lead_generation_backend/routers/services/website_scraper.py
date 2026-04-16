@@ -1,6 +1,7 @@
 import re
 import time
 import logging
+import asyncio
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 
@@ -42,16 +43,23 @@ CONTACT_HINTS = [
     "/contact-us",
     "/contact_us",
     "/contactus",
-    # "/get-in-touch",
-    # "/reach-us",
-    # "/about/contact",
-    # "/support/contact",
-    # "/about-us",
-    # "/support",
+    "/support",
+    "/support/contact",
+    "/help",
+    "/about",
+    "/about-us",
+    "/about_us",
+    "/team",
+    "/get-in-touch",
+    "/reach-us",
 ]
 
 # ── keywords used to identify contact URLs inside a sitemap ──────────────────
-CONTACT_KEYWORDS = {"contact", "reach", "get-in-touch", "getintouch", "contactus"}
+CONTACT_KEYWORDS = {
+    "contact", "reach", "get-in-touch", "getintouch", "contactus",
+    "support", "help", "team", "about", "customer", "service"
+}
+
 
 # ── HTTP session ──────────────────────────────────────────────────────────────
 SESSION = requests.Session()
@@ -180,6 +188,33 @@ def find_contact_url_heuristic(base_url: str) -> Optional[str]:
     return None
 
 
+def find_contact_url_on_home_page(base_url: str) -> Optional[str]:
+    """
+    Fetch the homepage and look for links that look like contact pages.
+    """
+    log.info("Scanning home page for contact links: %s", base_url)
+    resp = _get(base_url)
+    if resp is None:
+        return None
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    for a in soup.find_all("a", href=True):
+        href = a.get("href", "").strip()
+        text = a.get_text().lower().strip()
+        
+        # Check link text and href against keywords
+        if any(kw in text for kw in CONTACT_KEYWORDS) or any(kw in href.lower() for kw in CONTACT_KEYWORDS):
+            full_url = urljoin(base_url + "/", href)
+            # Ensure it's on the same domain
+            if urlparse(full_url).netloc == urlparse(base_url).netloc:
+                # Basic check to avoid linking back to home or nonsense
+                path = urlparse(full_url).path.lower().rstrip("/")
+                if path not in ("", "/"):
+                    log.info("Found contact link on home page: %s", full_url)
+                    return full_url
+    return None
+
+
 def extract_contact_info(contact_url: str) -> tuple[list[str], list[str]]:
     """Visit the contact page and return (emails, phones)."""
     log.info("Scraping contact page: %s", contact_url)
@@ -219,19 +254,14 @@ def extract_contact_info(contact_url: str) -> tuple[list[str], list[str]]:
     return emails[:1], phones[:1]
 
 
-def scrape_site(raw_url: str, delay: float = 1.0) -> dict:
+def scrape_site(raw_url: str, delay: float = 1.0, name: str = None, company: str = None) -> dict:
     """
     Full pipeline for a single website URL.
-
-    Returns:
-        {
-            "url": str,
-            "contact_page": str | None,
-            "emails": list[str],
-            "phones": list[str],
-            "error": str | None,
-        }
+    
+    If emails/phones are not found via standard scraping, it uses 
+    an AI fallback with Google Search grounding.
     """
+
     base_url = _normalize(raw_url)
     result = {
         "url": base_url,
@@ -246,9 +276,14 @@ def scrape_site(raw_url: str, delay: float = 1.0) -> dict:
         log.info("Trying heuristics for %s", base_url)
         contact_url = find_contact_url_heuristic(base_url)
 
-        # 2. Fallback to sitemap if heuristics fail
+        # 2. Fallback to scanning home page if heuristics fail
         if not contact_url:
-            log.info("Heuristics failed — trying sitemap for %s", base_url)
+            log.info("Heuristics failed — scanning home page for links for %s", base_url)
+            contact_url = find_contact_url_on_home_page(base_url)
+
+        # 3. Fallback to sitemap if scanning home page fails
+        if not contact_url:
+            log.info("Home page scan failed — trying sitemap for %s", base_url)
             contact_url = find_contact_url_in_sitemap(base_url)
 
         if not contact_url:
@@ -258,10 +293,33 @@ def scrape_site(raw_url: str, delay: float = 1.0) -> dict:
 
         result["contact_page"] = contact_url
 
-        # 3. Extract contact info
+        # 4. Extract contact info
         emails, phones = extract_contact_info(contact_url)
         result["emails"] = emails
         result["phones"] = phones
+
+        # 5. AI Fallback (New)
+        if not emails or not phones:
+            log.info("Contact info missing (Email: %s, Phone: %s) — Attempting AI fallback for %s", bool(emails), bool(phones), base_url)
+            from .ai_enrichment_service import find_contact_info_via_search
+            
+            ai_data = asyncio.run(find_contact_info_via_search(
+                name=name or "Contact Person",
+                company=company or "This Company",
+                domain=base_url
+            ))
+            
+            if ai_data.get("email") and ai_data["email"] not in result["emails"]:
+                result["emails"].append(ai_data["email"])
+                log.info("AI found email: %s", ai_data["email"])
+            
+            if ai_data.get("phone") and ai_data["phone"] not in result["phones"]:
+                result["phones"].append(ai_data["phone"])
+                log.info("AI found phone: %s", ai_data["phone"])
+            
+            if ai_data.get("source") and not result["contact_page"]:
+                result["contact_page"] = ai_data["source"]
+
 
     except Exception as exc:
         log.exception("Unexpected error for %s: %s", base_url, exc)

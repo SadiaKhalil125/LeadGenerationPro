@@ -31,3 +31,4 @@ jsonpath_ng
 sendgrid
 pandas
 python-multipart
+serpapi

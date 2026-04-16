@@ -7,20 +7,24 @@ from routers.get_db_connection import get_db_cursor
 
 TABLE = "test_contacts_website"
 
+TABLE2 = "enrichment_jobs"
+
+
 ROWS = [
     {"website": "https://bookme.pk/", "organization_name": "Bookme"},
-    # {"website": "https://www.zendesk.com/", "organization_name": "Zendesk"},
-    # {"website": "https://mailchimp.com/", "organization_name": "Mailchimp"},
-    # {"website": "https://www.hubspot.com/", "organization_name": "HubSpot"},
-    # {"website": "https://www.adobe.com/", "organization_name": "Adobe"},
-    # {"website": "https://www.paypal.com/", "organization_name": "PayPal"},
-    # {"website": "https://www.atlassian.com/company/", "organization_name": "Atlassian"},
-    # {"website": "https://www.freshworks.com/company/", "organization_name": "Freshworks"}
+    {"website": "https://www.zendesk.com/", "organization_name": "Zendesk"},
+    {"website": "https://mailchimp.com/", "organization_name": "Mailchimp"},
+    {"website": "https://www.hubspot.com/", "organization_name": "HubSpot"},
+    {"website": "https://www.adobe.com/", "organization_name": "Adobe"},
+    {"website": "https://www.paypal.com/", "organization_name": "PayPal"},
+    {"website": "https://www.atlassian.com/company/", "organization_name": "Atlassian"},
+    {"website": "https://www.freshworks.com/company/", "organization_name": "Freshworks"}
 ]
 
 def main():
     conn, cur = get_db_cursor()
 
+    cur.execute(f"DROP TABLE IF EXISTS {TABLE2};")
     cur.execute(f"DROP TABLE IF EXISTS {TABLE};")
     cur.execute(f"""
         CREATE TABLE {TABLE} (

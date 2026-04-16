@@ -16,7 +16,10 @@ class Settings:
     SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
     SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL")
     SENDGRID_FROM_NAME = os.getenv("SENDGRID_FROM_NAME")
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    SERPAPI_KEY = os.getenv("SERPAPI_KEY")
+    HUNTER_API_KEY = os.getenv("HUNTER_API_KEY")
+    APOLLO_API_KEY = os.getenv("APOLLO_API_KEY")
     
 
 settings = Settings()
