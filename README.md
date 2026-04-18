@@ -1,8 +1,8 @@
-# 🚀 Lead Generation Pro
+# 🚀 Scout - Lead Generation Pro
 
 **Build Your Own AI-Powered Client Hunter!**
 
-Lead Generation Pro is a powerful, two-in-one web application that automatically finds high-quality leads for software development and consultancy firms. This Final Year Project (FYP) aims to build a real-world tool that businesses actually need and use.
+Scout is a powerful, two-in-one web application that automatically finds high-quality leads for software development and consultancy firms. This Final Year Project (FYP) aims to build a real-world tool that businesses actually need and use.
 
 ---
 
@@ -11,6 +11,7 @@ Lead Generation Pro is a powerful, two-in-one web application that automatically
 - [Overview](#overview)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
+- [Deployment Summary](#deployment-summary)
 - [Architecture](#architecture)
 - [Project Status](#project-status)
 - [Installation](#installation)
@@ -130,6 +131,35 @@ Lead Generation Pro solves a critical problem faced by every tech business: find
 - **Containerization**: Docker
 - **Orchestration**: Kubernetes
 - **API Server**: Uvicorn (ASGI server)
+
+---
+
+## Deployment Summary
+
+Lead Generation Pro is currently deployed as a split-stack system with a separately hosted frontend and containerized backend services.
+
+- **Frontend**: Vercel
+- **Backend API**: Docker image
+- **Worker**: Docker image
+- **Status Updater**: Docker image
+- **Message Queue**: Apache Kafka running in Docker
+- **Database**: PostgreSQL
+- **CI/CD**: Not implemented yet
+
+### Deployment Notes
+
+- Kafka is required for scheduled and background task execution.
+- The backend runs as three services: API, worker, and status updater.
+- Backend images can be started through Docker Compose or through manual `docker run` commands.
+- The frontend can be deployed separately on Vercel.
+- Jenkins and GitHub Actions pipelines are not configured yet.
+
+### Deployment Artifacts
+
+- **Frontend URL**: `Add your Vercel URL here`
+- **Backend API Image**: `sadia2004/scraping-api:latest`
+- **Worker Image**: `sadia2004/scraping-worker:latest`
+- **Status Image**: `sadia2004/scraping-status:latest`
 
 ---
 
@@ -303,10 +333,15 @@ LeadGenerationPro/
 5. **Set up environment variables**:
    Create a `.env` file in the backend directory:
    ```env
-   DATABASE_URL=postgresql://user:password@localhost:5432/leadgen_db
-   KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-   API_HOST=0.0.0.0
-   API_PORT=8000
+   KAFKA_BOOTSTRAP=localhost:9092
+   GOOGLE_API_KEY=your_google_api_key
+   GOOGLE_CSE_ID=your_google_cse_id
+   SERPAPI_KEY=your_serpapi_key
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_NAME=LeadGenerationPro
+   DB_USER=postgres
+   DB_PASSWORD=your_db_password
    ```
 
 6. **Set up the database**:
@@ -352,21 +387,65 @@ LeadGenerationPro/
 
 ### Docker Setup
 
-1. **Build and run with Docker Compose** (if available):
-   ```bash
-   docker-compose up -d
+1. **Build backend images from the repository root**:
+   ```powershell
+   docker build -f lead_generation_backend/Dockerfile.api -t leadgen-api ./lead_generation_backend
+   docker build -f lead_generation_backend/Dockerfile.worker -t leadgen-worker ./lead_generation_backend
+   docker build -f lead_generation_backend/Dockerfile.status -t leadgen-status ./lead_generation_backend
    ```
 
-2. **Or build individual containers**:
-   ```bash
-   # API container
-   docker build -f Dockerfile.api -t leadgen-api .
-   
-   # Worker container
-   docker build -f Dockerfile.worker -t leadgen-worker .
-   
-   # Status service container
-   docker build -f Dockerfile.status -t leadgen-status .
+2. **Run with Docker Compose**:
+   ```powershell
+   docker compose -f docker-compose.backend.yml build
+   docker compose -f docker-compose.backend.yml up --build -d
+   ```
+
+3. **Or run the images manually with a separate Kafka container**:
+   ```powershell
+   docker run -d --name broker -p 9092:9092 -p 9093:9093 `
+     -e KAFKA_NODE_ID=1 `
+     -e KAFKA_PROCESS_ROLES=broker,controller `
+     -e KAFKA_LISTENERS=PLAINTEXT_LOCAL://0.0.0.0:9092,PLAINTEXT_DOCKER://0.0.0.0:9093,CONTROLLER://:9094 `
+     -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT_LOCAL://localhost:9092,PLAINTEXT_DOCKER://host.docker.internal:9093 `
+     -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER `
+     -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT_LOCAL:PLAINTEXT,PLAINTEXT_DOCKER:PLAINTEXT `
+     -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT_LOCAL `
+     -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9094 `
+     -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 `
+     -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 `
+     -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 `
+     -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 `
+     -e KAFKA_NUM_PARTITIONS=2 `
+     apache/kafka:latest
+   ```
+
+   Then run the backend containers:
+
+   ```powershell
+   docker run -d --name leadgen-api -p 8000:8000 `
+     --add-host host.docker.internal:host-gateway `
+     -e KAFKA_BOOTSTRAP=host.docker.internal:9093 `
+     --env-file .\lead_generation_backend\.env `
+     leadgen-api
+
+   docker run -d --name leadgen-worker `
+     --add-host host.docker.internal:host-gateway `
+     -e KAFKA_BOOTSTRAP=host.docker.internal:9093 `
+     --env-file .\lead_generation_backend\.env `
+     leadgen-worker
+
+   docker run -d --name leadgen-status `
+     --add-host host.docker.internal:host-gateway `
+     -e KAFKA_BOOTSTRAP=host.docker.internal:9093 `
+     --env-file .\lead_generation_backend\.env `
+     leadgen-status
+   ```
+
+4. **Check container logs**:
+   ```powershell
+   docker logs leadgen-api --tail 100
+   docker logs leadgen-worker --tail 100
+   docker logs leadgen-status --tail 100
    ```
 
 ### Kubernetes Setup
@@ -601,8 +680,6 @@ This project aims to:
 **Note**: This project is currently in active development. Some features may be incomplete or subject to change.
 
 ---
-
-*Last Updated: [Current Date]*
 
 *Project Status: 🚧 In Development*
 

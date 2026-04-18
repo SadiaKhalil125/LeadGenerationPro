@@ -32,3 +32,4 @@ sendgrid
 pandas
 python-multipart
 serpapi
+ddgs

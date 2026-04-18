@@ -2,10 +2,14 @@ from psycopg2 import sql
 import os
 import psycopg2
 import sys
+from dotenv import load_dotenv
+
+load_dotenv()
+
 DB_HOST = os.getenv("DB_HOST", "leadgenerationdb.c1e42aci8a5v.eu-north-1.rds.amazonaws.com")
 DB_NAME = os.getenv("DB_NAME", "postgres")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS", "2T7j8odlak")
+DB_PASS = os.getenv("DB_PASS") or os.getenv("DB_PASSWORD", "2T7j8odlak")
 # DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 
