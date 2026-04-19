@@ -287,6 +287,20 @@ export default function LeadGeneratorPage() {
             }}>
               Find Leads
             </a>
+            
+            <a href="/outreach" style={{
+              fontWeight: '500',
+              color: '#00364A',
+              textDecoration: 'none',
+              transition: 'all 0.3s',
+              padding: '8px 20px',
+              borderRadius: '10px'
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.1)'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
+              Outreach
+            </a>
+
             <a href="/dashboard" style={{
               fontWeight: '500',
               color: '#00364A',

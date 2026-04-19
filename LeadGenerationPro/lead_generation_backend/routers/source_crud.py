@@ -51,6 +51,49 @@ async def get_all_sources():
         print(f"Error fetching sources: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch sources: {str(e)}")
 
+@router.get("/scraped-sources", response_model=SourcesListResponse)
+async def get_all_scraped_sources():
+    """
+    Get all saved website sources that have at least one lead associated with them.
+    Uses EXISTS for better performance with large datasets.
+    """
+    try:
+        conn, cur = get_db_cursor()
+        
+        # Using EXISTS is typically faster than COUNT/GROUP BY
+        cur.execute("""
+            SELECT s.id, s.name, s.url
+            FROM sources s
+            WHERE EXISTS (
+                SELECT 1 FROM leads l 
+                WHERE l.source = s.name
+            )
+            ORDER BY s.id DESC;
+        """)
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # Convert rows into response objects
+        sources = []
+        for row in rows:
+            sources.append(SourceInfo(
+                id=row[0],
+                name=row[1],
+                url=row[2]
+            ))
+
+        return SourcesListResponse(
+            total_sources=len(sources),
+            sources=sources
+        )
+
+    except Exception as e:
+        print(f"Error fetching scraped sources: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch scraped sources: {str(e)}")
+    
+
 @router.get("/source/{source_id}", response_model=SourceInfo)
 async def get_source_by_id(source_id: int):
     """

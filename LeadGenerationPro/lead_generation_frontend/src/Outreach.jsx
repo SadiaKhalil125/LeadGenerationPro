@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FaSpinner, FaUpload, FaEnvelope, FaEye, FaPaperPlane, FaCog, FaFileAlt } from "react-icons/fa";
+import { FaSpinner, FaUpload, FaEnvelope, FaEye, FaPaperPlane, FaCog, FaFileAlt, FaDatabase } from "react-icons/fa";
 import { FiMail, FiUsers, FiSettings } from "react-icons/fi";
-import { BsStars, BsFileText, BsPersonLinesFill } from "react-icons/bs";
+import { BsStars, BsFileText, BsPersonLinesFill, BsCloudDownload } from "react-icons/bs";
 import { Layers, Activity } from "lucide-react";
 import ProviderSelector from "./components/ProviderSelector";
 import EmailPreview from "./components/EmailPreview";
@@ -65,6 +65,14 @@ export default function Outreach() {
     goal: ""
   });
   const [enriching, setEnriching] = useState(false);
+  
+  // New state for source selection
+  const [sources, setSources] = useState([]);
+  // Change state to store source name instead of ID
+  const [selectedSourceName, setSelectedSourceName] = useState(""); 
+  const [loadingSources, setLoadingSources] = useState(false);
+  const [loadingLeads, setLoadingLeads] = useState(false);
+  const [contactSource, setContactSource] = useState("csv"); // "csv" or "source"
 
   const addNotification = (type, message) => {
     const id = Date.now();
@@ -76,6 +84,70 @@ export default function Outreach() {
 
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  // Fetch sources on component mount
+  useEffect(() => {
+    fetchSources();
+  }, []);
+
+  const fetchSources = async () => {
+    setLoadingSources(true);
+    try {
+      const response = await fetch(`${API_BASE}/source/scraped-sources`);
+      const data = await response.json();
+      
+      if (response.ok && data.sources) {
+        setSources(data.sources);
+      } else {
+        console.error("Failed to fetch sources");
+      }
+    } catch (err) {
+      console.error("Error fetching sources:", err);
+      addNotification('error', "Failed to load sources");
+    } finally {
+      setLoadingSources(false);
+    }
+  };
+
+  // Modified fetchLeadsFromSource function to use source name
+  const fetchLeadsFromSource = async () => {
+    if (!selectedSourceName) {
+      addNotification('error', "Please select a source");
+      return;
+    }
+
+    setLoadingLeads(true);
+    try {
+      // Use source name in the URL instead of ID
+      const response = await fetch(`${API_BASE}/leads/by-source/${encodeURIComponent(selectedSourceName)}`);
+      const data = await response.json();
+
+      if (response.ok && data.leads) {
+        // Transform leads to contacts format
+        const transformedContacts = data.leads.map(lead => ({
+          name: lead.name || "",
+          email: lead.email || "",
+          company: lead.company_name || lead.name || "",
+          company_website: lead.website || "",
+          industry: lead.category || "",
+          phone: lead.phone || "",
+          address: lead.address || "",
+          source_name: data.source_name,
+          source_id: data.source_id
+        }));
+
+        setContacts(transformedContacts);
+        addNotification('success', `✅ Loaded ${transformedContacts.length} leads from "${data.source_name}"`);
+      } else {
+        throw new Error(data.detail || "Failed to load leads");
+      }
+    } catch (err) {
+      console.error("Error fetching leads:", err);
+      addNotification('error', "Failed to load leads from source: " + err.message);
+    } finally {
+      setLoadingLeads(false);
+    }
   };
 
   const CSVUploader = ({ setContacts }) => {
@@ -164,6 +236,82 @@ export default function Outreach() {
     );
   };
 
+  // Modified SourceSelector component (now using source name)
+  const SourceSelector = ({ sources, selectedSourceName, onSourceChange, onLoadLeads, loadingLeads, loadingSources }) => {
+    return (
+      <div style={{ marginBottom: '15px' }}>
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '8px',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#5A6F7D'
+          }}>
+            <FaDatabase size={14} />
+            Select Source
+          </label>
+          <select
+            value={selectedSourceName}
+            onChange={(e) => onSourceChange(e.target.value)}
+            disabled={loadingSources || sources.length === 0}
+            style={{
+              ...inputStyle,
+              backgroundColor: 'white',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="">-- Select a source --</option>
+            {sources.map(source => (
+              <option key={source.id} value={source.name}>
+                {source.name}
+              </option>
+            ))}
+          </select>
+          {sources.length === 0 && !loadingSources && (
+            <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '5px' }}>
+              No sources available. Please create a source first in the Leads section.
+            </p>
+          )}
+        </div>
+        
+        <button
+          onClick={onLoadLeads}
+          disabled={!selectedSourceName || loadingLeads}
+          style={{
+            width: '100%',
+            padding: '12px',
+            backgroundColor: (!selectedSourceName || loadingLeads) ? '#ccc' : '#10B981',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontWeight: '600',
+            cursor: (!selectedSourceName || loadingLeads) ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.3s'
+          }}
+        >
+          {loadingLeads ? (
+            <>
+              <FaSpinner className="spin" />
+              Loading Leads...
+            </>
+          ) : (
+            <>
+              <BsCloudDownload />
+              Load Leads from Source
+            </>
+          )}
+        </button>
+      </div>
+    );
+  };
+
   const ContactsStatus = ({ contacts, onViewContacts, onEnrich, enriching }) => {
     if (!contacts.length) return null;
 
@@ -199,7 +347,8 @@ export default function Outreach() {
               {contacts.length} Contact{contacts.length !== 1 ? 's' : ''} Loaded
             </div>
             <div style={{ fontSize: '12px', color: '#00364A', opacity: 0.6 }}>
-              Ready for campaign
+              {contacts[0]?.source_name && `Source: ${contacts[0].source_name}`}
+              {!contacts[0]?.source_name && 'Ready for campaign'}
             </div>
           </div>
         </div>
@@ -334,7 +483,7 @@ export default function Outreach() {
 
   const generatePreview = async () => {
     if (!contacts.length) {
-      addNotification('error', "Please upload contacts first");
+      addNotification('error', "Please upload contacts or load leads from a source first");
       return;
     }
     if (!message) {
@@ -395,7 +544,7 @@ export default function Outreach() {
 
   const sendCampaign = async () => {
     if (!contacts.length) {
-      addNotification('error', "Please upload contacts first");
+      addNotification('error', "Please upload contacts or load leads from a source first");
       return;
     }
     if (!subject) {
@@ -537,7 +686,7 @@ export default function Outreach() {
             onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
               Chatbot
             </Link>
-            <Link to="/leads" style={{
+            <Link to="/userleadsdashboard" style={{
               fontWeight: '500',
               color: '#00364A',
               textDecoration: 'none',
@@ -854,7 +1003,7 @@ export default function Outreach() {
           }}>
             {/* LEFT COLUMN - Configuration */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-              {/* Contacts Card */}
+              {/* Contacts Card - Updated with source selection */}
               <div style={{
                 backgroundColor: '#F8FAFC',
                 borderRadius: '20px',
@@ -874,9 +1023,76 @@ export default function Outreach() {
                   <FiUsers size={20} color="#49A3C4" />
                   Contacts
                 </h3>
-                <div style={{ marginBottom: '15px' }}>
-                  <CSVUploader setContacts={setContacts} />
+                
+                {/* Source selection tabs */}
+                <div style={{
+                  display: 'flex',
+                  gap: '10px',
+                  marginBottom: '20px',
+                  borderBottom: '2px solid #E9EDF2',
+                  paddingBottom: '10px'
+                }}>
+                  <button
+                    onClick={() => setContactSource("csv")}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      backgroundColor: contactSource === "csv" ? '#49A3C4' : 'transparent',
+                      color: contactSource === "csv" ? 'white' : '#5A6F7D',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <FaUpload style={{ marginRight: '8px' }} />
+                    From CSV
+                  </button>
+                  <button
+                    onClick={() => setContactSource("source")}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      backgroundColor: contactSource === "source" ? '#49A3C4' : 'transparent',
+                      color: contactSource === "source" ? 'white' : '#5A6F7D',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <FaDatabase style={{ marginRight: '8px' }} />
+                    From Scraped Source
+                  </button>
                 </div>
+                
+                {contactSource === "csv" ? (
+                  <div>
+                    <CSVUploader setContacts={setContacts} />
+                    <p style={{
+                      fontSize: '12px',
+                      color: '#5A6F7D',
+                      marginTop: '10px',
+                      textAlign: 'center'
+                    }}>
+                      CSV should contain columns: name, email, company (optional)
+                    </p>
+                  </div>
+                ) : (
+                    <SourceSelector
+                      sources={sources}
+                      selectedSourceName={selectedSourceName}  // Changed prop name
+                      onSourceChange={setSelectedSourceName}   // Changed to use name setter
+                      onLoadLeads={fetchLeadsFromSource}
+                      loadingLeads={loadingLeads}
+                      loadingSources={loadingSources}
+                    />
+                )}
+                
                 <ContactsStatus
                   contacts={contacts}
                   onViewContacts={() => setShowContacts(true)}

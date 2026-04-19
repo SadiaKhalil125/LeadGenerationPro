@@ -1,10 +1,14 @@
 # leads_schema.py
+from datetime import datetime
+import os
+import sys
+
 from psycopg2 import sql
 from routers.get_db_connection import get_db_cursor
 
 # routers/leads_sync.py
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, List
+from fastapi import APIRouter, HTTPException, Query, Path
+from typing import Dict, Optional, List
 
 # leads_normalization.py
 import hashlib
@@ -15,6 +19,23 @@ from pydantic import BaseModel
 class SyncRequest(BaseModel):
     entity_tables: List[str]
     batch_size: int = 500
+
+# Response models
+class LeadInfo(BaseModel):
+    id: int
+    name: str
+    category: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    rating: Optional[float] = None
+    reviews_count: Optional[int] = None
+    source: Optional[str] = None
+    source_entity: Optional[str] = None
+    created_at: datetime
+    company_name: Optional[str] = None
+
 
 router = APIRouter()
 
@@ -294,3 +315,67 @@ async def search_leads(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+@router.get("/leads/by-source/{source_name}")
+async def get_leads_by_source_name(
+    source_name: str = Path(..., description="The name of the source to fetch leads from"),
+    limit: int = Query(1000, ge=1, le=10000),
+    offset: int = Query(0, ge=0),
+):
+    """Fetch all leads associated with a specific source name."""
+    try:
+        conn, cur = get_db_cursor()
+        
+        # Verify source exists
+        cur.execute("SELECT id, name, url FROM sources WHERE name = %s", (source_name,))
+        source_row = cur.fetchone()
+        if not source_row:
+            raise HTTPException(status_code=404, detail=f"Source with name '{source_name}' not found")
+        
+        source_id = source_row[0]
+        source_url = source_row[2]
+        
+        # Fetch leads where source column matches
+        query = """
+            SELECT 
+                id, name, category, address, phone, email, website,
+                rating, reviews_count, source, source_entity, created_at
+            FROM leads
+            WHERE source = %s
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """
+        
+        cur.execute(query, (source_name, limit, offset))
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description]
+        
+        leads = []
+        for row in rows:
+            lead_dict = dict(zip(columns, row))
+            lead_dict['company_name'] = lead_dict.get('name', '')
+            # Convert datetime to string for JSON serialization
+            if lead_dict.get('created_at'):
+                lead_dict['created_at'] = lead_dict['created_at'].isoformat()
+            leads.append(lead_dict)
+        
+        cur.close()
+        conn.close()
+        
+        return {
+            "success": True,
+            "source_name": source_name,
+            "source_id": source_id,
+            "source_url": source_url,
+            "total_leads": len(leads),
+            "leads": leads
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching leads: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch leads: {str(e)}")
