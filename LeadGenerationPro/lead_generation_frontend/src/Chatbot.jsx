@@ -155,10 +155,10 @@ export default function ChatbotInterface() {
   }
 
   return (
-    <div className="h-screen flex flex-col relative overflow-hidden" style={{ backgroundColor: '#C7D8ED' }}>
+    <div className="min-h-screen flex flex-col relative overflow-x-hidden" style={{ backgroundColor: '#C7D8ED' }}>
       <Header activeTab="chatbot" />
       
-      <div className="flex-1 flex items-center justify-center p-4 relative">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 relative" style={{ minHeight: 'calc(100vh - 80px)' }}>
       
       {/* Background Animations */}
       <div className="absolute inset-0 pointer-events-none">
@@ -170,7 +170,7 @@ export default function ChatbotInterface() {
       `}</style>
       
       {/* Chatbot Interface */}
-      <div className={`flex flex-col h-full w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden border-4 transition-all duration-300 ${showWelcome ? 'blur-md' : ''}`} style={{ backgroundColor: 'white', borderColor: '#00364A' }}>
+      <div className={`flex flex-col w-full max-w-4xl h-[80vh] min-h-[500px] rounded-3xl shadow-2xl overflow-hidden border-4 transition-all duration-300 ${showWelcome ? 'blur-md' : ''}`} style={{ backgroundColor: 'white', borderColor: '#00364A' }}>
         
         {/* Header */}
         <div className="shadow-md border-b-4 p-4" style={{ backgroundColor: 'white', borderColor: '#00364A' }}>
@@ -200,7 +200,7 @@ export default function ChatbotInterface() {
         </div>
 
         {/* Messages Container */}
-        <div className="flex-1 overflow-y-auto p-4" style={{ background: 'linear-gradient(to bottom, rgba(199, 216, 237, 0.3), white)' }}>
+        <div className="flex-1 overflow-y-auto p-4 min-h-0" style={{ background: 'linear-gradient(to bottom, rgba(199, 216, 237, 0.3), white)', overscrollBehavior: 'contain' }}>
           <div className="space-y-4">
             {messages.map((message) => (
               <div
