@@ -4,6 +4,7 @@ import {
   Clock, Loader2, RefreshCw, Layers, Activity, Trash2, ArrowLeft, CheckCircle2, XCircle, Eye
 } from 'lucide-react';
 import API_BASE from './api_base';
+import Header from './components/Header';
 
 const T = {
   bg: '#C7D8ED',
@@ -124,74 +125,7 @@ export default function EnrichmentJobsPage() {
       `}</style>
 
       {/* ── Header ── */}
-      <header style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '20px 60px',
-        position: 'relative',
-        zIndex: 50
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backgroundColor: 'white',
-          borderRadius: '20px',
-          padding: '12px 40px',
-          boxShadow: '0 4px 20px rgba(0, 54, 74, 0.1)',
-          width: '100%',
-          maxWidth: '1600px'
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            fontSize: '20px',
-            fontWeight: 'bold',
-            color: '#00364A',
-            cursor: 'pointer'
-          }} onClick={() => navigate('/dashboard')}>
-            <div style={{ position: 'relative', width: '40px', height: '24px' }}>
-              <Layers size={50} strokeWidth={2} style={{ position: 'absolute', top: -14, left: -5 }} />
-              <Activity size={30} strokeWidth={2} style={{ position: 'absolute', top: -2, left: 6 }} />
-            </div>
-            SCOUT
-          </div>
-
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
-            <Link to="/enrichment" style={{
-              fontWeight: '500',
-              color: '#00364A',
-              textDecoration: 'none',
-              transition: 'all 0.3s',
-              padding: '8px 20px',
-              borderRadius: '10px'
-            }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.1)'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
-              Enrichment Dashboard
-            </Link>
-            <span style={{
-              fontWeight: '500',
-              textDecoration: 'none',
-              transition: 'all 0.3s',
-              padding: '8px 20px',
-              borderRadius: '10px',
-              backgroundColor: '#00364A',
-              color: 'white'
-            }}>
-              Scheduled Jobs
-            </span>
-          </nav>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: '600', fontSize: '15px' }}>John Doe</div>
-              <div style={{ fontSize: '13px', color: '#49A3C4' }}>Premium Plan</div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header activeTab="enrichment" />
 
       {/* ── Main content ── */}
       <main style={{ maxWidth: 1200, margin: '20px auto 60px', padding: '0 20px' }}>

@@ -42,7 +42,7 @@ async def find_contact_info_via_search(
 
     query = f'"{company}" contact email OR phone site:{domain}'
 
-    # Step 1: Search (DDG → SerpAPI fallback handled in your search layer)
+    # Step 1: Search (SerpAPI)
     results = search(query, serpapi_key=settings.SERPAPI_KEY)
     context = format_search_results(results)
     print(context)

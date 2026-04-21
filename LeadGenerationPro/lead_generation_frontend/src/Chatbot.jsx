@@ -5,6 +5,7 @@ import { AuthContext } from './AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Header from './components/Header';
 
 const API_BASE_URL = "http://localhost:8000"; // Pointing to root, as discussed
 
@@ -142,16 +143,22 @@ export default function ChatbotInterface() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#C7D8ED]">
-        <div className="text-[#00364A] font-bold text-xl animate-pulse">
-           Verifying Session...
+      <div className="h-screen flex flex-col bg-[#C7D8ED]">
+        <Header activeTab="chatbot" />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-[#00364A] font-bold text-xl animate-pulse">
+            Verifying Session...
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex items-center justify-center p-4 relative overflow-hidden" style={{ backgroundColor: '#C7D8ED' }}>
+    <div className="h-screen flex flex-col relative overflow-hidden" style={{ backgroundColor: '#C7D8ED' }}>
+      <Header activeTab="chatbot" />
+      
+      <div className="flex-1 flex items-center justify-center p-4 relative">
       
       {/* Background Animations */}
       <div className="absolute inset-0 pointer-events-none">
@@ -371,6 +378,7 @@ export default function ChatbotInterface() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

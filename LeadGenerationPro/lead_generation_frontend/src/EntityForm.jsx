@@ -31,7 +31,7 @@ const EntityForm = () => {
       maxLength: 50,
       pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/,
       patternMessage: "Must start with a letter and contain only letters, numbers, and underscores",
-      reservedKeywords: ['id', 'modified_at', 'source', 'name', 'created_at', 'updated_at']
+      reservedKeywords: ['id', 'modified_at', 'source', 'created_at', 'updated_at']
     }
   };
 
@@ -98,7 +98,7 @@ const EntityForm = () => {
       }
 
       // Check for duplicate attribute names (case-insensitive)
-      const duplicateIndex = allAttributes.findIndex((attr, i) => 
+      const duplicateIndex = allAttributes.findIndex((attr, i) =>
         i !== index && attr.name.trim().toLowerCase() === trimmedName.toLowerCase()
       );
       if (duplicateIndex !== -1) {
@@ -196,7 +196,7 @@ const EntityForm = () => {
 
   const deleteAttribute = (index) => {
     setAttributes(attributes.filter((_, i) => i !== index));
-    
+
     // Clean up validation errors for deleted attribute
     setValidationErrors(prev => {
       const newErrors = { ...prev };
@@ -209,7 +209,7 @@ const EntityForm = () => {
           reindexedErrors[newKey] = newErrors.attributes[key];
         });
         newErrors.attributes = reindexedErrors;
-        
+
         if (Object.keys(newErrors.attributes).length === 0) {
           delete newErrors.attributes;
         }
@@ -235,7 +235,7 @@ const EntityForm = () => {
       addNotification('error', "Please enter entity name!");
       return;
     }
-    
+
     if (attributes.length === 0) {
       addNotification('error', "Please add at least one attribute!");
       return;
@@ -278,7 +278,7 @@ const EntityForm = () => {
         },
         body: JSON.stringify(payload),
       });
-      
+
       const data = await response.json();
 
       if (response.ok && data.success === true) {
@@ -291,7 +291,7 @@ const EntityForm = () => {
         // Handle backend validation errors
         const errorMessage = data.message || data.detail || "Failed to save entity!";
         addNotification('error', errorMessage);
-        
+
         // If backend returns field-specific errors, you can parse them here
         if (data.errors) {
           // Parse and display backend validation errors
@@ -558,8 +558,8 @@ const EntityForm = () => {
                     gap: '20px',
                     padding: '25px',
                     backgroundColor: 'white',
-                    border: validationErrors.attributes?.[index] 
-                      ? '2px solid #EF4444' 
+                    border: validationErrors.attributes?.[index]
+                      ? '2px solid #EF4444'
                       : '2px solid rgba(0, 54, 74, 0.08)',
                     borderRadius: '20px',
                     boxShadow: validationErrors.attributes?.[index]
@@ -572,7 +572,7 @@ const EntityForm = () => {
                     {/* Name with Validation */}
                     <div>
                       <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>
-                        Name {validationErrors.attributes?.[index]?.name && 
+                        Name {validationErrors.attributes?.[index]?.name &&
                           <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>
                         }
                       </label>
@@ -585,8 +585,8 @@ const EntityForm = () => {
                           width: '100%',
                           padding: '12px 16px',
                           borderRadius: '10px',
-                          border: validationErrors.attributes?.[index]?.name 
-                            ? '1px solid #EF4444' 
+                          border: validationErrors.attributes?.[index]?.name
+                            ? '1px solid #EF4444'
                             : '1px solid rgba(0, 54, 74, 0.15)',
                           fontSize: '14px',
                           color: '#00364A',
@@ -608,7 +608,7 @@ const EntityForm = () => {
                     {/* Datatype with Validation */}
                     <div>
                       <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#00364A', marginBottom: '8px' }}>
-                        Data Type {validationErrors.attributes?.[index]?.datatype && 
+                        Data Type {validationErrors.attributes?.[index]?.datatype &&
                           <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>
                         }
                       </label>
@@ -619,8 +619,8 @@ const EntityForm = () => {
                           width: '100%',
                           padding: '12px 16px',
                           borderRadius: '10px',
-                          border: validationErrors.attributes?.[index]?.datatype 
-                            ? '1px solid #EF4444' 
+                          border: validationErrors.attributes?.[index]?.datatype
+                            ? '1px solid #EF4444'
                             : '1px solid rgba(0, 54, 74, 0.15)',
                           fontSize: '14px',
                           color: '#00364A',

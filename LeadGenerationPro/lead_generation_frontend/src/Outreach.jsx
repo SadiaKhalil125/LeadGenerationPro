@@ -9,6 +9,7 @@ import EmailPreview from "./components/EmailPreview";
 import CampaignResults from "./components/CampaignResults";
 import ContactsViewer from "./components/ContactsViewer";
 import API_BASE from "./api_base";
+import Header from "./components/Header";
 
 const BASE = API_BASE + "/outreach";
 
@@ -666,102 +667,7 @@ export default function Outreach() {
         }
       `}</style>
 
-      {/* Header */}
-      <header style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '20px 60px',
-        position: 'relative',
-        zIndex: 50
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backgroundColor: 'white',
-          borderRadius: '20px',
-          padding: '12px 40px',
-          boxShadow: '0 4px 20px rgba(0, 54, 74, 0.1)',
-          width: '100%',
-          maxWidth: '1600px'
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            fontSize: '20px',
-            fontWeight: 'bold',
-            color: '#00364A'
-          }}>
-            <div style={{ position: 'relative', width: '40px', height: '24px' }}>
-              <Layers size={50} strokeWidth={2} style={{ position: 'absolute', top: -14, left: -5 }} />
-              <Activity size={30} strokeWidth={2} style={{ position: 'absolute', top: -2, left: 6 }} />
-            </div>
-            SCOUT
-          </div>
-          
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
-            <Link to="/chatbot" style={{
-              fontWeight: '500',
-              color: '#00364A',
-              textDecoration: 'none',
-              transition: 'all 0.3s',
-              padding: '8px 20px',
-              borderRadius: '10px'
-            }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.1)'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
-              Chatbot
-            </Link>
-            <Link to="/userleadsdashboard" style={{
-              fontWeight: '500',
-              color: '#00364A',
-              textDecoration: 'none',
-              transition: 'all 0.3s',
-              padding: '8px 20px',
-              borderRadius: '10px'
-            }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.1)'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}>
-              Find Leads
-            </Link>
-            <a href="#" style={{
-              fontWeight: '500',
-              color: '#00364A',
-              textDecoration: 'none',
-              transition: 'all 0.3s',
-              padding: '8px 20px',
-              borderRadius: '10px',
-              backgroundColor: '#00364A',
-              color: 'white'
-            }}>
-              Email Outreach
-            </a>
-          </nav>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: '600', fontSize: '15px' }}>John Doe</div>
-              <div style={{ fontSize: '13px', color: '#49A3C4' }}>Premium Plan</div>
-            </div>
-            <div style={{
-              width: '45px',
-              height: '45px',
-              backgroundColor: '#49A3C4',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontWeight: '600',
-              fontSize: '18px'
-            }}>
-              JD
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header activeTab="outreach" />
 
       {/* Main Content */}
       <main style={{
