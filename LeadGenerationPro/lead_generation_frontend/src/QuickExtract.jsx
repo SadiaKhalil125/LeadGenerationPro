@@ -25,6 +25,7 @@ import {
   ChevronRight,
   Info
 } from "lucide-react";
+import { FaPaperPlane } from "react-icons/fa";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ServerHtmlPreview from "./ServerHtmlPreview";
@@ -1044,7 +1045,38 @@ export default function QuickExtract() {
   };
 
   const escapeXml = (unsafe) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+// In QuickExtract component, add this function before the return statement:
 
+  const startOutreach = () => {
+    if (!extractedData?.data || extractedData.data.length === 0) {
+      alert("No data to export to outreach!");
+      return;
+    }
+  
+    // Transform scraped data to Outreach contact format
+    const outreachContacts = extractedData.data.map(record => ({
+      name: record.name || record.business_name || record.title || record.company || "",
+      email: record.email || record.business_email || "",
+      company: record.company || record.business_name || record.name || "",
+      company_website: record.website || record.url || "",
+      industry: record.category || record.industry || "",
+      phone: record.phone || "",
+      address: record.address || "",
+      source_name: "Quick Extract",
+      // Preserve original data as fallback
+      ...record
+    }));
+  
+    // Save to localStorage
+    localStorage.setItem('outreach_pending_contacts', JSON.stringify({
+      contacts: outreachContacts,
+      timestamp: Date.now(),
+      source: 'quick_extract'
+    }));
+  
+    // Navigate to outreach page
+    window.location.href = '/outreach';
+  };  
   // --- RENDER ---
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-[#49A3C4] selection:text-white">
@@ -2089,20 +2121,29 @@ export default function QuickExtract() {
                     <p className="text-gray-500">Data extracted from {url}</p>
                   </div>
                   
-                  <div className="flex gap-3">
-                    <button
-                      onClick={exportToCSV}
-                      className="flex items-center gap-2 px-6 py-3 bg-white text-[#00364A] border border-gray-200 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-[#49A3C4] transition-all"
-                    >
-                      <Download size={20} /> CSV
-                    </button>
-                    <button
-                      onClick={exportToExcel}
-                      className="flex items-center gap-2 px-6 py-3 bg-white text-[#00364A] border border-gray-200 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-[#49A3C4] transition-all"
-                    >
-                      <FileSpreadsheet size={20} /> Excel
-                    </button>
-                  </div>
+                {/* In Step 3 results section, add this button alongside CSV/Excel buttons */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={exportToCSV}
+                    className="flex items-centser gap-2 px-6 py-3 bg-white text-[#00364A] border border-gray-200 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-[#49A3C4] transition-all"
+                  >
+                    <Download size={20} /> CSV
+                  </button>
+                  <button
+                    onClick={exportToExcel}
+                    className="flex items-center gap-2 px-6 py-3 bg-white text-[#00364A] border border-gray-200 rounded-xl font-bold shadow-sm hover:bg-gray-50 hover:border-[#49A3C4] transition-all"
+                  >
+                    <FileSpreadsheet size={20} /> Excel
+                  </button>
+
+                  {/* NEW BUTTON - Start Outreach */}
+                  <button
+                    onClick={startOutreach}
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#49A3C4] to-[#00364A] text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all"
+                  >
+                    <FaPaperPlane size={18} /> Start Outreach
+                  </button>
+                </div>
                 </div>
 
                 <div className="flex-grow bg-gray-50 p-6 overflow-hidden">

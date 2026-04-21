@@ -85,7 +85,35 @@ export default function Outreach() {
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
+  // In Outreach component, add this with other useEffects:
 
+  // Check for pending contacts from Quick Extract
+  useEffect(() => {
+    const pendingData = localStorage.getItem('outreach_pending_contacts');
+    
+    if (pendingData) {
+      try {
+        const { contacts, timestamp, source } = JSON.parse(pendingData);
+        
+        // Optional: Check if data is fresh (within last 5 minutes)
+        const isFresh = (Date.now() - timestamp) < 5 * 60 * 1000;
+        
+        if (contacts && contacts.length > 0 && isFresh) {
+          setContacts(contacts);
+          addNotification('success', `✅ Loaded ${contacts.length} contacts from ${source || 'Quick Extract'}`);
+          
+          // Clear localStorage after loading
+          localStorage.removeItem('outreach_pending_contacts');
+        } else if (!isFresh) {
+          // Clear stale data
+          localStorage.removeItem('outreach_pending_contacts');
+        }
+      } catch (err) {
+        console.error("Error loading pending contacts:", err);
+        localStorage.removeItem('outreach_pending_contacts');
+      }
+    }
+  }, []); // Empty dependency array - runs once on mount
   // Fetch sources on component mount
   useEffect(() => {
     fetchSources();
