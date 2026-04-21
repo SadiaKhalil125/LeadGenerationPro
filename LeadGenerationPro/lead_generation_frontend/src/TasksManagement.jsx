@@ -87,32 +87,35 @@ const TasksManagement = () => {
     };
 
     const sidebarStyles = {
-        container: {
+            container: {
             minHeight: "100vh",
             display: "flex",
-            backgroundColor: "#F1F6FB",
+            backgroundColor: "#C7D8ED", // background
             color: "#00364A",
             fontFamily: "'Inter', sans-serif",
         },
+
         sidebar: {
             position: "fixed",
             top: 0,
             left: 0,
             height: "100%",
-            backgroundColor: "#2C5F6F",
-            color: "white",
-            boxShadow: "rgb(0 0 0 / 15%) 10px 0px 20px",
+            backgroundColor: "#00364A", // primary
+            color: "#FFFFFF",
+            boxShadow: "0 0 20px rgba(0, 54, 74, 0.15)", // shadowLight
             zIndex: 40,
             transition: "all 0.3s ease-in-out",
             width: sidebarOpen ? "280px" : "80px",
             overflow: "hidden",
         },
+
         sidebarInner: {
             padding: "24px 16px",
             height: "100%",
             display: "flex",
             flexDirection: "column",
         },
+
         sidebarHeader: {
             fontSize: "36px",
             fontWeight: "900",
@@ -123,11 +126,13 @@ const TasksManagement = () => {
             letterSpacing: "4px",
             fontFamily: "'Montserrat', 'Arial Black', sans-serif",
             textTransform: "uppercase",
-            background: "linear-gradient(135deg, #ffffff 0%, #a9d2ff 100%)",
+            background: "linear-gradient(135deg, #ffffff 0%, #49A3C4 100%)", // accent
             WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "white",
+            WebkitTextFillColor: "transparent",
             backgroundClip: "text",
+            cursor: "pointer",
         },
+
         menuButton: (isActive) => ({
             width: "100%",
             display: "flex",
@@ -139,20 +144,25 @@ const TasksManagement = () => {
             border: "none",
             cursor: "pointer",
             transition: "all 0.2s ease",
-            backgroundColor: isActive ? "rgba(255, 255, 255, 0.15)" : "transparent",
-            color: "white",
+            backgroundColor: isActive
+            ? "rgba(73, 163, 196, 0.25)" // accent active
+            : "transparent",
+            color: "#FFFFFF",
             marginBottom: "8px",
             justifyContent: sidebarOpen ? "flex-start" : "center",
         }),
+
         menuButtonHover: {
-            backgroundColor: "rgba(255, 255, 255, 0.1)",
+            backgroundColor: "rgba(73, 163, 196, 0.15)", // accent hover
         },
+
         menuLabel: {
             marginLeft: "16px",
             flex: 1,
             textAlign: "left",
             display: sidebarOpen ? "block" : "none",
         },
+
         submenuContainer: (isOpen) => ({
             maxHeight: isOpen ? "500px" : "0",
             overflow: "hidden",
@@ -160,12 +170,13 @@ const TasksManagement = () => {
             marginLeft: sidebarOpen ? "20px" : "0",
             marginTop: "4px",
         }),
+
         submenuItem: {
             width: "100%",
             padding: "12px 16px",
             backgroundColor: "transparent",
             border: "none",
-            color: "white",
+            color: "#FFFFFF",
             fontSize: "14px",
             fontWeight: "500",
             textAlign: "left",
@@ -175,48 +186,54 @@ const TasksManagement = () => {
             marginBottom: "4px",
             display: sidebarOpen ? "block" : "none",
         },
+
         mainContent: {
             flex: 1,
             transition: "all 0.3s ease-in-out",
             marginLeft: sidebarOpen ? "280px" : "80px",
             minHeight: "100vh",
-            backgroundColor: "#F1F6FB",
+            backgroundColor: "#C7D8ED", // background
             display: "flex",
             flexDirection: "column",
         },
+
         header: {
             width: "100%",
-            background: "#2C5F6F",
-            color: "white",
+            background: "#00364A", // primary
+            color: "#FFFFFF",
             padding: "20px 32px",
-            boxShadow: "0 4px 12px rgba(0, 54, 74, 0.1)",
+            boxShadow: "0 4px 12px rgba(0, 54, 74, 0.15)", // shadowLight
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
         },
+
         headerLeft: {
             display: "flex",
             alignItems: "center",
             gap: "16px",
         },
+
         menuToggle: {
             padding: "10px",
-            backgroundColor: "rgba(255, 255, 255, 0.15)",
+            backgroundColor: "rgba(73, 163, 196, 0.2)", // accent
             border: "none",
             borderRadius: "10px",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "white",
+            color: "#FFFFFF",
             transition: "all 0.2s ease",
         },
+
         headerTitle: {
             fontSize: "28px",
             fontWeight: "700",
-            color: "white",
+            color: "#FFFFFF",
             letterSpacing: "0.5px",
         },
+
         main: {
             padding: "40px",
             flex: 1,
@@ -408,7 +425,14 @@ const TasksManagement = () => {
             <div style={sidebarStyles.container}>
                 <aside style={sidebarStyles.sidebar}>
                     <div style={sidebarStyles.sidebarInner}>
-                        <h2 style={sidebarStyles.sidebarHeader}>SCOUT</h2>
+                        <h2 
+                            style={sidebarStyles.sidebarHeader}
+                            onClick={() => navigate('/dashboard')}
+                            title="Go to Dashboard"
+                        >
+                            SCOUT
+                        </h2>
+                        
                         {Object.entries(menuContent).map(([key, { label, icon }]) => (
                             <div key={key}>
                                 <button
