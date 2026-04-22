@@ -11,6 +11,7 @@ import {
     CheckCircle,
     AlertCircle,
     Type,
+    ListChecks,
     RefreshCw,
     Loader2,
     Search,
@@ -305,8 +306,28 @@ const TaskScheduler = () => {
                 padding: '50px'
             }}>
                     {/* Tabs */}
-                    <div style={{ display: 'flex', backgroundColor: '#F3F4F6', padding: '4px', borderRadius: '12px', marginBottom: '40px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F3F4F6', padding: '4px', borderRadius: '12px', marginBottom: '40px' }}>
                         <TabButton active={activeTab === 'create'} onClick={() => setActiveTab('create')} icon={<Plus size={16} />}>Create Task</TabButton>
+                        <button 
+                            onClick={() => navigate('/tasksmanagement')}
+                            style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                padding: '12px 24px', 
+                                borderRadius: '10px', 
+                                border: 'none', 
+                                fontWeight: '600', 
+                                cursor: 'pointer', 
+                                backgroundColor: 'transparent', 
+                                color: '#00364A',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={e => e.target.style.backgroundColor = 'rgba(0, 54, 74, 0.05)'}
+                            onMouseLeave={e => e.target.style.backgroundColor = 'transparent'}
+                        >
+                            <ListChecks size={16} /> Task Manager
+                        </button>
                     </div>
 
                     {/* Response Messages - REMOVED: now using NotificationPanel */}

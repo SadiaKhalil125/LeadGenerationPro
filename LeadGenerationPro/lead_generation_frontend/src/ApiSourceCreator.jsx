@@ -3,6 +3,7 @@ import { Globe, Save, X, AlertTriangle, CheckCircle, Loader2, Plus, List, ArrowL
 import API_BASE from "./api_base";
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import Layout from './components/Layout';
 
 // Styling Components (Kept exactly as provided)
 const StyledInput = (props) => (
@@ -208,10 +209,10 @@ const ApiSourceCreator = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#C7D8ED', color: '#00364A', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", padding: '40px 20px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-      <div style={{ width: '100%', maxWidth: '1000px', backgroundColor: 'white', borderRadius: '25px', boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)', overflow: 'hidden' }}>
+    <Layout pageTitle="Add New API Source">
+      <div style={{ width: '100%', maxWidth: '1000px', backgroundColor: 'white', borderRadius: '25px', boxShadow: '0 15px 50px rgba(0, 54, 74, 0.15)', overflow: 'hidden', margin: '0 auto' }}>
 
-        {/* Header */}
+        {/* Header - kept for internal page title/description if needed, or can be removed if Layout header is enough */}
         <div style={{ padding: '40px 50px', borderBottom: '1px solid rgba(0, 54, 74, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <div style={{ width: '56px', height: '56px', backgroundColor: '#49A3C4', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
@@ -386,7 +387,7 @@ const ApiSourceCreator = () => {
         </div>
       </div>
       <style>{`.spin { animation: rotate 1s linear infinite; } @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-    </div>
+    </Layout>
   );
 };
 

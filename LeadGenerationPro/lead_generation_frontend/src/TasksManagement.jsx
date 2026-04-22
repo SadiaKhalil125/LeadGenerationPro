@@ -427,8 +427,8 @@ const TasksManagement = () => {
                     <div style={sidebarStyles.sidebarInner}>
                         <h2 
                             style={sidebarStyles.sidebarHeader}
-                            onClick={() => navigate('/dashboard')}
-                            title="Go to Dashboard"
+                            onClick={() => navigate('/')}
+                            title="Go to Homepage"
                         >
                             SCOUT
                         </h2>
@@ -492,7 +492,13 @@ const TasksManagement = () => {
             {/* Sidebar */}
             <aside style={sidebarStyles.sidebar}>
                 <div style={sidebarStyles.sidebarInner}>
-                    <h2 style={sidebarStyles.sidebarHeader}>SCOUT</h2>
+                    <h2 
+                        style={sidebarStyles.sidebarHeader}
+                        onClick={() => navigate('/')}
+                        title="Go to Homepage"
+                    >
+                        SCOUT
+                    </h2>
 
                     {Object.entries(menuContent).map(([key, { label, icon }]) => (
                         <div key={key}>

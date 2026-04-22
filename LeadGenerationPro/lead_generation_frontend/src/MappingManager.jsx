@@ -395,7 +395,8 @@ const MappingManager = () => {
         <div style={sidebarStyles.sidebarInner}>
           <h2 
             style={{ ...sidebarStyles.sidebarHeader, cursor: 'pointer' }}
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/')}
+            title="Go to Homepage"
           > SCOUT
           </h2>
 

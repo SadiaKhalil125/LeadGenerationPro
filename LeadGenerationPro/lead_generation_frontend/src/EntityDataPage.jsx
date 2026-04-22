@@ -459,8 +459,8 @@ const EntityDataScreen = () => {
         <div style={sidebarStyles.sidebarInner}>
           <h2 
             style={sidebarStyles.sidebarHeader}
-            onClick={() => navigate('/dashboard')}
-            title="Go to Dashboard"
+            onClick={() => navigate('/')}
+            title="Go to Homepage"
           >
             SCOUT
           </h2>
