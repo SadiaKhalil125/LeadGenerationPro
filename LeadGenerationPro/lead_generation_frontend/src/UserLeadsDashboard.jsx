@@ -528,6 +528,30 @@ export default function LeadGeneratorPage() {
                     Reset
                   </button>
                 </div>
+                
+                {/* Immediate access to Request Form */}
+                <p style={{ 
+                  marginTop: '15px', 
+                  textAlign: 'center', 
+                  fontSize: '14px', 
+                  color: '#00364A', 
+                  opacity: 0.8 
+                }}>
+                  Don't see your business? 
+                  <a 
+                    href="https://docs.google.com/forms/d/e/1FAIpQLSfvK4eNpQIwaboIpXmqxYbCYpX_QTPcS-4ZpKtqb0wNETN1Xw/viewform?usp=publish-editor"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ 
+                      color: '#49A3C4', 
+                      fontWeight: '700', 
+                      marginLeft: '5px',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Request an addition here
+                  </a>.
+                </p>
               </div>
             </div>
           </div>
@@ -1185,14 +1209,34 @@ export default function LeadGeneratorPage() {
                 <p style={{
                   color: '#00364A',
                   opacity: 0.7,
-                  marginBottom: '30px',
+                  marginBottom: '20px',
                   maxWidth: '500px',
-                  margin: '0 auto 30px'
+                  margin: '0 auto 20px'
                 }}>
                   Try adjusting your filters or broaden your search criteria to find more leads.
                   The database may not have {businessType} businesses in {location}.
                 </p>
-                <button
+                <div style={{ 
+                  marginBottom: '30px', 
+                  padding: '15px', 
+                  backgroundColor: 'rgba(73, 163, 196, 0.1)', 
+                  borderRadius: '10px',
+                  display: 'inline-block'
+                }}>
+                  <p style={{ color: '#00364A', margin: 0, fontSize: '14px', fontWeight: '500' }}>
+                    If we don't have your business in our list, you can send us a request and we will process and add this business with time. <br/>
+                    <a 
+                      href="https://docs.google.com/forms/d/e/1FAIpQLSfvK4eNpQIwaboIpXmqxYbCYpX_QTPcS-4ZpKtqb0wNETN1Xw/viewform?usp=publish-editor" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ color: '#49A3C4', textDecoration: 'underline', fontWeight: '700', marginTop: '5px', display: 'inline-block' }}
+                    >
+                      Send request via Google Form
+                    </a>
+                  </p>
+                </div>
+                <div>
+                  <button
                   onClick={handleReset}
                   style={{
                     padding: '12px 30px',
@@ -1217,7 +1261,8 @@ export default function LeadGeneratorPage() {
                   Start New Search
                 </button>
               </div>
-            )}
+            </div>
+          )}
 
             {/* Results Summary */}
             {leads.length > 0 && (
@@ -1291,6 +1336,62 @@ export default function LeadGeneratorPage() {
               </div>
             )}
           </section>
+        )}
+
+        {/* Business Request CTA */}
+        {searchPerformed && (
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '25px 40px',
+            boxShadow: '0 10px 30px rgba(0, 54, 74, 0.05)',
+            marginBottom: '40px',
+            border: '2px dashed rgba(73, 163, 196, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '20px',
+            flexWrap: 'wrap',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '32px' }}>🏢</div>
+            <div style={{ flex: 1, minWidth: '300px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#00364A', marginBottom: '5px' }}>
+                Can't find your business?
+              </h3>
+              <p style={{ color: '#00364A', opacity: 0.7, margin: 0, fontSize: '15px' }}>
+                If we don't have your business in our list, you can send us a request and we will process and add this business with time.
+              </p>
+            </div>
+            <a 
+              href="https://docs.google.com/forms/d/e/1FAIpQLSfvK4eNpQIwaboIpXmqxYbCYpX_QTPcS-4ZpKtqb0wNETN1Xw/viewform?usp=publish-editor"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '12px 25px',
+                backgroundColor: '#00364A',
+                color: 'white',
+                borderRadius: '12px',
+                fontWeight: '600',
+                textDecoration: 'none',
+                transition: 'all 0.3s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#004d66';
+                e.target.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#00364A';
+                e.target.style.transform = 'translateY(0)';
+              }}
+            >
+              <span>📩</span>
+              Request Business Addition
+            </a>
+          </div>
         )}
 
         {/* Features Section */}
