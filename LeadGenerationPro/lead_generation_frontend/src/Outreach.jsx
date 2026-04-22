@@ -74,6 +74,7 @@ export default function Outreach() {
   const [loadingSources, setLoadingSources] = useState(false);
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [contactSource, setContactSource] = useState("csv"); // "csv" or "source"
+  const [useExistingConfig, setUseExistingConfig] = useState(false);
 
   const addNotification = (type, message) => {
     const id = Date.now();
@@ -1035,6 +1036,7 @@ export default function Outreach() {
                 />
               </div>
 
+
               {/* Provider Card */}
               <div style={{
                 backgroundColor: '#F8FAFC',
@@ -1057,7 +1059,76 @@ export default function Outreach() {
                 </h3>
                 <ProviderSelector value={provider} onChange={setProvider} />
 
-                {provider === "sendgrid" && (
+                {/* Use Existing Config Toggle */}
+                <div style={{
+                  marginTop: '20px',
+                  marginBottom: '15px',
+                  padding: '12px 16px',
+                  backgroundColor: useExistingConfig ? '#E8F5E9' : '#F5F5F5',
+                  borderRadius: '12px',
+                  border: useExistingConfig ? '1px solid #4CAF50' : '1px solid #E0E0E0',
+                  transition: 'all 0.2s ease'
+                }}>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={useExistingConfig}
+                      onChange={(e) => setUseExistingConfig(e.target.checked)}
+                      style={{
+                        width: '18px',
+                        height: '18px',
+                        cursor: 'pointer',
+                        accentColor: '#49A3C4'
+                      }}
+                    />
+                    <span style={{
+                      fontWeight: '600',
+                      color: useExistingConfig ? '#2E7D32' : '#00364A',
+                      fontSize: '14px'
+                    }}>
+                      Use Existing Config
+                    </span>
+                    {useExistingConfig && (
+                      <span style={{
+                        marginLeft: 'auto',
+                        fontSize: '12px',
+                        color: '#4CAF50',
+                        backgroundColor: '#E8F5E9',
+                        padding: '4px 8px',
+                        borderRadius: '6px'
+                      }}>
+                        ✓ Active
+                      </span>
+                    )}
+                  </label>
+                  {useExistingConfig && (
+                    <div style={{
+                      marginTop: '10px',
+                      padding: '10px',
+                      backgroundColor: '#E8F5E9',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      color: '#2E7D32',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 16v-4M12 8h.01" />
+                      </svg>
+                      Applied provider configurations from user settings
+                    </div>
+                  )}
+                </div>
+
+                {!useExistingConfig && provider === "sendgrid" && (
                   <div style={{ marginTop: '20px' }}>
                     <div style={{
                       backgroundColor: 'white',
@@ -1082,7 +1153,7 @@ export default function Outreach() {
                           type="password"
                           placeholder="API Key"
                           value={config.api_key}
-                          onChange={(e) => setConfig({...config, api_key: e.target.value})}
+                          onChange={(e) => setConfig({ ...config, api_key: e.target.value })}
                           autoComplete="new-password"
                           style={inputStyle}
                         />
@@ -1090,14 +1161,14 @@ export default function Outreach() {
                           type="email"
                           placeholder="From Email"
                           value={config.from_email}
-                          onChange={(e) => setConfig({...config, from_email: e.target.value})}
+                          onChange={(e) => setConfig({ ...config, from_email: e.target.value })}
                           style={inputStyle}
                         />
                         <input
                           type="text"
                           placeholder="Your Name (for signature)"
                           value={config.from_name}
-                          onChange={(e) => setConfig({...config, from_name: e.target.value})}
+                          onChange={(e) => setConfig({ ...config, from_name: e.target.value })}
                           style={inputStyle}
                         />
                       </div>
@@ -1105,7 +1176,7 @@ export default function Outreach() {
                   </div>
                 )}
 
-                {provider === "smtp" && (
+                {!useExistingConfig && provider === "smtp" && (
                   <div style={{ marginTop: '20px' }}>
                     <div style={{
                       backgroundColor: 'white',
@@ -1130,7 +1201,7 @@ export default function Outreach() {
                           type="email"
                           placeholder="Username / Email"
                           value={config.smtp_username}
-                          onChange={(e) => setConfig({...config, smtp_username: e.target.value})}
+                          onChange={(e) => setConfig({ ...config, smtp_username: e.target.value })}
                           autoComplete="new-password"
                           style={inputStyle}
                         />
@@ -1138,7 +1209,7 @@ export default function Outreach() {
                           type="password"
                           placeholder="Password"
                           value={config.smtp_password}
-                          onChange={(e) => setConfig({...config, smtp_password: e.target.value})}
+                          onChange={(e) => setConfig({ ...config, smtp_password: e.target.value })}
                           autoComplete="new-password"
                           style={inputStyle}
                         />
@@ -1146,13 +1217,14 @@ export default function Outreach() {
                           type="text"
                           placeholder="Your Name (for signature)"
                           value={config.from_name}
-                          onChange={(e) => setConfig({...config, from_name: e.target.value})}
+                          onChange={(e) => setConfig({ ...config, from_name: e.target.value })}
                           style={inputStyle}
                         />
                       </div>
                     </div>
                   </div>
                 )}
+                
               </div>
             </div>
 
