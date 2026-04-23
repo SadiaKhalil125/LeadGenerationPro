@@ -57,7 +57,7 @@ export default function Outreach() {
     smtp_username: "",
     smtp_password: ""
   });
-  
+
   const [showContacts, setShowContacts] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [campaignDetails, setCampaignDetails] = useState({
@@ -66,11 +66,12 @@ export default function Outreach() {
     goal: ""
   });
   const [enriching, setEnriching] = useState(false);
-  
+  const [removedCount, setRemovedCount] = useState(0);
+
   // New state for source selection
   const [sources, setSources] = useState([]);
   // Change state to store source name instead of ID
-  const [selectedSourceName, setSelectedSourceName] = useState(""); 
+  const [selectedSourceName, setSelectedSourceName] = useState("");
   const [loadingSources, setLoadingSources] = useState(false);
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [contactSource, setContactSource] = useState("csv"); // "csv" or "source"
@@ -92,18 +93,18 @@ export default function Outreach() {
   // Check for pending contacts from Quick Extract
   useEffect(() => {
     const pendingData = localStorage.getItem('outreach_pending_contacts');
-    
+
     if (pendingData) {
       try {
         const { contacts, timestamp, source } = JSON.parse(pendingData);
-        
+
         // Optional: Check if data is fresh (within last 5 minutes)
         const isFresh = (Date.now() - timestamp) < 5 * 60 * 1000;
-        
+
         if (contacts && contacts.length > 0 && isFresh) {
           setContacts(contacts);
           addNotification('success', `✅ Loaded ${contacts.length} contacts from ${source || 'Quick Extract'}`);
-          
+
           // Clear localStorage after loading
           localStorage.removeItem('outreach_pending_contacts');
         } else if (!isFresh) {
@@ -126,7 +127,7 @@ export default function Outreach() {
     try {
       const response = await fetch(`${API_BASE}/source/scraped-sources`);
       const data = await response.json();
-      
+
       if (response.ok && data.sources) {
         setSources(data.sources);
       } else {
@@ -207,7 +208,13 @@ export default function Outreach() {
         }
 
         setContacts(data.contacts);
-        addNotification('success', `✅ Successfully loaded ${data.count} contacts`);
+        setRemovedCount(data.removed_count || 0);
+
+        let successMsg = `✅ Successfully loaded ${data.count} contacts`;
+        if (data.removed_count > 0) {
+          successMsg += `Can't outreach to ${data.removed_count} contacts due to unavailability of contact info.`;
+        }
+        addNotification('success', successMsg);
       } catch (err) {
         console.error('Upload error:', err);
         setError(err.message);
@@ -306,7 +313,7 @@ export default function Outreach() {
             </p>
           )}
         </div>
-        
+
         <button
           onClick={onLoadLeads}
           disabled={!selectedSourceName || loadingLeads}
@@ -342,7 +349,7 @@ export default function Outreach() {
     );
   };
 
-  const ContactsStatus = ({ contacts, onViewContacts, onEnrich, enriching }) => {
+  const ContactsStatus = ({ contacts, removedCount, onViewContacts, onEnrich, enriching }) => {
     if (!contacts.length) return null;
 
     return (
@@ -377,12 +384,13 @@ export default function Outreach() {
               {contacts.length} Contact{contacts.length !== 1 ? 's' : ''} Loaded
             </div>
             <div style={{ fontSize: '12px', color: '#00364A', opacity: 0.6 }}>
+              {removedCount > 0 && <span style={{ color: '#EF4444', fontWeight: '600' }}>({removedCount} skipped) </span>}
               {contacts[0]?.source_name && `Source: ${contacts[0].source_name}`}
               {!contacts[0]?.source_name && 'Ready for campaign'}
             </div>
           </div>
         </div>
-        
+
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             onClick={onEnrich}
@@ -405,7 +413,7 @@ export default function Outreach() {
             {enriching ? <FaSpinner className="spin" /> : <BsStars />}
             {enriching ? 'Enriching...' : 'Enrich'}
           </button>
-          
+
           <button
             onClick={onViewContacts}
             style={{
@@ -554,13 +562,13 @@ export default function Outreach() {
         Goal: ${campaignDetails.goal}
         
         The email should be personalized and include placeholders like {{name}}, {{company}} where appropriate. Keep it concise and engaging.`;
-      
+
       const res = await fetch(`${BASE}/generate-ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
-      
+
       const data = await res.json();
       setMessage(data.generated);
       addNotification('success', "AI-generated email created based on your campaign settings");
@@ -610,7 +618,7 @@ export default function Outreach() {
       setAction(null);
     }
   };
-  
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -625,7 +633,7 @@ export default function Outreach() {
         <ContactsViewer
           contacts={contacts}
           onClose={() => setShowContacts(false)}
-          onUpdateContacts={setContacts}  
+          onUpdateContacts={setContacts}
         />
       )}
 
@@ -958,7 +966,7 @@ export default function Outreach() {
                   <FiUsers size={20} color="#49A3C4" />
                   Contacts
                 </h3>
-                
+
                 {/* Source selection tabs */}
                 <div style={{
                   display: 'flex',
@@ -1004,7 +1012,7 @@ export default function Outreach() {
                     From Scraped Source
                   </button>
                 </div>
-                
+
                 {contactSource === "csv" ? (
                   <div>
                     <CSVUploader setContacts={setContacts} />
@@ -1018,16 +1026,16 @@ export default function Outreach() {
                     </p>
                   </div>
                 ) : (
-                    <SourceSelector
-                      sources={sources}
-                      selectedSourceName={selectedSourceName}  // Changed prop name
-                      onSourceChange={setSelectedSourceName}   // Changed to use name setter
-                      onLoadLeads={fetchLeadsFromSource}
-                      loadingLeads={loadingLeads}
-                      loadingSources={loadingSources}
-                    />
+                  <SourceSelector
+                    sources={sources}
+                    selectedSourceName={selectedSourceName}  // Changed prop name
+                    onSourceChange={setSelectedSourceName}   // Changed to use name setter
+                    onLoadLeads={fetchLeadsFromSource}
+                    loadingLeads={loadingLeads}
+                    loadingSources={loadingSources}
+                  />
                 )}
-                
+
                 <ContactsStatus
                   contacts={contacts}
                   onViewContacts={() => setShowContacts(true)}
@@ -1308,7 +1316,7 @@ export default function Outreach() {
                   <FaFileAlt size={18} color="#49A3C4" />
                   Email Content
                 </h3>
-                
+
                 <div style={{ marginBottom: '20px' }}>
                   <label style={{
                     display: 'block',
@@ -1401,7 +1409,7 @@ export default function Outreach() {
               {action === "preview" ? <FaSpinner className="spin" /> : <FaEye />}
               Preview
             </button>
-            
+
             <button
               onClick={sendCampaign}
               disabled={action === "send" || !contacts.length || !subject || !message}
@@ -1449,19 +1457,19 @@ export default function Outreach() {
             gap: '30px',
             marginTop: '40px'
           }}>
-            <FeatureCard 
+            <FeatureCard
               icon="🚀"
               title="Bulk Email Sending"
               description="Send personalized emails to thousands of contacts with a single click. Track delivery and engagement."
               color="#00364A"
             />
-            <FeatureCard 
+            <FeatureCard
               icon="🤖"
               title="AI-Powered Content"
               description="Generate professional outreach emails using AI based on your campaign goals. Save time and improve response rates."
               color="#49A3C4"
             />
-            <FeatureCard 
+            <FeatureCard
               icon="📊"
               title="Lead Enrichment"
               description="Automatically enrich your contacts with company data, industry info, and personalized insights using AI."
@@ -1502,8 +1510,8 @@ function FeatureCard({ icon, title, description, color }) {
         padding: '30px',
         transition: 'all 0.3s',
         transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
-        boxShadow: isHovered 
-          ? `0 15px 40px rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, 0.15)` 
+        boxShadow: isHovered
+          ? `0 15px 40px rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, 0.15)`
           : '0 8px 25px rgba(0, 54, 74, 0.08)',
         cursor: 'pointer',
         border: `2px solid rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, 0.1)`

@@ -30,13 +30,22 @@ async def upload_csv(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Only CSV files are allowed")
         
         contacts = await parse_csv(file)
+        
+        # Normalize keys to lowercase for consistent processing
         contacts = [{k.lower(): v for k, v in row.items()} for row in contacts]
-        #print(f"Parsed {len(contacts)} contacts from CSV")
+        
+        initial_count = len(contacts)
+        # Filter out contacts without an email
+        contacts = [c for c in contacts if c.get('email') and str(c.get('email')).strip()]
+        removed_count = initial_count - len(contacts)
+
+        logger.info(f"CSV Upload: {len(contacts)} valid contacts, {removed_count} removed (no email)")
 
         return {
             "count": len(contacts), 
+            "removed_count": removed_count,
             "contacts": contacts,
-            "message": f"Successfully loaded {len(contacts)} contacts"
+            "message": f"Successfully loaded {len(contacts)} contacts. {removed_count} removed due to missing emails."
         }
     except Exception as e:
         logger.error(f"CSV upload failed: {str(e)}")

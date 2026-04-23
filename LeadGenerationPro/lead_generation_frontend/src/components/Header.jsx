@@ -226,8 +226,8 @@ const Header = ({ activeTab, onToggleSidebar, fullWidth, title }) => {
                     <Link to="/quick-extract" style={dropdownItemStyle} onClick={() => setIsMoreOpen(false)} onMouseEnter={e => e.target.style.background = '#F0F7FF'} onMouseLeave={e => e.target.style.background = 'transparent'}>
                       Quick Extract
                     </Link>
-                    <Link to="/userleadsdashboard" style={dropdownItemStyle} onClick={() => setIsMoreOpen(false)} onMouseEnter={e => e.target.style.background = '#F0F7FF'} onMouseLeave={e => e.target.style.background = 'transparent'}>
-                      Dashboard
+                    <Link to="/dashboard" style={dropdownItemStyle} onClick={() => setIsMoreOpen(false)} onMouseEnter={e => e.target.style.background = '#F0F7FF'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                      Admin Dashboard
                     </Link>
                     <div style={{ borderTop: '1px solid rgba(0,54,74,0.05)' }} />
                     <button onClick={logout} style={{ ...dropdownItemStyle, color: '#EF4444' }} onMouseEnter={e => e.target.style.background = '#FFF5F5'} onMouseLeave={e => e.target.style.background = 'transparent'}>

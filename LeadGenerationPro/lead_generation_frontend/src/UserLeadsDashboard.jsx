@@ -956,7 +956,7 @@ export default function LeadGeneratorPage() {
                       backgroundColor: '#E0EFFF',
                       borderBottom: '2px solid rgba(0, 54, 74, 0.1)'
                     }}>
-                      {['Company', 'Industry', 'Location', 'Contact Info', 'Rating', 'Source', 'Actions'].map((header) => (
+                      {['Company', 'Industry', 'Location', 'Contact Info', 'Rating', 'Source'].map((header) => (
                         <th key={header} style={{
                           padding: '20px 15px',
                           textAlign: 'center',
@@ -1154,30 +1154,6 @@ export default function LeadGeneratorPage() {
                         
                         
                         
-                        {/* Actions */}
-                        <td style={{ padding: '18px 15px' }}>
-                          <button style={{
-                            padding: '8px 16px',
-                            backgroundColor: 'transparent',
-                            color: '#49A3C4',
-                            border: '2px solid #49A3C4',
-                            borderRadius: '8px',
-                            fontWeight: '600',
-                            fontSize: '13px',
-                            cursor: 'pointer',
-                            transition: 'all 0.3s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.backgroundColor = '#49A3C4';
-                            e.target.style.color = 'white';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.backgroundColor = 'transparent';
-                            e.target.style.color = '#49A3C4';
-                          }}>
-                            View Details
-                          </button>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
