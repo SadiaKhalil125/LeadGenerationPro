@@ -140,6 +140,12 @@ export default function Outreach() {
       setLoadingSources(false);
     }
   };
+  
+  // Update removedCount whenever contacts list changes
+  useEffect(() => {
+    const missingEmails = contacts.filter(c => !c.email || !c.email.trim()).length;
+    setRemovedCount(missingEmails);
+  }, [contacts]);
 
   // Modified fetchLeadsFromSource function to use source name
   const fetchLeadsFromSource = async () => {
@@ -169,7 +175,12 @@ export default function Outreach() {
         }));
 
         setContacts(transformedContacts);
-        addNotification('success', `✅ Loaded ${transformedContacts.length} leads from "${data.source_name}"`);
+        const missingEmails = transformedContacts.filter(c => !c.email || !c.email.trim()).length;
+        let successMsg = `✅ Loaded ${transformedContacts.length} leads from "${data.source_name}"`;
+        if (missingEmails > 0) {
+          successMsg += `. Note: ${missingEmails} leads are missing email info.`;
+        }
+        addNotification('success', successMsg);
       } else {
         throw new Error(data.detail || "Failed to load leads");
       }
@@ -208,11 +219,11 @@ export default function Outreach() {
         }
 
         setContacts(data.contacts);
-        setRemovedCount(data.removed_count || 0);
-
+        
+        const missingEmails = data.contacts.filter(c => !c.email || !c.email.trim()).length;
         let successMsg = `✅ Successfully loaded ${data.count} contacts`;
-        if (data.removed_count > 0) {
-          successMsg += `Can't outreach to ${data.removed_count} contacts due to unavailability of contact info.`;
+        if (missingEmails > 0) {
+          successMsg += `. ${missingEmails} contacts are missing email info and will be skipped during outreach.`;
         }
         addNotification('success', successMsg);
       } catch (err) {

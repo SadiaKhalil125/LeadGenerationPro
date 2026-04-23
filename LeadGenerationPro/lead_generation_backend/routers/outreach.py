@@ -34,18 +34,12 @@ async def upload_csv(file: UploadFile = File(...)):
         # Normalize keys to lowercase for consistent processing
         contacts = [{k.lower(): v for k, v in row.items()} for row in contacts]
         
-        initial_count = len(contacts)
-        # Filter out contacts without an email
-        contacts = [c for c in contacts if c.get('email') and str(c.get('email')).strip()]
-        removed_count = initial_count - len(contacts)
-
-        logger.info(f"CSV Upload: {len(contacts)} valid contacts, {removed_count} removed (no email)")
+        logger.info(f"CSV Upload: {len(contacts)} contacts loaded.")
 
         return {
             "count": len(contacts), 
-            "removed_count": removed_count,
             "contacts": contacts,
-            "message": f"Successfully loaded {len(contacts)} contacts. {removed_count} removed due to missing emails."
+            "message": f"Successfully loaded {len(contacts)} contacts."
         }
     except Exception as e:
         logger.error(f"CSV upload failed: {str(e)}")
@@ -83,10 +77,47 @@ async def preview_email(request: PreviewRequest):
         raise HTTPException(status_code=500, detail=f"Preview failed: {str(e)}")
 
 
+# @router.post("/send")
+# async def send_outreach(request: OutreachRequest):
+#     """Execute email campaign"""
+#     #request=request.model_dump()
+#     print(f"Received outreach request: provider={request.provider}, contacts={len(request.contacts)}")
+    
+#     try:
+#         # Validate required fields
+#         if not request.contacts:
+#             raise HTTPException(status_code=400, detail="No contacts provided")
+        
+#         if not request.subject or not request.message:
+#             raise HTTPException(status_code=400, detail="Subject and message are required")
+        
+#         # Validate provider config
+#         # if request.provider == "sendgrid" and not request.config.get("api_key"):
+#         #     raise HTTPException(status_code=400, detail="SendGrid API key is required")
+        
+#         print(f"Executing campaign with provider: {request.provider}")
+#         results = await execute_campaign(request)
+
+#         success = sum(1 for r in results if r["status"] == "sent")
+#         failed = sum(1 for r in results if r["status"] == "failed")
+
+#         return {
+#             "total": len(results),
+#             "success": success,
+#             "failed": failed,
+#             "details": results,
+#             "message": f"Campaign completed: {success} sent, {failed} failed"
+#         }
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(f"Campaign failed: {str(e)}")
+#         raise HTTPException(status_code=500, detail=f"Campaign failed: {str(e)}")
+
+
 @router.post("/send")
 async def send_outreach(request: OutreachRequest):
     """Execute email campaign"""
-    #request=request.model_dump()
     print(f"Received outreach request: provider={request.provider}, contacts={len(request.contacts)}")
     
     try:
@@ -96,12 +127,31 @@ async def send_outreach(request: OutreachRequest):
         
         if not request.subject or not request.message:
             raise HTTPException(status_code=400, detail="Subject and message are required")
-        
-        # Validate provider config
-        # if request.provider == "sendgrid" and not request.config.get("api_key"):
-        #     raise HTTPException(status_code=400, detail="SendGrid API key is required")
-        
+
+        #Filter out invalid emails (null, empty, whitespace)
+        valid_contacts = []
+        skipped_contacts = []
+
+        for contact in request.contacts:
+            email = contact.get("email")
+
+            if email and isinstance(email, str) and email.strip():
+                valid_contacts.append(contact)
+            else:
+                skipped_contacts.append(contact)
+
+        skipped = len(skipped_contacts)
+
+        if not valid_contacts:
+            raise HTTPException(status_code=400, detail="No valid email addresses found")
+
+        # Replace contacts with filtered ones
+        request.contacts = valid_contacts
+
+        print(f"Valid contacts: {len(valid_contacts)}, Skipped: {skipped}")
         print(f"Executing campaign with provider: {request.provider}")
+
+        # Execute campaign
         results = await execute_campaign(request)
 
         success = sum(1 for r in results if r["status"] == "sent")
@@ -111,15 +161,18 @@ async def send_outreach(request: OutreachRequest):
             "total": len(results),
             "success": success,
             "failed": failed,
+            "skipped": skipped,
             "details": results,
-            "message": f"Campaign completed: {success} sent, {failed} failed"
+            "skipped_contacts": skipped_contacts,  # optional but useful
+            "message": f"Campaign completed: {success} sent, {failed} failed, {skipped} skipped"
         }
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Campaign failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Campaign failed: {str(e)}")
-    
+
 # Add this new Pydantic model
 class EnrichRequest(BaseModel):
     contacts: List[Dict]
