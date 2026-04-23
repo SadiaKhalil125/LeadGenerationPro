@@ -184,7 +184,7 @@ const Header = ({ activeTab, onToggleSidebar, fullWidth, title }) => {
               <Link to="/userleadsdashboard" style={navItemStyle('leads')}
                 onMouseEnter={(e) => handleMouseEnter(e, 'leads')}
                 onMouseLeave={(e) => handleMouseLeave(e, 'leads')}>
-                Dashboard
+                Find Leads
               </Link>
               <Link to="/outreach" style={navItemStyle('outreach')}
                 onMouseEnter={(e) => handleMouseEnter(e, 'outreach')}

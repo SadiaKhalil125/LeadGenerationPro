@@ -28,9 +28,28 @@ export default function AuthenticationPage() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
 
+  // Error State for inline display
+  const [errorMessage, setErrorMessage] = useState("");
+
+  // Notification State
+  const [notifications, setNotifications] = useState([]);
+
+  const addNotification = (type, message) => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
+
+  const removeNotification = (id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
   const handleLogin = async () => {
+    setErrorMessage("");
     if (!email || !password) {
-      alert("Please enter both email and password");
+      setErrorMessage("Please enter both email and password");
       return;
     }
     setLoadingLogin(true);
@@ -47,19 +66,20 @@ export default function AuthenticationPage() {
         login(data.user, data.token);
         navigate("/userleadsdashboard");
       } else {
-        alert(data.detail || "Invalid email or password");
+        setErrorMessage(data.detail || "Invalid email or password");
       }
     } catch (error) {
       console.error(error);
-      alert("Server error. Check backend.");
+      setErrorMessage("Server error. Please check your connection.");
     } finally {
       setLoadingLogin(false);
     }
   };
 
   const handleSignup = async () => {
+    setErrorMessage("");
     if (!fullName || !signupEmail || !signupPassword) {
-      alert("Please fill all fields for signup");
+      setErrorMessage("Please fill all fields for signup");
       return;
     }
     setLoadingSignup(true);
@@ -77,17 +97,71 @@ export default function AuthenticationPage() {
       const data = await res.json();
 
       if (res.ok && data.status === "success") {
-        alert("Signup successful! You can now login.");
+        addNotification("success", "Signup successful! You can now login.");
         setShowLogin(true);
       } else {
-        alert(data.detail || "Signup failed. Try again.");
+        setErrorMessage(data.detail || "Signup failed. Try again.");
       }
     } catch (error) {
       console.error(error);
-      alert("Server error. Check backend.");
+      setErrorMessage("Server error. Please check your connection.");
     } finally {
       setLoadingSignup(false);
     }
+  };
+
+  const NotificationPanel = ({ notifications, onRemove }) => {
+    if (!notifications.length) return null;
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: '20px',
+        right: '20px',
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        maxWidth: '350px'
+      }}>
+        <AnimatePresence>
+          {notifications.map(notif => (
+            <motion.div
+              key={notif.id}
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              style={{
+                backgroundColor: notif.type === 'success' ? '#10B981' : '#EF4444',
+                color: 'white',
+                padding: '15px 20px',
+                borderRadius: '12px',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ fontSize: '14px', fontWeight: '500' }}>{notif.message}</span>
+              <button
+                onClick={() => onRemove(notif.id)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '18px',
+                  cursor: 'pointer',
+                  opacity: 0.8,
+                  marginLeft: '10px'
+                }}
+              >
+                ×
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    );
   };
 
   const Spinner = () => (
@@ -143,6 +217,7 @@ export default function AuthenticationPage() {
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
       overflow: 'hidden'
     }}>
+      <NotificationPanel notifications={notifications} onRemove={removeNotification} />
       {/* Homepage Grid Background Pattern */}
       <div style={{
         position: 'absolute',
@@ -324,6 +399,29 @@ export default function AuthenticationPage() {
                   </button>
                 </div>
 
+                {errorMessage && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    style={{ 
+                      color: '#EF4444', 
+                      fontSize: '14px', 
+                      fontWeight: '500', 
+                      marginTop: '10px', 
+                      marginBottom: '15px',
+                      padding: '8px 12px',
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <span style={{ fontSize: '16px' }}>⚠️</span> {errorMessage}
+                  </motion.div>
+                )}
+
                 <motion.button 
                   onClick={handleLogin}
                   disabled={loadingLogin}
@@ -355,7 +453,10 @@ export default function AuthenticationPage() {
                 <p style={{ textAlign: 'center', marginTop: '30px', color: '#64748B', fontSize: '15px' }}>
                   Don't have an account? {' '}
                   <button 
-                    onClick={() => setShowLogin(false)} 
+                    onClick={() => {
+                      setShowLogin(false);
+                      setErrorMessage("");
+                    }} 
                     style={{ background: 'none', border: 'none', color: '#49A3C4', fontWeight: '700', cursor: 'pointer', padding: 0 }}
                   >
                     Create Account
@@ -430,6 +531,29 @@ export default function AuthenticationPage() {
                   </button>
                 </div>
 
+                {errorMessage && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    style={{ 
+                      color: '#EF4444', 
+                      fontSize: '14px', 
+                      fontWeight: '500', 
+                      marginTop: '10px', 
+                      marginBottom: '15px',
+                      padding: '8px 12px',
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <span style={{ fontSize: '16px' }}>⚠️</span> {errorMessage}
+                  </motion.div>
+                )}
+
                 <motion.button 
                   onClick={handleSignup}
                   disabled={loadingSignup}
@@ -461,7 +585,10 @@ export default function AuthenticationPage() {
                 <p style={{ textAlign: 'center', marginTop: '30px', color: '#64748B', fontSize: '15px' }}>
                   Already have an account? {' '}
                   <button 
-                    onClick={() => setShowLogin(true)} 
+                    onClick={() => {
+                      setShowLogin(true);
+                      setErrorMessage("");
+                    }} 
                     style={{ background: 'none', border: 'none', color: '#49A3C4', fontWeight: '700', cursor: 'pointer', padding: 0 }}
                   >
                     Sign In
