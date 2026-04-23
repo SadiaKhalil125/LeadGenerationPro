@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AuthContext } from './AuthContext';
 import { Globe, Magnet, Clock, LucideHammer, Target, BarChart2, Link2, Bot, Zap, Search, Database, Settings, Cloud, Activity, Layers, Bug, Network } from 'lucide-react';
 import Header from './components/Header';
 // import { Target, BarChart2, Link2 } from 'lucide-react';
@@ -11,9 +12,10 @@ export default function WebScraperLanding() {
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   const handleTryNow = () => {
     if (url) {
-      alert(`Processing URL: ${url}`);
+      navigate('/quick-extract', { state: { initialUrl: url } });
     } else {
       alert('Please enter a URL first');
     }
@@ -183,6 +185,7 @@ export default function WebScraperLanding() {
               alignItems: 'center',
               gap: '10px'
             }}
+              onClick={() => navigate(user ? '/chatbot' : '/login')}
               onMouseEnter={(e) => {
                 e.target.style.backgroundColor = '#00364A';
                 e.target.style.color = 'white';
@@ -195,7 +198,7 @@ export default function WebScraperLanding() {
                 e.target.style.transform = 'translateY(0)';
                 e.target.style.boxShadow = 'none';
               }}>
-              <span style={{ fontSize: '20px' }}>✨</span> How it works
+              <span style={{ fontSize: '20px' }}></span> How it works
             </button>
           </div>
 
@@ -256,7 +259,7 @@ export default function WebScraperLanding() {
                 e.target.style.transform = 'translateY(0)';
                 e.target.style.boxShadow = 'none';
               }}>
-              💬 Try it now
+              Try it now
             </button>
           </div>
         </div>

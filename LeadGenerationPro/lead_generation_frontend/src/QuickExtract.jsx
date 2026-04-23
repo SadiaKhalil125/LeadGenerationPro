@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { 
   Globe, 
   Database, 
@@ -326,6 +327,7 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], className }
 /* --- Main Component --- */
 
 export default function QuickExtract() {
+  const location = useLocation();
   // --- STATE ---
   const [url, setUrl] = useState("");
   const [fields, setFields] = useState([]); // Dynamic field list
@@ -369,6 +371,13 @@ export default function QuickExtract() {
     const urlLower = url.toLowerCase();
     setIsGoogleMaps(urlLower.includes('google.com/maps') || urlLower.includes('maps.google.com'));
   }, [url]);
+
+  // Load initial URL if passed from homepage
+  useEffect(() => {
+    if (location.state && location.state.initialUrl) {
+      setUrl(location.state.initialUrl);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     if (fields.length === 0) {
