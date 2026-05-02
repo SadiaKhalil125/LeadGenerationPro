@@ -134,32 +134,27 @@ Lead Generation Pro solves a critical problem faced by every tech business: find
 
 ---
 
-## Deployment Summary
+## 🚀 Deployment Summary
 
-Lead Generation Pro is currently deployed as a split-stack system with a separately hosted frontend and containerized backend services.
+Scout - Lead Generation Pro is deployed as a distributed hybrid-cloud system to ensure maximum availability and scalability.
 
-- **Frontend**: Vercel
-- **Backend API**: Docker image
-- **Worker**: Docker image
-- **Status Updater**: Docker image
-- **Message Queue**: Apache Kafka running in Docker
-- **Database**: PostgreSQL
-- **CI/CD**: Not implemented yet
+### **Live Platform Links**
+*   **Frontend Dashboard (Vercel):** [https://lead-generation-frontend-taupe.vercel.app/](https://lead-generation-frontend-taupe.vercel.app/)
+*   **Backend API (Render):** [https://lead-generation-backend-service.onrender.com](https://lead-generation-backend-ob2q.onrender.com)
+*   **Background Worker (Hugging Face):** [https://huggingface.co/spaces/Sadia712/leadgenworker](https://huggingface.co/spaces/Sadia712/leadgenworker)
+*   **Database (AWS RDS):** Managed PostgreSQL Instance
 
-### Deployment Notes
+### **Architecture & Infrastructure**
+*   **Frontend**: React 19 / Vite hosted on **Vercel** with automated CD.
+*   **Backend API**: FastAPI hosted on **Render** (Dockerized) with automated CD.
+*   **Worker Service**: Python/Playwright hosted on **Hugging Face Spaces** (Always-on Docker instance).
+*   **Message Broker**: **Aiven Kafka** (Managed SASL_SSL) for inter-service communication.
+*   **Database**: **AWS RDS** for persistent lead and task storage.
 
-- Kafka is required for scheduled and background task execution.
-- The backend runs as three services: API, worker, and status updater.
-- Backend images can be started through Docker Compose or through manual `docker run` commands.
-- The frontend can be deployed separately on Vercel.
-- Jenkins and GitHub Actions pipelines are not configured yet.
-
-### Deployment Artifacts
-
-- **Frontend URL**: `Add your Vercel URL here`
-- **Backend API Image**: `sadia2004/scraping-api:latest`
-- **Worker Image**: `sadia2004/scraping-worker:latest`
-- **Status Image**: `sadia2004/scraping-status:latest`
+### **CI/CD Status**
+*   **Vercel:** Fully automated Continuous Deployment linked to the GitHub repository.
+*   **Render:** Automated rebuilds and redeployments upon every push to the main branch.
+*   **Hugging Face:** Automated container builds via Git-based workflow.
 
 ---
 
