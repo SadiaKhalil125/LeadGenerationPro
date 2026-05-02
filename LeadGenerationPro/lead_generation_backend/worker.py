@@ -17,39 +17,54 @@ except ImportError as e:
     print(f"❌ CRITICAL: Failed to import 'execute_task': {e}")
     print("   Ensure 'task_crud.py' and all its dependencies (models, routers, etc.) are in the '/app' directory inside the container.")
     sys.exit(1)
-
-
 # --- Configuration ---
 KAFKA_TOPIC = "scraping_tasks"
 KAFKA_STATUS_TOPIC = "task_status_updates"
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
-# BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "host.docker.internal:9092")
+
+def get_kafka_config():
+    """Helper to generate Kafka config with SASL_SSL support."""
+    config = {
+        "bootstrap_servers": BOOTSTRAP,
+    }
+    
+    security_protocol = os.getenv("KAFKA_SECURITY_PROTOCOL", "SASL_SSL")
+    if security_protocol == "SASL_SSL":
+        config.update({
+            "security_protocol": "SASL_SSL",
+            "sasl_mechanism": os.getenv("KAFKA_SASL_MECHANISM", "SCRAM-SHA-256"),
+            "sasl_plain_username": os.getenv("KAFKA_SASL_USER"),
+            "sasl_plain_password": os.getenv("KAFKA_SASL_PASSWORD"),
+            "ssl_cafile": os.getenv("KAFKA_CA_LOCATION"),
+            "ssl_check_hostname": False
+        })
+    return config
 
 # --- Kafka Clients ---
 print(f" Worker connecting to Kafka at {BOOTSTRAP}...")
 
-try:
-    # Consumer for receiving new scraping tasks
-    # UPDATED CONFIGURATION to prevent "CommitFailedError" loop
-    consumer = KafkaConsumer(
+def create_consumer():
+    config = get_kafka_config()
+    return KafkaConsumer(
         KAFKA_TOPIC,
-        bootstrap_servers=BOOTSTRAP,
-        auto_offset_reset='latest',  # Don't reprocess old messages on pod restart
-        enable_auto_commit=False,  # Manual commit for better control and idempotency
+        auto_offset_reset='latest',
+        enable_auto_commit=False,
         group_id='scraping-workers',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        
-        # --- CRITICAL PERFORMANCE FIXES FOR K8S ---
-        max_poll_records=1,           # Only fetch 1 task at a time. Ensures we commit before fetching next.
-        max_poll_interval_ms=90000000, # 25 hours. Allows long scraping tasks without getting kicked from group.
-        session_timeout_ms=60000,     # 60 Seconds. Tolerates network jitter in K8s.
-        heartbeat_interval_ms=10000   # 10 Seconds. Frequent heartbeats to keep connection alive.
+        max_poll_records=1,
+        max_poll_interval_ms=90000000,
+        session_timeout_ms=60000,
+        heartbeat_interval_ms=10000,
+        **config
     )
 
-    # Producer for sending status updates
+try:
+    consumer = create_consumer()
+    
+    producer_config = get_kafka_config()
     status_producer = KafkaProducer(
-        bootstrap_servers=BOOTSTRAP,
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+        **producer_config
     )
     print("Kafka clients connected successfully.")
 except Exception as e:
@@ -208,18 +223,7 @@ while True:
             pass
         # Recreate consumer and continue the outer loop
         try:
-            consumer = KafkaConsumer(
-                KAFKA_TOPIC,
-                bootstrap_servers=BOOTSTRAP,
-                auto_offset_reset='latest',
-                enable_auto_commit=False,
-                group_id='scraping-workers',
-                value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-                max_poll_records=1,           # Ensure config matches initial setup
-                max_poll_interval_ms=1200000,
-                session_timeout_ms=60000,
-                heartbeat_interval_ms=10000
-            )
+            consumer = create_consumer()
             print("Recreated Kafka consumer successfully.")
             continue
         except Exception as e:
@@ -239,18 +243,7 @@ while True:
         import time
         time.sleep(5)
         try:
-            consumer = KafkaConsumer(
-                KAFKA_TOPIC,
-                bootstrap_servers=BOOTSTRAP,
-                auto_offset_reset='latest',
-                enable_auto_commit=False,
-                group_id='scraping-workers',
-                value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-                max_poll_records=1,           # Ensure config matches initial setup
-                max_poll_interval_ms=1200000,
-                session_timeout_ms=60000,
-                heartbeat_interval_ms=10000
-            )
+            consumer = create_consumer()
         except Exception as e2:
             print(f"Failed to recreate consumer after error: {e2}")
             time.sleep(5)

@@ -4,7 +4,7 @@ metadata:
   name: worker-deployment
   namespace: scraping-system
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: worker
@@ -19,15 +19,30 @@ spec:
         imagePullPolicy: Always
         resources:
           requests:
-            cpu: "500m"
-            memory: "1Gi"
+            cpu: "200m"
+            memory: "256Mi"
           limits:
-            cpu: "1"
-            memory: "2Gi"    
+            cpu: "500m"
+            memory: "512Mi"    
         env:       
-        # Use PLAINTEXT_DOCKER listener on port 9093 for Docker/K8s services
         - name: KAFKA_BOOTSTRAP
-          value: "host.docker.internal:9093"
+          value: "kafka-leadgenpro-lead-gen-pro.j.aivencloud.com:16246"
+        - name: KAFKA_SECURITY_PROTOCOL
+          value: "SASL_SSL"
+        - name: KAFKA_SASL_MECHANISM
+          value: "SCRAM-SHA-256"
+        - name: KAFKA_SASL_USER
+          valueFrom:
+            secretKeyRef:
+              name: aiven-kafka-sasl
+              key: username
+        - name: KAFKA_SASL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: aiven-kafka-sasl
+              key: password
+        - name: KAFKA_CA_LOCATION
+          value: "/etc/kafka-certs/ca.pem"
         - name: DB_HOST
           value: "leadgenerationdb.c1e42aci8a5v.eu-north-1.rds.amazonaws.com" 
         - name: DB_PORT
@@ -41,4 +56,12 @@ spec:
             secretKeyRef:
               name: rds-credentials
               key: password
+        volumeMounts:
+        - name: kafka-certs
+          mountPath: "/etc/kafka-certs"
+          readOnly: true
+      volumes:
+      - name: kafka-certs
+        secret:
+          secretName: aiven-kafka-certs
           

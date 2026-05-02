@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.env
+
+# Secrets (IMPORTANT)
+lead_generation_backend/k8s/aiven-kafka-sasl.yaml
+lead_generation_backend/k8s/aiven-kafka-secret.yaml
+lead_generation_backend/k8s/*.pem
+lead_generation_backend/k8s/*.cert
+lead_generation_backend/k8s/*.key
+
+# IDE
+.vscode/
+.idea/

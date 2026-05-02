@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aiven-kafka-sasl
+  namespace: scraping-system
+type: Opaque
+stringData:
+  username: avnadmin
+  password: YOUR_AIVEN_PASSWORD_HERE
