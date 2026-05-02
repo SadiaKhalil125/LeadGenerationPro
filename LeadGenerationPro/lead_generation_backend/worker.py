@@ -1,10 +1,31 @@
-import json
 import os
 import sys
+import json
 import asyncio
+import threading
 from datetime import datetime
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import CommitFailedError
+from uvicorn import Config, Server
+from fastapi import FastAPI
+
+# --- Hugging Face Health Check Server ---
+# HF Spaces requires a web server on port 7860
+app = FastAPI()
+
+@app.get("/")
+def health_check():
+    return {"status": "worker_running", "timestamp": datetime.utcnow().isoformat()}
+
+def run_health_server():
+    config = Config(app=app, host="0.0.0.0", port=7860)
+    server = Server(config)
+    server.run()
+
+# Start the health check in a background thread
+threading.Thread(target=run_health_server, daemon=True).start()
+
+# --- Rest of your imports ---
 from routers.task_crud import execute_task, execute_quick_extract_task
 from api_executor import execute_api_task
 import httpx
