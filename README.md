@@ -140,7 +140,7 @@ Scout - Lead Generation Pro is deployed as a distributed hybrid-cloud system to 
 
 ### **Live Platform Links**
 *   **Frontend Dashboard (Vercel):** [https://lead-generation-frontend-taupe.vercel.app/](https://lead-generation-frontend-taupe.vercel.app/)
-*   **Backend API (Render):** [https://lead-generation-backend-service.onrender.com](https://lead-generation-backend-ob2q.onrender.com)
+*   **Backend API (Render):** [https://lead-generation-backend-service.onrender.com](https://lead-generation-backend-service.onrender.com)
 *   **Background Worker (Hugging Face):** [https://huggingface.co/spaces/Sadia712/leadgenworker](https://huggingface.co/spaces/Sadia712/leadgenworker)
 *   **Database (AWS RDS):** Managed PostgreSQL Instance
 
