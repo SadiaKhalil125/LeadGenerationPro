@@ -6,7 +6,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { AuthProvider, AuthContext } from "./AuthContext";
 import { useContext } from "react";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import WebScraperForm from './WebScraperForm'
 import EntityForm from "./EntityForm"
 import EntityMappingForm from './EntityMappingForm'
 import MappingManager from './MappingManager'
@@ -59,34 +58,33 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router> 
+        <Router>
           {/* <NavigationPage /> */}
           <Routes>
-        <Route path="/dashboard" element={<NavigationPage />} />
-        <Route path="/entityform" element={<EntityForm />} />
-        <Route path="/entitylist" element={<EntityList />} />
-        <Route path="/entitymappingform" element={<EntityMappingForm />} />
-        <Route path="/mappingmanager" element={<MappingManager />} />
-        <Route path="/taskscheduler" element={<TaskScheduler />} />
-        <Route path="/tasksmanagement" element={<TasksManagement />} />
-        <Route path="/taskexecutor" element={<TaskExecutor />} />
-        <Route path="/task-logs/:taskId" element={<TaskLogs />} />
-        <Route path="/webscraperform" element={<WebScraperForm />} />
-        <Route path="/sourcemanagement" element={<SourceManagement />} />
-        <Route path="/entity-data" element={<EntityDataPage />} />
-        <Route path="/addsource" element={<SourceCreator />} />
-        <Route path="/api-sources" element={<ApiSourceManager />} />
-        <Route path="/api-source-creator" element={<ApiSourceCreator />} />
-        <Route path="/api-task-executor" element={<ApiTaskExecutor />} />
-        <Route path="/login" element={<Login/>} />
-        <Route path="/" element={<Homepage/>}/>
-        <Route path="/chatbot" element={<Chatbot />} />
-        <Route path="/quick-extract" element={<QuickExtract />} />
-        <Route path="/userleadsdashboard" element={<LeadGeneratorPage />} />
-        <Route path="/leadssync" element= {<LeadSyncTest />} />
-        <Route path="/outreach" element={<Outreach />} />
-        <Route path="/enrichment" element={<EnrichmentDashboard />} />
-        <Route path="/enrichment-jobs" element={<EnrichmentJobsPage />} />
+            <Route path="/dashboard" element={<NavigationPage />} />
+            <Route path="/entityform" element={<EntityForm />} />
+            <Route path="/entitylist" element={<EntityList />} />
+            <Route path="/entitymappingform" element={<EntityMappingForm />} />
+            <Route path="/mappingmanager" element={<MappingManager />} />
+            <Route path="/taskscheduler" element={<TaskScheduler />} />
+            <Route path="/tasksmanagement" element={<TasksManagement />} />
+            <Route path="/taskexecutor" element={<TaskExecutor />} />
+            <Route path="/task-logs/:taskId" element={<TaskLogs />} />
+            <Route path="/sourcemanagement" element={<SourceManagement />} />
+            <Route path="/entity-data" element={<EntityDataPage />} />
+            <Route path="/addsource" element={<SourceCreator />} />
+            <Route path="/api-sources" element={<ApiSourceManager />} />
+            <Route path="/api-source-creator" element={<ApiSourceCreator />} />
+            <Route path="/api-task-executor" element={<ApiTaskExecutor />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<Homepage />} />
+            <Route path="/chatbot" element={<Chatbot />} />
+            <Route path="/quick-extract" element={<QuickExtract />} />
+            <Route path="/userleadsdashboard" element={<LeadGeneratorPage />} />
+            <Route path="/leadssync" element={<LeadSyncTest />} />
+            <Route path="/outreach" element={<Outreach />} />
+            <Route path="/enrichment" element={<EnrichmentDashboard />} />
+            <Route path="/enrichment-jobs" element={<EnrichmentJobsPage />} />
           </Routes>
         </Router>
       </AuthProvider>
