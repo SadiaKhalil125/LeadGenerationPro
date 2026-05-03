@@ -1,7 +1,7 @@
-const API_BASE = "http://localhost:8000"; // FastAPI backend URL
+const API_BASE = "https://lead-generation-backend-service.onrender.com"; // FastAPI backend URL
 
 export async function saveEntity(entityRequest) {
-  const response = await fetch(${API_BASE}/save-entity, {
+  const response = await fetch(${ API_BASE } / save - entity, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { 
-  Globe, 
-  Database, 
-  Eye, 
-  Play, 
-  Download, 
-  FileSpreadsheet, 
-  ChevronDown, 
+import {
+  Globe,
+  Database,
+  Eye,
+  Play,
+  Download,
+  FileSpreadsheet,
+  ChevronDown,
   ChevronUp,
   X,
   Loader2,
@@ -34,7 +34,7 @@ import API_BASE from "./api_base";
 import Header from "./components/Header";
 
 // Point this to your Python API URL
-const PYTHON_API_URL = "http://localhost:8000"; 
+const PYTHON_API_URL = "https://lead-generation-backend-service.onrender.com";
 
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
 
@@ -54,7 +54,7 @@ const GOOGLE_MAPS_FIELDS = {
 
 const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoading = false }) => {
   if (!data) return null;
-  
+
   // Dynamically get all headers from all rows (not just the first row)
   // This ensures we capture all columns even when following links or pagination changes columns
   const getAllHeaders = () => {
@@ -65,7 +65,7 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
     });
     return Array.from(headerSet);
   };
-  
+
   const headers = getAllHeaders();
   const isFirstStep = currentStep <= 1;
 
@@ -83,9 +83,9 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
           <div className="flex justify-between horizontal gap-4 items-center">
             <h2 className="text-2xl font-bold text-[#00364A]">Data Preview</h2>
             <span className="text-xs bg-[#49A3C4]/10 text-[#49A3C4] px-2 py-1 rounded-full">
-                Step {currentStep}
+              Step {currentStep}
             </span>
-         
+
           </div>
           <button
             onClick={onClose}
@@ -102,7 +102,7 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
             <div className="flex flex-col items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#49A3C4]"></div>
               <p className="mt-4 text-gray-600 font-medium">Loading next preview data...</p>
-              <p className="text-sm text-gray-500 mt-1">Step {currentStep+1}</p>
+              <p className="text-sm text-gray-500 mt-1">Step {currentStep + 1}</p>
             </div>
           ) : (
             <>
@@ -113,7 +113,7 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
                   <p className="font-semibold text-[#00364A]">{data.message}</p>
                   <p className="text-sm text-[#49A3C4]">
                     Showing {data.data?.length || 0} of {data.total_items} total items found.
-                    
+
                   </p>
                 </div>
               </div>
@@ -155,7 +155,7 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
             </>
           )}
         </div>
-        
+
         {/* Footer - Added Next/Previous buttons with QuickExtract styling */}
         <div className="flex justify-between items-center px-7 py-3 border-t border-gray-100 bg-white rounded-b-2xl">
           <div>
@@ -163,35 +163,33 @@ const PreviewModal = ({ data, onClose, onNext, onPrevious, currentStep, isLoadin
               <span className="text-sm text-gray-600">Page {currentStep}</span>
             )}
           </div>
-          
+
           <div className="flex gap-3">
             {/* Previous Button */}
             {onPrevious && (
               <button
                 onClick={onPrevious}
                 disabled={isFirstStep || isLoading}
-                className={`px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors ${
-                  isFirstStep || isLoading
+                className={`px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors ${isFirstStep || isLoading
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-white text-black hover:bg-[#00364A]/20'
-                }`}
+                  }`}
               >
                 <ChevronLeft size={18} />
                 Prev
               </button>
             )}
-            
-           
+
+
             {/* Next Button */}
             {onNext && (
               <button
                 onClick={onNext}
                 disabled={isLoading}
-                className={`px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors ${
-                  isLoading
+                className={`px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors ${isLoading
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-white text-black hover:bg-[#00364A]/90'
-                }`}
+                  }`}
               >
                 Next
                 <ChevronRight size={18} />
@@ -224,7 +222,7 @@ const MetadataInput = ({ value, onChange, options, className = "" }) => {
 
   return (
     <div className="relative w-full" ref={dropdownRef}>
-      <div 
+      <div
         className="relative group cursor-pointer"
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -273,7 +271,7 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], className }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(opt => 
+  const filteredOptions = options.filter(opt =>
     opt.toLowerCase().includes(value?.toLowerCase() || "")
   );
 
@@ -285,23 +283,23 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], className }
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setIsOpen(true)}
-        className={className} 
+        className={className}
       />
       {options.length > 0 && (
-         <button
-            type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#49A3C4]"
-         >
-            {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-         </button>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#49A3C4]"
+        >
+          {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
       )}
 
       {isOpen && options.length > 0 && (
         <div className="absolute mt-2 w-full bg-white border border-gray-100 rounded-xl shadow-xl z-30 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
-           {filteredOptions.length > 0 ? (
-             <div className="p-1">
-               {filteredOptions.map((option) => (
+          {filteredOptions.length > 0 ? (
+            <div className="p-1">
+              {filteredOptions.map((option) => (
                 <div
                   key={option}
                   onClick={() => {
@@ -312,10 +310,10 @@ const SelectorInput = ({ value, onChange, placeholder, options = [], className }
                 >
                   {option}
                 </div>
-               ))}
-             </div>
-           ) : (
-             <div className="px-4 py-3 text-gray-400 text-xs italic text-center">No matching selectors found in container</div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-4 py-3 text-gray-400 text-xs italic text-center">No matching selectors found in container</div>
           )}
         </div>
       )}
@@ -359,10 +357,10 @@ export default function QuickExtract() {
   // --- NEW STATE for Selectors ---
   const [scanningSelectors, setScanningSelectors] = useState(false);
   const [availableSelectors, setAvailableSelectors] = useState([]);
-  
+
   // --- STATE for Multi-Page Scraping (follow_links) ---
   const [followLinksConfig, setFollowLinksConfig] = useState([]); // [{ name, selectorField, fieldMappings: [{attribute, selector, extract}] }]
-  
+
   // --- REF to prevent multiple task submissions ---
   const isSubmittingTask = useRef(false);
 
@@ -435,7 +433,7 @@ export default function QuickExtract() {
                   metadata: "text"
                 };
               });
-            
+
             if (entityColumns.length > 0) {
               setFields(entityColumns);
             }
@@ -445,12 +443,12 @@ export default function QuickExtract() {
         }
       }
     };
-    
+
     fetchEntityColumns();
   }, [selectedEntity, createNewEntity, storeInDatabase]);
 
   // --- LOGIC ---
-// In your QuickExtract component:
+  // In your QuickExtract component:
 
 
   const handlePreview = async (step = 1) => {
@@ -478,15 +476,15 @@ export default function QuickExtract() {
     fields.forEach((f) => {
       if (!f.attribute.trim()) return;
       if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
-        field_mappings[f.attribute] = { 
-          selector: f.selector || "", 
-          extract: f.metadata || "text" 
+        field_mappings[f.attribute] = {
+          selector: f.selector || "",
+          extract: f.metadata || "text"
         };
         hasValidMappings = true;
       } else if (f.selector.trim()) {
-        field_mappings[f.attribute] = { 
-          selector: f.selector, 
-          extract: f.metadata || "text" 
+        field_mappings[f.attribute] = {
+          selector: f.selector,
+          extract: f.metadata || "text"
         };
         hasValidMappings = true;
       }
@@ -553,9 +551,9 @@ export default function QuickExtract() {
 
       const res = await fetch(`${API_BASE}/quick-extract/paginated-preview?preview_step=${stepNumber}`, {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json", 
-          "ngrok-skip-browser-warning": "true" 
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true"
         },
         body: JSON.stringify(requestBody),
       });
@@ -572,8 +570,8 @@ export default function QuickExtract() {
 
       if (data.success) {
         // Cache the result with step info
-        const cachedData = { 
-          ...data, 
+        const cachedData = {
+          ...data,
           entity_name: "Quick Extract",
           preview_step: stepNumber,
           current_step: stepNumber
@@ -618,39 +616,39 @@ export default function QuickExtract() {
   // --- NEW FUNCTION: Fetch Child Selectors ---
   const handleScanSelectors = async () => {
     if (!url) {
-        alert("Please go back and enter a URL first.");
-        return;
+      alert("Please go back and enter a URL first.");
+      return;
     }
     if (!containerSelector) {
-        alert("Please enter a Container Selector first (e.g. div.business-card).");
-        return;
+      alert("Please enter a Container Selector first (e.g. div.business-card).");
+      return;
     }
 
     setScanningSelectors(true);
 
     try {
-        const res = await fetch(`${PYTHON_API_URL}/api/extract-selectors`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                url: url,
-                container_selector: containerSelector
-            })
-        });
-        
-        const data = await res.json();
-        
-        if (data.success && data.selectors) {
-            setAvailableSelectors(data.selectors);
-        } else {
-            alert("Failed to extract selectors. Check if the container exists.");
-        }
+      const res = await fetch(`${PYTHON_API_URL}/api/extract-selectors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: url,
+          container_selector: containerSelector
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.selectors) {
+        setAvailableSelectors(data.selectors);
+      } else {
+        alert("Failed to extract selectors. Check if the container exists.");
+      }
 
     } catch (e) {
-        console.error("Scanning failed", e);
-        alert("Error connecting to selector extraction service.");
+      console.error("Scanning failed", e);
+      alert("Error connecting to selector extraction service.");
     } finally {
-        setScanningSelectors(false);
+      setScanningSelectors(false);
     }
   };
 
@@ -665,7 +663,7 @@ export default function QuickExtract() {
   const handleFieldChange = (id, key, value) => {
     setFields(fields.map(f => f.id === id ? { ...f, [key]: value } : f));
   };
-  
+
   // Add follow link configuration
   const handleAddFollowLink = () => {
     setFollowLinksConfig((prev) => [
@@ -678,19 +676,19 @@ export default function QuickExtract() {
       }
     ]);
   };
-  
+
   // Remove follow link configuration
   const handleRemoveFollowLink = (id) => {
     setFollowLinksConfig((prev) => prev.filter((fl) => fl.id !== id));
   };
-  
+
   // Update follow link configuration
   const handleFollowLinkChange = (id, key, value) => {
     setFollowLinksConfig((prev) =>
       prev.map((fl) => (fl.id === id ? { ...fl, [key]: value } : fl))
     );
   };
-  
+
   // Update follow link field mapping
   const handleUpdateFollowLinkField = (linkId, fieldIndex, key, value) => {
     setFollowLinksConfig((prev) => {
@@ -698,7 +696,7 @@ export default function QuickExtract() {
         if (fl.id === linkId) {
           const fieldMappings = [...(fl.fieldMappings || [])];
           const currentField = fieldMappings[fieldIndex] || {};
-          
+
           // If attribute is being changed, auto-fill selector and extract from main field mappings
           if (key === 'attribute' && value) {
             const mainField = fields.find(f => f.attribute === value);
@@ -714,7 +712,7 @@ export default function QuickExtract() {
           } else {
             fieldMappings[fieldIndex] = { ...currentField, [key]: value };
           }
-          
+
           return { ...fl, fieldMappings };
         }
         return fl;
@@ -722,16 +720,16 @@ export default function QuickExtract() {
       return updated;
     });
   };
-  
+
   // Remove field mapping from follow link
   const handleRemoveFollowLinkField = (linkId, fieldIndex) => {
     setFollowLinksConfig((prev) =>
       prev.map((fl) =>
         fl.id === linkId
           ? {
-              ...fl,
-              fieldMappings: (fl.fieldMappings || []).filter((_, i) => i !== fieldIndex)
-            }
+            ...fl,
+            fieldMappings: (fl.fieldMappings || []).filter((_, i) => i !== fieldIndex)
+          }
           : fl
       )
     );
@@ -739,7 +737,7 @@ export default function QuickExtract() {
 
   const isGoogleMapsSupported = (fieldName) => {
     const normalized = fieldName.toLowerCase().replace(/_/g, '');
-    return Object.keys(GOOGLE_MAPS_FIELDS).some(key => 
+    return Object.keys(GOOGLE_MAPS_FIELDS).some(key =>
       normalized.includes(key) || key.includes(normalized)
     );
   };
@@ -768,15 +766,15 @@ export default function QuickExtract() {
       console.log("Task submission already in progress, ignoring duplicate request");
       return;
     }
-    
+
     if (!url.trim()) {
       alert("URL is required!");
       return;
     }
-    
+
     const field_mappings = {};
     let hasValidMappings = false;
-    
+
     fields.forEach((f) => {
       if (!f.attribute.trim()) return;
       if (isGoogleMaps && isGoogleMapsSupported(f.attribute)) {
@@ -787,16 +785,16 @@ export default function QuickExtract() {
         hasValidMappings = true;
       }
     });
-    
+
     if (!hasValidMappings) {
       alert("Add at least one field mapping with attribute name and selector!");
       return;
     }
-    
+
     // Set flags immediately to prevent duplicate submissions
     isSubmittingTask.current = true;
     setExtractingAsTask(true);
-    
+
     let finalEntityName = null;
     if (storeInDatabase) {
       if (createNewEntity && newEntityName.trim()) {
@@ -842,11 +840,11 @@ export default function QuickExtract() {
         return;
       }
     }
-    
+
     setTaskExecutionId(null);
     setTaskStatus(null);
     setExtractedData(null);
-    
+
     try {
       const maxItemsValue = maxItems.trim() ? parseInt(maxItems, 10) : null;
       const paginationPayload = buildPaginationPayload();
@@ -867,7 +865,7 @@ export default function QuickExtract() {
           }, {})
         }))
         .filter((fl) => Object.keys(fl.field_mappings).length > 0);
-      
+
       const scrapeRequest = {
         url: url,
         container_selector: containerSelector || null,
@@ -880,13 +878,13 @@ export default function QuickExtract() {
         create_entity: false,
         source_name: "Quick Extract"
       };
-      
+
       const res = await fetch(`${API_BASE}/quick-extract/execute-as-task`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
         body: JSON.stringify(scrapeRequest),
       });
-      
+
       const data = await res.json();
       if (data.success && data.execution_id) {
         setTaskExecutionId(data.execution_id);
@@ -930,21 +928,21 @@ export default function QuickExtract() {
   };
 
   const pollTaskStatus = async (executionId) => {
-    const maxAttempts = 300; 
+    const maxAttempts = 300;
     let attempts = 0;
     let lastStatus = null;
     let lastLogFetch = 0;
-    
+
     const poll = async () => {
       try {
         const res = await fetch(`${API_BASE}/quick-extract/task-status/${executionId}`, {
           headers: { "ngrok-skip-browser-warning": "true" }
         });
         const data = await res.json();
-        
+
         // Always update status (React will handle re-renders efficiently)
         setTaskStatus(data);
-        
+
         // Only fetch logs if status changed or every 3 seconds (to reduce flickering)
         const now = Date.now();
         if (data.status !== lastStatus || (now - lastLogFetch) > 3000) {
@@ -952,11 +950,11 @@ export default function QuickExtract() {
           lastStatus = data.status;
           lastLogFetch = now;
         }
-        
+
         if (data.status === "completed" && data.success === true) {
           // Set extracted data from the response
-          const extractedDataToSet = { 
-            ...data, 
+          const extractedDataToSet = {
+            ...data,
             entity_name: "Quick Extract",
             data: data.data || [],
             total_items: data.total_items || (data.data ? data.data.length : 0),
@@ -1005,7 +1003,7 @@ export default function QuickExtract() {
         }
       }
     };
-    
+
     setTimeout(poll, 1000);
   };
 
@@ -1055,14 +1053,14 @@ export default function QuickExtract() {
   };
 
   const escapeXml = (unsafe) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-// In QuickExtract component, add this function before the return statement:
+  // In QuickExtract component, add this function before the return statement:
 
   const startOutreach = () => {
     if (!extractedData?.data || extractedData.data.length === 0) {
       alert("No data to export to outreach!");
       return;
     }
-  
+
     // Transform scraped data to Outreach contact format
     const outreachContacts = extractedData.data.map(record => ({
       name: record.name || record.business_name || record.title || record.company || "",
@@ -1076,17 +1074,17 @@ export default function QuickExtract() {
       // Preserve original data as fallback
       ...record
     }));
-  
+
     // Save to localStorage
     localStorage.setItem('outreach_pending_contacts', JSON.stringify({
       contacts: outreachContacts,
       timestamp: Date.now(),
       source: 'quick_extract'
     }));
-  
+
     // Navigate to outreach page
     window.location.href = '/outreach';
-  };  
+  };
   // --- RENDER ---
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-[#49A3C4] selection:text-white">
@@ -1096,13 +1094,13 @@ export default function QuickExtract() {
         <h1 className="text-4xl font-extrabold text-[#00364A] mb-8">
           Quick <span className="text-[#49A3C4]">Extract</span>
         </h1>
-        
+
         {/* Progress Stepper */}
         <div className="mb-10">
           <div className="flex items-center justify-between relative max-w-4xl mx-auto">
             {/* Connecting Line */}
             <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-gray-200 -z-10 rounded-full"></div>
-            <div 
+            <div
               className="absolute left-0 top-1/2 transform -translate-y-1/2 h-1 bg-[#49A3C4] -z-10 transition-all duration-500 rounded-full"
               style={{ width: `${((currentStep - 1) / 3) * 100}%` }}
             ></div>
@@ -1115,21 +1113,19 @@ export default function QuickExtract() {
               const isActive = currentStep >= step.num;
               const isCurrent = currentStep === step.num;
               const Icon = step.icon;
-              
+
               return (
                 <div key={step.num} className="flex flex-col items-center gap-2 bg-slate-50 px-2">
-                  <div 
-                    className={`w-12 h-12 rounded-full flex items-center justify-center border-4 transition-all duration-300 shadow-lg ${
-                      isActive 
-                        ? 'bg-[#00364A] border-[#00364A] text-white scale-110' 
+                  <div
+                    className={`w-12 h-12 rounded-full flex items-center justify-center border-4 transition-all duration-300 shadow-lg ${isActive
+                        ? 'bg-[#00364A] border-[#00364A] text-white scale-110'
                         : 'bg-white border-gray-200 text-gray-400'
-                    }`}
+                      }`}
                   >
                     {isActive ? <Icon size={20} /> : <span className="text-lg font-bold">{step.num}</span>}
                   </div>
-                  <span className={`text-xs font-bold uppercase tracking-wide transition-colors duration-300 ${
-                    isCurrent ? 'text-[#00364A]' : 'text-gray-400'
-                  }`}>
+                  <span className={`text-xs font-bold uppercase tracking-wide transition-colors duration-300 ${isCurrent ? 'text-[#00364A]' : 'text-gray-400'
+                    }`}>
                     {step.label}
                   </span>
                 </div>
@@ -1140,7 +1136,7 @@ export default function QuickExtract() {
 
         {/* Main Workspace Card */}
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden min-h-[600px] flex flex-col relative">
-          
+
           {/* Step 1: URL Entry */}
           {currentStep === 1 && (
             <div className="flex-grow flex flex-col items-center justify-center p-12 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1149,7 +1145,7 @@ export default function QuickExtract() {
                   <h2 className="text-3xl font-bold text-[#00364A]">Where should we extract data from?</h2>
                   <p className="text-gray-500 text-lg">Enter the full URL of the target page to begin analysis.</p>
                 </div>
-                
+
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
                     <Globe className={`w-6 h-6 transition-colors ${url ? 'text-[#49A3C4]' : 'text-gray-400'}`} />
@@ -1193,9 +1189,9 @@ export default function QuickExtract() {
                     <p className="text-sm text-gray-500">Define field attributes and CSS selectors</p>
                   </div>
                 </div>
-                
+
                 <div className="flex gap-2">
-                   {/* Actions Toolbar */}
+                  {/* Actions Toolbar */}
                   <button
                     onClick={() => handlePreview(1)}
                     disabled={previewLoading}
@@ -1204,7 +1200,7 @@ export default function QuickExtract() {
                     {previewLoading ? <Loader2 size={18} className="animate-spin" /> : <Eye size={18} />}
                     Preview
                   </button>
-                  
+
                   <button
                     onClick={handleExtractAsTask}
                     disabled={extractingAsTask}
@@ -1220,7 +1216,7 @@ export default function QuickExtract() {
               <div className="flex-grow flex overflow-hidden">
                 {/* Left Panel: Configuration */}
                 <div className="w-1/2 overflow-y-auto p-8 border-r border-gray-100">
-                  
+
                   {isGoogleMaps && (
                     <div className="mb-8 p-4 bg-gradient-to-r from-blue-50 to-white border border-blue-100 rounded-xl flex gap-4 shadow-sm">
                       <div className="p-2 bg-white rounded-lg shadow-sm h-fit text-[#49A3C4]">
@@ -1229,7 +1225,7 @@ export default function QuickExtract() {
                       <div>
                         <h4 className="font-bold text-[#00364A]">Google Maps Detected</h4>
                         <p className="text-sm text-gray-600 mt-1">
-                          Standard fields like Name, Address, and Rating are auto-mapped. 
+                          Standard fields like Name, Address, and Rating are auto-mapped.
                           Leave selectors empty to use auto-extraction.
                         </p>
                       </div>
@@ -1250,9 +1246,9 @@ export default function QuickExtract() {
                         </div>
                         <div className="flex-grow">
                           <h4 className="font-bold text-[#00364A]">
-                            {taskStatus.status === "processing" ? "Task Executing..." : 
-                             taskStatus.status === "pending" || taskStatus.status === "queued" ? "Task Queued..." :
-                             taskStatus.status === "completed" ? "Task Completed Successfully!" : "Task Failed"}
+                            {taskStatus.status === "processing" ? "Task Executing..." :
+                              taskStatus.status === "pending" || taskStatus.status === "queued" ? "Task Queued..." :
+                                taskStatus.status === "completed" ? "Task Completed Successfully!" : "Task Failed"}
                           </h4>
                           <p className="text-sm text-gray-600 mt-1">
                             {taskStatus.message || "Processing..."}
@@ -1307,7 +1303,7 @@ export default function QuickExtract() {
                           </button>
                         </div>
                       </div>
-                      
+
                       {showLogs && taskLogs.length > 0 && (
                         <div className="p-4 bg-white rounded-xl border border-gray-200 max-h-96 overflow-y-auto">
                           <div className="space-y-4">
@@ -1322,34 +1318,31 @@ export default function QuickExtract() {
                                   return dateString;
                                 }
                               };
-                              
+
                               return (
                                 <div
                                   key={log.id || index}
-                                  className={`p-5 rounded-lg border-l-4 transition-all ${
-                                    log.log_level === 'error' ? 'bg-red-50 border-red-500 shadow-sm' :
-                                    log.log_level === 'warning' ? 'bg-yellow-50 border-yellow-500 shadow-sm' :
-                                    log.status === 'completed' ? 'bg-green-50 border-green-500 shadow-sm' :
-                                    'bg-gray-50 border-gray-300 shadow-sm'
-                                  }`}
+                                  className={`p-5 rounded-lg border-l-4 transition-all ${log.log_level === 'error' ? 'bg-red-50 border-red-500 shadow-sm' :
+                                      log.log_level === 'warning' ? 'bg-yellow-50 border-yellow-500 shadow-sm' :
+                                        log.status === 'completed' ? 'bg-green-50 border-green-500 shadow-sm' :
+                                          'bg-gray-50 border-gray-300 shadow-sm'
+                                    }`}
                                 >
                                   <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1">
                                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                        <span className={`px-2.5 py-1 rounded text-xs font-medium ${
-                                          log.log_level === 'error' ? 'bg-red-200 text-red-800' :
-                                          log.log_level === 'warning' ? 'bg-yellow-200 text-yellow-800' :
-                                          log.log_level === 'debug' ? 'bg-blue-200 text-blue-800' :
-                                          'bg-gray-200 text-gray-800'
-                                        }`}>
+                                        <span className={`px-2.5 py-1 rounded text-xs font-medium ${log.log_level === 'error' ? 'bg-red-200 text-red-800' :
+                                            log.log_level === 'warning' ? 'bg-yellow-200 text-yellow-800' :
+                                              log.log_level === 'debug' ? 'bg-blue-200 text-blue-800' :
+                                                'bg-gray-200 text-gray-800'
+                                          }`}>
                                           {log.log_level?.toUpperCase() || 'INFO'}
                                         </span>
-                                        <span className={`px-2.5 py-1 rounded text-xs font-medium ${
-                                          log.status === 'completed' ? 'bg-green-200 text-green-800' :
-                                          log.status === 'failed' ? 'bg-red-200 text-red-800' :
-                                          log.status === 'processing' ? 'bg-blue-200 text-blue-800' :
-                                          'bg-gray-200 text-gray-800'
-                                        }`}>
+                                        <span className={`px-2.5 py-1 rounded text-xs font-medium ${log.status === 'completed' ? 'bg-green-200 text-green-800' :
+                                            log.status === 'failed' ? 'bg-red-200 text-red-800' :
+                                              log.status === 'processing' ? 'bg-blue-200 text-blue-800' :
+                                                'bg-gray-200 text-gray-800'
+                                          }`}>
                                           {log.status || 'unknown'}
                                         </span>
                                         {log.execution_duration_ms && (
@@ -1369,37 +1362,37 @@ export default function QuickExtract() {
                                       {(() => {
                                         const messageInfo = [];
                                         const msg = log.message || '';
-                                        
+
                                         // Extract page numbers from message (various patterns)
                                         const pageMatch = msg.match(/(?:page|Page|PAGE)\s*[#:]?\s*(\d+)|(\d+)\s*(?:page|Page)/i);
                                         if (pageMatch) {
                                           messageInfo.push({ label: 'Page', value: pageMatch[1] || pageMatch[2] });
                                         }
-                                        
+
                                         // Extract row/item counts from message (various patterns)
                                         const rowsMatch = msg.match(/(\d+)\s*(?:rows?|items?|records?|entries?)\s*(?:scraped|extracted|found|collected|processed|saved)/i) ||
-                                                         msg.match(/(?:scraped|extracted|found|collected|processed|saved)\s*(\d+)\s*(?:rows?|items?|records?|entries?)/i);
+                                          msg.match(/(?:scraped|extracted|found|collected|processed|saved)\s*(\d+)\s*(?:rows?|items?|records?|entries?)/i);
                                         if (rowsMatch) {
                                           messageInfo.push({ label: 'Rows Scraped', value: rowsMatch[1] });
                                         }
-                                        
+
                                         // Extract total counts
                                         const totalMatch = msg.match(/(?:total|Total|TOTAL)\s*(?:of\s*)?(\d+)\s*(?:rows?|items?|records?|entries?)/i);
                                         if (totalMatch) {
                                           messageInfo.push({ label: 'Total Items', value: totalMatch[1] });
                                         }
-                                        
+
                                         // Extract "done" or "completed" status
                                         if (msg.match(/(?:done|completed|finished|success)/i)) {
                                           messageInfo.push({ label: 'Status', value: 'Done' });
                                         }
-                                        
+
                                         // Extract URL if present
                                         const urlMatch = msg.match(/(https?:\/\/[^\s]+)/i);
                                         if (urlMatch && urlMatch[1].length < 80) {
                                           messageInfo.push({ label: 'URL', value: urlMatch[1] });
                                         }
-                                        
+
                                         return messageInfo.length > 0 ? (
                                           <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg shadow-sm">
                                             <div className="flex flex-wrap gap-4">
@@ -1418,7 +1411,7 @@ export default function QuickExtract() {
                                       {log.details && Object.keys(log.details).length > 0 && (() => {
                                         const details = log.details;
                                         const keyInfo = [];
-                                        
+
                                         // Extract important information - check multiple possible field names
                                         const getValue = (...keys) => {
                                           for (const key of keys) {
@@ -1428,55 +1421,55 @@ export default function QuickExtract() {
                                           }
                                           return null;
                                         };
-                                        
+
                                         // Page information
                                         const page = getValue('page', 'page_number', 'current_page', 'page_num');
                                         if (page !== null) {
                                           keyInfo.push({ label: 'Page', value: page });
                                         }
-                                        
+
                                         // Rows/Items scraped
                                         const rows = getValue('rows_scraped', 'items_scraped', 'items_count', 'rows_count', 'scraped_count', 'count');
                                         if (rows !== null) {
                                           keyInfo.push({ label: 'Rows Scraped', value: rows });
                                         }
-                                        
+
                                         // Total pages
                                         const totalPages = getValue('total_pages', 'max_pages', 'pages_total');
                                         if (totalPages !== null) {
                                           keyInfo.push({ label: 'Total Pages', value: totalPages });
                                         }
-                                        
+
                                         // Total items
                                         const totalItems = getValue('total_items', 'total_rows', 'total_count', 'expected_items');
                                         if (totalItems !== null) {
                                           keyInfo.push({ label: 'Total Items', value: totalItems });
                                         }
-                                        
+
                                         // Progress
                                         const progress = getValue('progress', 'progress_percent', 'progress_pct', 'completion');
                                         if (progress !== null) {
                                           keyInfo.push({ label: 'Progress', value: typeof progress === 'number' ? `${progress}%` : progress });
                                         }
-                                        
+
                                         // URL
                                         const url = getValue('url', 'page_url', 'current_url');
                                         if (url !== null && typeof url === 'string' && url.length < 100) {
                                           keyInfo.push({ label: 'URL', value: url });
                                         }
-                                        
+
                                         // Status message
                                         const statusMsg = getValue('status_message', 'message', 'status_msg', 'note');
                                         if (statusMsg !== null && statusMsg !== log.message) {
                                           keyInfo.push({ label: 'Status', value: statusMsg });
                                         }
-                                        
+
                                         // Execution ID (if present and not too long)
                                         const execId = getValue('execution_id', 'exec_id', 'task_id');
                                         if (execId !== null && String(execId).length < 50) {
                                           keyInfo.push({ label: 'Execution ID', value: String(execId) });
                                         }
-                                        
+
                                         return keyInfo.length > 0 ? (
                                           <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg shadow-sm">
                                             <div className="flex flex-wrap gap-4">
@@ -1498,7 +1491,7 @@ export default function QuickExtract() {
                                             <span>View All Details ({Object.keys(log.details).length} {Object.keys(log.details).length === 1 ? 'field' : 'fields'})</span>
                                             <span className="group-open:rotate-180 transition-transform">▼</span>
                                           </summary>
-                                          
+
                                           <div className="mt-3 overflow-x-auto border border-gray-300 rounded-lg shadow-sm">
                                             <table className="w-full text-xs bg-white">
                                               <thead className="bg-gradient-to-r from-purple-50 to-purple-100 border-b-2 border-purple-300">
@@ -1518,7 +1511,7 @@ export default function QuickExtract() {
                                                       {key}
                                                     </td>
                                                     <td className="px-4 py-3 text-gray-700 break-words">
-                                                      {typeof value === 'object' && value !== null 
+                                                      {typeof value === 'object' && value !== null
                                                         ? <code className="bg-gray-100 px-2 py-1 rounded text-xs text-gray-800">{JSON.stringify(value, null, 2)}</code>
                                                         : String(value)}
                                                     </td>
@@ -1583,7 +1576,7 @@ export default function QuickExtract() {
                             Store extracted data in database entity table
                           </label>
                         </div>
-                        
+
                         {storeInDatabase && (
                           <div className="pl-7 space-y-3 border-l-2 border-[#49A3C4]">
                             <div className="flex items-center gap-3">
@@ -1602,7 +1595,7 @@ export default function QuickExtract() {
                                 Select existing entity
                               </label>
                             </div>
-                            
+
                             {!createNewEntity && (
                               <div className="pl-7 space-y-2">
                                 <select
@@ -1623,7 +1616,7 @@ export default function QuickExtract() {
                                 )}
                               </div>
                             )}
-                            
+
                             <div className="flex items-center gap-3">
                               <input
                                 type="radio"
@@ -1637,7 +1630,7 @@ export default function QuickExtract() {
                                 Create new entity from field mappings
                               </label>
                             </div>
-                            
+
                             {createNewEntity && (
                               <div className="pl-7 space-y-2">
                                 <div>
@@ -1658,7 +1651,7 @@ export default function QuickExtract() {
                         )}
                       </div>
                     </div>
-                    
+
                     {/* CONTAINER SELECTOR with SCAN BUTTON */}
                     <div>
                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
@@ -1677,23 +1670,23 @@ export default function QuickExtract() {
                           className="px-4 bg-[#e0f2f7] hover:bg-[#ccebf4] text-[#00364A] rounded-xl border border-[#b3dce9] flex items-center justify-center transition-colors shadow-sm"
                           title="Scan for available elements inside this container"
                         >
-                           {scanningSelectors ? (
-                              <Loader2 size={20} className="animate-spin text-[#49A3C4]" />
-                           ) : (
-                              <Search size={20} />
-                           )}
+                          {scanningSelectors ? (
+                            <Loader2 size={20} className="animate-spin text-[#49A3C4]" />
+                          ) : (
+                            <Search size={20} />
+                          )}
                         </button>
                       </div>
                       <p className="text-xs text-gray-400 mt-2">
                         The CSS selector that wraps each individual item. Click search to auto-find child elements.
                       </p>
                       {availableSelectors.length > 0 && (
-                          <p className="text-xs text-green-600 mt-1 font-medium">
-                              ✓ Found {availableSelectors.length} possible child elements. Use dropdowns in fields below.
-                          </p>
+                        <p className="text-xs text-green-600 mt-1 font-medium">
+                          ✓ Found {availableSelectors.length} possible child elements. Use dropdowns in fields below.
+                        </p>
                       )}
                     </div>
-                    
+
                     <div>
                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
                         Max Items (Optional)
@@ -1733,7 +1726,7 @@ export default function QuickExtract() {
                           <Layers size={18} className="text-blue-500" />
                           Pagination Configuration
                         </h3>
-                        
+
                         <div className="space-y-1">
                           <label className="text-sm font-medium text-gray-700">Pagination Type</label>
                           <select
@@ -1894,7 +1887,7 @@ export default function QuickExtract() {
                         </button>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-3">
                       {fields.map((field) => {
                         const isSupported = isGoogleMaps && isGoogleMapsSupported(field.attribute);
@@ -1949,7 +1942,7 @@ export default function QuickExtract() {
                       })}
                     </div>
                   </div>
-                  
+
                   {/* Multi-Page Scraping Configuration */}
                   <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-[#49A3C4] rounded-xl">
                     <div className="flex justify-between items-center mb-4">
@@ -1964,7 +1957,7 @@ export default function QuickExtract() {
                         <Plus size={16} /> Add Detail Page
                       </button>
                     </div>
-                    
+
                     {/* Instructions Box */}
                     <div className="mb-6 p-4 bg-white rounded-lg border border-[#49A3C4] border-l-4">
                       <div className="flex gap-3 items-start">
@@ -1982,7 +1975,7 @@ export default function QuickExtract() {
                         </div>
                       </div>
                     </div>
-                    
+
                     {followLinksConfig.map((fl, flIndex) => (
                       <div key={fl.id} className="mb-4 p-4 bg-white rounded-lg border border-[#49A3C4]">
                         <div className="flex justify-between items-start mb-4">
@@ -2012,10 +2005,10 @@ export default function QuickExtract() {
                             onClick={() => handleRemoveFollowLink(fl.id)}
                             className="ml-3 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                           >
-                            <X  className="text-black"size={16} />
+                            <X className="text-black" size={16} />
                           </button>
                         </div>
-                        
+
                         <div>
                           <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Fields to Extract from Detail Page</label>
                           {(fl.fieldMappings || []).map((fm, fmIndex) => (
@@ -2050,8 +2043,8 @@ export default function QuickExtract() {
                                 <div className="col-span-6">
                                   <label className="text-xs text-gray-600 mb-1 block">CSS Selector</label>
                                   <SelectorInput
-                                    placeholder={fm.attribute && fields.find(f => f.attribute === fm.attribute)?.selector 
-                                      ? `Auto-filled: ${fields.find(f => f.attribute === fm.attribute).selector}` 
+                                    placeholder={fm.attribute && fields.find(f => f.attribute === fm.attribute)?.selector
+                                      ? `Auto-filled: ${fields.find(f => f.attribute === fm.attribute).selector}`
                                       : "CSS Selector"}
                                     value={fm.selector || ""}
                                     onChange={(val) => handleUpdateFollowLinkField(fl.id, fmIndex, 'selector', val)}
@@ -2085,7 +2078,7 @@ export default function QuickExtract() {
                         </div>
                       </div>
                     ))}
-                    
+
                     {followLinksConfig.length === 0 && (
                       <div className="text-center py-6 text-gray-500 text-sm">
                         <p className="mb-2">No detail pages configured yet.</p>
@@ -2098,7 +2091,7 @@ export default function QuickExtract() {
                 {/* Right Panel: Source Code View */}
                 <div className="w-1/2 bg-[#1e1e1e] border-l border-gray-200 p-0 flex flex-col">
                   <div className="flex-grow overflow-hidden ">
-                     <ServerHtmlPreview url={url} />
+                    <ServerHtmlPreview url={url} />
                   </div>
                 </div>
               </div>
@@ -2108,16 +2101,16 @@ export default function QuickExtract() {
           {/* Step 3: Results */}
           {currentStep === 3 && extractedData && (
             <div className="flex-grow flex flex-col h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
-               <div className="p-8 border-b border-gray-100 bg-white flex justify-between items-end">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                      <span className="text-sm font-bold text-green-600 uppercase tracking-wide">Extraction Complete</span>
-                    </div>
-                    <p className="ps-2 text-xl text-left font-bold text-[#00364A]">{extractedData.total_items || extractedData.data?.length || 0} Records Found</p>
-                    <p className="text-gray-500">Data extracted from {url}</p>
+              <div className="p-8 border-b border-gray-100 bg-white flex justify-between items-end">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span className="text-sm font-bold text-green-600 uppercase tracking-wide">Extraction Complete</span>
                   </div>
-                  
+                  <p className="ps-2 text-xl text-left font-bold text-[#00364A]">{extractedData.total_items || extractedData.data?.length || 0} Records Found</p>
+                  <p className="text-gray-500">Data extracted from {url}</p>
+                </div>
+
                 {/* In Step 3 results section, add this button alongside CSV/Excel buttons */}
                 <div className="flex gap-3">
                   <button
@@ -2141,73 +2134,73 @@ export default function QuickExtract() {
                     <FaPaperPlane size={18} /> Start Outreach
                   </button>
                 </div>
-                </div>
+              </div>
 
-                <div className="flex-grow bg-gray-50 p-6 overflow-hidden">
-                  {extractedData.data && extractedData.data.length > 0 ? (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 h-full flex flex-col overflow-hidden">
-                      <div className="overflow-auto custom-scrollbar">
-                        <table className="w-full text-sm text-left text-gray-600">
-                          <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-semibold border-b border-gray-200 sticky top-0">
-                            <tr>
+              <div className="flex-grow bg-gray-50 p-6 overflow-hidden">
+                {extractedData.data && extractedData.data.length > 0 ? (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 h-full flex flex-col overflow-hidden">
+                    <div className="overflow-auto custom-scrollbar">
+                      <table className="w-full text-sm text-left text-gray-600">
+                        <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-semibold border-b border-gray-200 sticky top-0">
+                          <tr>
+                            {getAllDataHeaders(extractedData.data).map((header) => (
+                              <th key={header} className="px-6 py-4 whitespace-nowrap bg-gray-50">
+                                {header}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {extractedData.data.map((item, index) => (
+                            <tr key={index} className="hover:bg-blue-50/30 transition-colors">
                               {getAllDataHeaders(extractedData.data).map((header) => (
-                                <th key={header} className="px-6 py-4 whitespace-nowrap bg-gray-50">
-                                  {header}
-                                </th>
+                                <td key={`${index}-${header}`} className="px-6 py-4 whitespace-nowrap">
+                                  {String(item[header] || '')}
+                                </td>
                               ))}
                             </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {extractedData.data.map((item, index) => (
-                              <tr key={index} className="hover:bg-blue-50/30 transition-colors">
-                                {getAllDataHeaders(extractedData.data).map((header) => (
-                                  <td key={`${index}-${header}`} className="px-6 py-4 whitespace-nowrap">
-                                    {String(item[header] || '')}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center">
-                      <div className="bg-white p-8 rounded-full shadow-sm mb-4">
-                        <Database size={48} className="text-gray-300" />
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-700">No Data Extracted</h3>
-                      <p className="text-gray-500 mt-2">Check your selectors and try again.</p>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-center">
+                    <div className="bg-white p-8 rounded-full shadow-sm mb-4">
+                      <Database size={48} className="text-gray-300" />
                     </div>
-                  )}
-                </div>
+                    <h3 className="text-xl font-bold text-gray-700">No Data Extracted</h3>
+                    <p className="text-gray-500 mt-2">Check your selectors and try again.</p>
+                  </div>
+                )}
+              </div>
 
-                <div className="p-6 bg-white border-t border-gray-100 flex justify-end">
-                   <button
-                    onClick={() => {
-                      setCurrentStep(1);
-                      setExtractedData(null);
-                      setUrl("");
-                      setFields([{ id: Date.now(), attribute: "", selector: "", metadata: "text" }]);
-                      setContainerSelector("");
-                      setMaxItems("");
-                      setPaginationType("");
-                      setPaginationConfig({});
-                      setShowAdvancedOptions(false);
-                      setTaskExecutionId(null);
-                      setTaskStatus(null);
-                      setTaskLogs([]);
-                      setShowLogs(false);
-                      setExtractingAsTask(false);
-                      setAvailableSelectors([]);
-                      setFollowLinksConfig([]);
-                      isSubmittingTask.current = false; // Reset submission flag
-                    }}
-                    className="text-gray-500 font-semibold hover:text-[#00364A] px-6 py-2 transition-colors"
-                  >
-                    Start New Extraction
-                  </button>
-                </div>
+              <div className="p-6 bg-white border-t border-gray-100 flex justify-end">
+                <button
+                  onClick={() => {
+                    setCurrentStep(1);
+                    setExtractedData(null);
+                    setUrl("");
+                    setFields([{ id: Date.now(), attribute: "", selector: "", metadata: "text" }]);
+                    setContainerSelector("");
+                    setMaxItems("");
+                    setPaginationType("");
+                    setPaginationConfig({});
+                    setShowAdvancedOptions(false);
+                    setTaskExecutionId(null);
+                    setTaskStatus(null);
+                    setTaskLogs([]);
+                    setShowLogs(false);
+                    setExtractingAsTask(false);
+                    setAvailableSelectors([]);
+                    setFollowLinksConfig([]);
+                    isSubmittingTask.current = false; // Reset submission flag
+                  }}
+                  className="text-gray-500 font-semibold hover:text-[#00364A] px-6 py-2 transition-colors"
+                >
+                  Start New Extraction
+                </button>
+              </div>
             </div>
           )}
 

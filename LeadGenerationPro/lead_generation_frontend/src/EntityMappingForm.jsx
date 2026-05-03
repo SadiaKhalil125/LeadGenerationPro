@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  Eye, ArrowLeft, Search, ChevronDown, ChevronUp, 
-  ChevronLeft, ChevronRight, X, Info, AlertTriangle, 
-  RefreshCw 
+import {
+  Eye, ArrowLeft, Search, ChevronDown, ChevronUp,
+  ChevronLeft, ChevronRight, X, Info, AlertTriangle,
+  RefreshCw
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from '@tanstack/react-query';
@@ -13,7 +13,6 @@ import NotificationPanel from "./components/NotificationPanel";
 import API_BASE from "./api_base";
 
 // Constants
-const PYTHON_API_URL = "http://localhost:8000";
 const METADATA_OPTIONS = ["text", "href", "src", "html", "datetime"];
 const GOOGLE_MAPS_FIELDS = {
   name: "Business/Place Name",
@@ -501,7 +500,7 @@ export default function EntityMappingScreen() {
     setScanningSelectors(prev => ({ ...prev, [entity]: true }));
 
     try {
-      const res = await fetch(`${PYTHON_API_URL}/api/extract-selectors`, {
+      const res = await fetch(`${API_BASE}/api/extract-selectors`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, container_selector: container })
@@ -819,7 +818,7 @@ export default function EntityMappingScreen() {
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     }}>
       <NotificationPanel notifications={notifications} onRemove={(id) => setNotifications(prev => prev.filter(n => n.id !== id))} />
-      
+
       {/* Left Panel - Configuration */}
       <div style={{ width: '50%', height: '100%', overflowY: 'auto', padding: '20px' }}>
         <div style={{
@@ -1384,13 +1383,13 @@ export default function EntityMappingScreen() {
                               onChange={(val) => handleUpdateFollowLinkField(entity, flIndex, fmIndex, 'selector', val)}
                               options={availableSelectors[entity] || []}
                             />
-                            
+
                             <MetadataInput
                               value={fm.extract || "text"}
                               onChange={(val) => handleUpdateFollowLinkField(entity, flIndex, fmIndex, 'extract', val)}
                               options={METADATA_OPTIONS}
                             />
-                            
+
                             <button
                               onClick={() => handleRemoveFollowLinkField(entity, flIndex, fmIndex)}
                               style={{
@@ -1406,7 +1405,7 @@ export default function EntityMappingScreen() {
                             </button>
                           </div>
                         ))}
-                        
+
                         <button
                           onClick={() => {
                             const updated = [...(fl.fieldMappings || []), { attribute: "", selector: "", extract: "text" }];
